@@ -11,6 +11,8 @@ MayaVI is a locally hosted AI companion with:
 
 ## Rules
 
+Read only the files relevant to the current task.
+
 Read existing architecture before modifying it.
 
 Do not replace working systems unnecessarily.
