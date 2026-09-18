@@ -29,33 +29,33 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
 ## Architecture
 
 ```
- ┌────────────────────────────── Python Backend (asyncio) ──────────────────────────────┐
- │                                                                                        │
+ ┌────────────────────────────── Python Backend (asyncio) ──────────────────────────────────┐
+ │                                                                                          │
  │  mic ──▶ Listener (Silero VAD +      ──▶ QueueManager ──▶ Processor ──▶ Router         │
- │          WakeWordDetector)               (asyncio.Queue,     │            │            │
- │              │                            serial FIFO)       │            ├─▶ Skills   │
- │              ▼                                                │            │  (20+)    │
- │        Transcriber (Google STT)                               │            │            │
- │                                                                 ▼            ▼            │
+ │          WakeWordDetector)               (asyncio.Queue,      │            │             │
+ │              │                            serial FIFO)        │            ├─▶ Skills   │
+ │              ▼                                                │            │  (20+)      │
+ │        Transcriber (Google STT)                               │            │             │
+ │                                                               ▼            ▼             │
  │                                                          IntentEngine   llm_service      │
  │                                                        (PyTorch BiLSTM +   (Ollama       │
  │                                                         TF CNN ensemble +  streaming +   │
- │                                                         keyword fallback)  Kokoro TTS)    │
- │                                                                                        │
- │  ContextManager (brain/conversation.py): recent window, conversation state,            │
- │  open loops, SQLiteVectorStore + Ollama embeddings (semantic memory)                    │
- │                                                                                        │
- │  MoodManager (persistent anger/sad) ──▶ BehaviorEngine (compose expression packet)     │
- │                                                                                        │
+ │                                                         keyword fallback)  Kokoro TTS)   │
+ │                                                                                          │
+ │  ContextManager (brain/conversation.py): recent window, conversation state,              │
+ │  open loops, SQLiteVectorStore + Ollama embeddings (semantic memory)                     │
+ │                                                                                          │
+ │  MoodManager (persistent anger/sad) ──▶ BehaviorEngine (compose expression packet)      │
+ │                                                                                          │
  │  Speaker / llm_service TTS worker ──▶ ws_server (WebSocket, :8765) ──▶ browser avatar   │
- └────────────────────────────────────────────────────────────────────────────────────────┘
+ └──────────────────────────────────────────────────────────────────────────────────────────┘
                                             │  WebSocket (audio / state / behavior / transcript / animation)
                                             ▼
- ┌───────────────────────────── Frontend (Three.js + @pixiv/three-vrm) ───────────────────┐
- │  websocket.js → avatar.js (VRM load, lip-sync, idle fidgets, animations)                │
- │                → expression-composer.js (behavior packet → VRM weights)                 │
- │  animation-controller.js (bone ownership) · expression-controller.js (layered exprs)    │
- │  life-motion-controller.js (breathing/posture) · gaze-controller.js (screen attention)  │
+ ┌───────────────────────────── Frontend (Three.js + @pixiv/three-vrm) ─────────────────────┐
+ │  websocket.js → avatar.js (VRM load, lip-sync, idle fidgets, animations)                 │
+ │                → expression-composer.js (behavior packet → VRM weights)                  │
+ │  animation-controller.js (bone ownership) · expression-controller.js (layered exprs)     │
+ │  life-motion-controller.js (breathing/posture) · gaze-controller.js (screen attention)   │
  └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
