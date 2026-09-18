@@ -44,6 +44,8 @@ _EMOTION_BASE: dict[str, dict[str, float]] = {
     "angry":     {"Fcl_BRW_Angry": 0.75, "Fcl_EYE_Angry": 0.65, "Fcl_MTH_Angry": 0.55},
     "sad":       {"Fcl_BRW_Sorrow": 0.6, "Fcl_EYE_Sorrow": 0.6, "Fcl_MTH_Sorrow": 0.55,
                   "Fcl_EYE_Close_L": 0.15, "Fcl_EYE_Close_R": 0.15},
+    "scared":    {"Fcl_BRW_Surprised": 0.9, "Fcl_EYE_Surprised": 0.85, "Fcl_EYE_Spread": 0.7,
+                  "Fcl_MTH_Surprised": 0.6, "Fcl_MTH_Down": 0.35},
     "relaxed":   {"Fcl_EYE_Natural": 0.4, "Fcl_MTH_Neutral": 0.3},
     "neutral":   {"Fcl_EYE_Natural": 0.25, "Fcl_MTH_Neutral": 0.15},
 }
