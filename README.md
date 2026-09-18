@@ -49,8 +49,8 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
  │                                                                                          │
  │  Speaker / llm_service TTS worker ──▶ ws_server (WebSocket, :8765) ──▶ browser avatar   │
  └──────────────────────────────────────────────────────────────────────────────────────────┘
-                                            │  WebSocket (audio / state / behavior / transcript / animation)
-                                            ▼
+                                            │  WebSocket (audio / state / behavior /
+                                            ▼  transcript / animation)
  ┌───────────────────────────── Frontend (Three.js + @pixiv/three-vrm) ─────────────────────┐
  │  websocket.js → avatar.js (VRM load, lip-sync, idle fidgets, animations)                 │
  │                → expression-composer.js (behavior packet → VRM weights)                  │
