@@ -1,0 +1,64 @@
+﻿# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Runtime logs
+logs/
+*.log
+
+# Local/model files
+models/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.npm/
+.npmrc
+
+# Node build/cache
+dist/
+build/
+.cache/
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+
+# Electron
+electron-builder.yml
+electron-builder.yaml
+release/
+out/
+app-build/
+electron-builder/
+*.asar
+
+# Electron generated output
+dist-electron/
+
+# Local installation artifacts
+0.9.0
+12.0

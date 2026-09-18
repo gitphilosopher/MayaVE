@@ -1,0 +1,34 @@
+# Maya – Audio Operating System
+# Install: pip install -r config/requirements.txt
+
+# ── Audio capture & VAD ───────────────────────────────────────────────────────
+sounddevice>=0.4.6          # cross-platform mic/speaker via PortAudio
+torch>=2.0.0                # Silero VAD + PyTorch intent model
+torchaudio>=2.0.0
+
+# ── Speech-to-Text ────────────────────────────────────────────────────────────
+SpeechRecognition>=3.10.0   # Google Speech API (free, no key, needs internet)
+
+# ── Text-to-Speech ────────────────────────────────────────────────────────────
+kokoro>=0.9.0               # offline neural TTS, Apache 2.0
+# soundfile no longer needed for TTS (Kokoro outputs numpy directly)
+
+# ── ML Intent Classification ─────────────────────────────────────────────────
+# torch already listed above (PyTorch BiLSTM model)
+tensorflow>=2.13.0          # TensorFlow/Keras 1-D CNN model
+numpy>=1.24.0
+
+# ── Skills – optional but recommended ────────────────────────────────────────
+wikipedia>=1.4.0            # offline Q&A summaries
+psutil>=5.9.0               # battery, CPU, RAM, disk
+keyboard>=0.13.5            # media key control
+pyautogui>=0.9.54           # screenshot
+
+# ── LLM backends (uncomment whichever you use) ────────────────────────────────
+# openai>=1.0.0             # set LLMConfig.provider = "openai" + OPENAI_API_KEY
+httpx>=0.27.0             # for Ollama; set LLMConfig.provider = "ollama"
+
+# ── PortAudio (sounddevice dependency) ────────────────────────────────────────
+# Windows:  pip install sounddevice  (wheels bundle PortAudio)
+# macOS:    brew install portaudio
+# Linux:    sudo apt install libportaudio2 portaudio19-dev
