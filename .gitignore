@@ -6,6 +6,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+#Temp/Testing
+tests/
+temp.py
+
 # Runtime logs
 logs/
 *.log
@@ -62,5 +66,3 @@ dist-electron/
 # Local installation artifacts
 0.9.0
 12.0
-temp.py
-test_phrase_streaming.py

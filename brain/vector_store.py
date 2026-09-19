@@ -55,6 +55,10 @@ class VectorStore:
     def update(self, record_id: int, content: str, embedding: list[float], timestamp: float) -> None:
         raise NotImplementedError
 
+    def has_records(self) -> bool:
+        """Cheap "is there anything to search?" gate. Default True (never skips)."""
+        return True
+
     def search(self, embedding: list[float], top_k: int = 3,
                mem_type: str | None = None, min_similarity: float = 0.0) -> list[tuple[MemoryRecord, float]]:
         raise NotImplementedError
@@ -127,6 +131,15 @@ class SQLiteVectorStore(VectorStore):
                 conn.commit()
         except Exception as e:
             logger.error(f"Vector store update failed: {e}", exc_info=True)
+
+    def has_records(self) -> bool:
+        # Fail open: on any error report True so callers do the full search.
+        try:
+            with self._connect() as conn:
+                return conn.execute("SELECT 1 FROM memories LIMIT 1").fetchone() is not None
+        except Exception as e:
+            logger.error(f"Vector store has_records failed: {e}", exc_info=True)
+            return True
 
     def _all_rows(self, mem_type: str | None = None):
         query = ("SELECT id, content, embedding, mem_type, topic, importance, "

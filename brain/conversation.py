@@ -232,6 +232,12 @@ _TOPIC_HISTORY_MAX  = 5
 _ENTITIES_MAX       = 10
 _TOPIC_OVERLAP_MIN  = 0.34  # jaccard threshold for "same topic, different wording"
 
+# Short referential turns ("tell me more", "are you sure", "never mind") have
+# no content of their own to match memories against — retrieval skips the
+# embedding round-trip for them (see ContextManager._skips_semantic).
+_SEMANTIC_SKIP_INTENTS    = frozenset({"followup", "confirm", "dismissal"})
+_SEMANTIC_SKIP_MAX_TOKENS = 6
+
 _STOPWORDS = {
     "the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "on",
     "for", "and", "or", "but", "it", "that", "this", "i", "you", "me",
@@ -293,6 +299,9 @@ class ContextManager:
         # genuine open loop (see observe_user_turn).
         self._pending_question: str | None = None
         self._pending_question_topic: str | None = None
+        # (stripped text, intent name) of the latest observed turn — lets
+        # retrieval gate on intent without changing llm_service's signatures.
+        self._turn: tuple[str, str] | None = None
 
         self._embedder = OllamaEmbedder()
         try:
@@ -320,6 +329,7 @@ class ContextManager:
     def _observe_user_turn(self, text: str, intent: dict | None) -> None:
         stripped    = text.strip()
         intent_name = (intent or {}).get("intent", "")
+        self._turn  = (stripped, intent_name)
         new_topic   = self._infer_topic(text, intent)
         prev_topic  = self._state.active_topic
 
@@ -589,10 +599,24 @@ class ContextManager:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [l.description for _, l in scored[:config.context.max_open_loops]]
 
+    def _skips_semantic(self, question: str) -> bool:
+        """True for a short followup/confirm/dismissal turn — only when the
+        intent recorded by observe_user_turn is for this exact text."""
+        turn = self._turn
+        if not turn or turn[0] != question.strip() or turn[1] not in _SEMANTIC_SKIP_INTENTS:
+            return False
+        return len(re.findall(r"[a-z0-9']+", question.lower())) <= _SEMANTIC_SKIP_MAX_TOKENS
+
     async def _retrieve_semantic(self, question: str) -> list[str]:
         if self._store is None:
             return []
         try:
+            if self._skips_semantic(question):
+                logger.info("[TIMING]     semantic retrieval skipped: short referential turn")
+                return []
+            if not self._store.has_records():
+                logger.info("[TIMING]     semantic retrieval skipped: no stored memories")
+                return []
             t0 = time.perf_counter()
             embedding = await self._embedder.embed(question)
             logger.info(f"[TIMING]     embed(): {time.perf_counter()-t0:.3f}s")

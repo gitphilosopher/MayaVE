@@ -23,12 +23,18 @@ isn't cut off mid-load — this should only matter once per session now
 that OLLAMA_MAX_LOADED_MODELS=2 keeps both the chat and embedding
 models resident simultaneously (see Handoff) instead of Ollama
 evicting one to load the other on every turn.
+
+Latency pass 2: small LRU cache of exact-text results (embeddings are
+deterministic per model, so never stale), longer HTTP keep-alive, and
+per-call diagnostics (gap since last call, overlapping requests, and an
+automatic /api/ps snapshot when a call is slow).
 """
 
 import asyncio
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 import httpx
 import time
@@ -36,6 +42,12 @@ import time
 from config.settings import config
 
 logger = logging.getLogger(__name__)
+
+_CACHE_MAX          = 64      # exact-text embeddings kept (a few hundred KB at most)
+_SLOW_EMBED_SECONDS = 2.0     # above this, log a warning + /api/ps snapshot
+_KEEPALIVE_EXPIRY   = 300.0   # httpx default is 5s — reconnects every idle gap between turns
+
+_bg_tasks: set[asyncio.Task] = set()   # keeps fire-and-forget diagnostics from being GC'd
 
 
 def _resolve_embedding_device() -> str:
@@ -66,8 +78,9 @@ def _embedding_gpu_options() -> dict | None:
 async def describe_ollama_models() -> None:
     """
     Diagnostic only — logs each currently-loaded Ollama model's GPU/CPU
-    placement via GET /api/ps (size_vram / size = % resident in VRAM),
-    so a device-placement change can be verified from Maya's own log
+    placement via GET /api/ps (size_vram / size = % resident in VRAM) and
+    its expires_at (shows whether keep_alive was actually applied), so a
+    device-placement change can be verified from Maya's own log
     instead of external tooling. Best-effort; never raises.
     """
     url = f"{config.llm.base_url.rstrip('/')}/api/ps"
@@ -87,7 +100,8 @@ async def describe_ollama_models() -> None:
                 placement = "GPU" if pct_gpu >= 99 else "CPU" if pct_gpu <= 1 else f"MIXED({pct_gpu:.0f}% GPU)"
                 logger.info(
                     f"[TIMING] Ollama model '{name}': {placement}  "
-                    f"size={size/1e6:.0f}MB size_vram={size_vram/1e6:.0f}MB"
+                    f"size={size/1e6:.0f}MB size_vram={size_vram/1e6:.0f}MB "
+                    f"expires_at={m.get('expires_at', '?')}"
                 )
     except Exception as e:
         logger.debug(f"describe_ollama_models diagnostic failed (non-fatal): {e}")
@@ -113,12 +127,20 @@ class OllamaEmbedder(Embedder):
         # fresh httpx.AsyncClient per request (see module docstring).
         self._client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
+        # Exact-text LRU + diagnostics state.
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._in_flight = 0
+        self._last_call_at: float | None = None
+        self._logged_first_request = False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             async with self._client_lock:
                 if self._client is None or self._client.is_closed:
-                    self._client = httpx.AsyncClient(timeout=self._timeout)
+                    self._client = httpx.AsyncClient(
+                        timeout=self._timeout,
+                        limits=httpx.Limits(keepalive_expiry=_KEEPALIVE_EXPIRY),
+                    )
         return self._client
 
     async def aclose(self) -> None:
@@ -126,11 +148,35 @@ class OllamaEmbedder(Embedder):
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
 
+    def _remember(self, text: str, emb: list[float]) -> None:
+        self._cache[text] = emb
+        self._cache.move_to_end(text)
+        while len(self._cache) > _CACHE_MAX:
+            self._cache.popitem(last=False)
+
+    def _report_slow(self, elapsed: float, gap: float | None, overlap: int) -> None:
+        gap_s = f"{gap:.0f}s" if gap is not None else "first call"
+        logger.warning(
+            f"Slow embedding ({elapsed:.2f}s): model='{self._model}' device='{self._device}' "
+            f"gap_since_last={gap_s} overlapping_requests={overlap} — Ollama state follows"
+        )
+        task = asyncio.create_task(describe_ollama_models())
+        _bg_tasks.add(task)
+        task.add_done_callback(_bg_tasks.discard)
+
     async def embed(self, text: str) -> list[float] | None:
         if self._unavailable or not text.strip():
             return None
+        cached = self._cache.get(text)
+        if cached is not None:
+            self._cache.move_to_end(text)
+            logger.info("[TIMING]       embed cache hit")
+            return cached
+        overlap = self._in_flight
+        self._in_flight += 1
         try:
             t0 = time.perf_counter()
+            gap = (t0 - self._last_call_at) if self._last_call_at is not None else None
             client = await self._get_client()
             payload = {
                 "model": self._model,
@@ -145,13 +191,28 @@ class OllamaEmbedder(Embedder):
             gpu_opts = _embedding_gpu_options()
             if gpu_opts:
                 payload["options"] = gpu_opts
+            if not self._logged_first_request:
+                self._logged_first_request = True
+                logger.info(
+                    f"[TIMING]       first embed request: keep_alive={payload['keep_alive']} "
+                    f"options={payload.get('options')}"
+                )
             resp = await client.post(self._url, json=payload)
-            logger.info(f"[TIMING]       httpx POST /api/embeddings: {time.perf_counter()-t0:.3f}s")
+            elapsed = time.perf_counter() - t0
+            self._last_call_at = time.perf_counter()
+            logger.info(
+                f"[TIMING]       httpx POST /api/embeddings: {elapsed:.3f}s "
+                f"(chars={len(text)} gap={'%.0fs' % gap if gap is not None else 'first'} "
+                f"in_flight_at_start={overlap})"
+            )
             resp.raise_for_status()
             emb = resp.json().get("embedding")
             if not emb:
                 logger.warning(f"Ollama embeddings returned no vector for model '{self._model}'")
                 return None
+            self._remember(text, emb)
+            if elapsed >= _SLOW_EMBED_SECONDS:
+                self._report_slow(elapsed, gap, overlap)
             return emb
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -166,3 +227,5 @@ class OllamaEmbedder(Embedder):
         except Exception as e:
             logger.debug(f"Embedding error (non-fatal): {e}")
             return None
+        finally:
+            self._in_flight -= 1
