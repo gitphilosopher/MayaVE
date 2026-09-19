@@ -104,12 +104,14 @@ Interrupt handling (core/state.py):
 """
 
 import asyncio
+import concurrent.futures
 import inspect
 import json
 import logging
 import os
 import random
 import re
+import threading
 import time
 
 import httpx
@@ -145,6 +147,19 @@ _VOCATIVE_WORDS  = {config.user_name.lower()}
 _NEXT_WORD_RE    = re.compile(r'\s*(\S+)')
 
 
+def _is_vocative_prefix(word: str) -> bool:
+    """
+    True if `word` is a strict, case-insensitive prefix of a known
+    vocative (e.g. "sen" of "senpai") — i.e. it might still grow into
+    one as more stream tokens arrive. Ollama streams sub-word tokens
+    ("sen" + "pai"), so the word right after a comma can be incomplete
+    at the moment _next_boundary checks it; without this, "sen" doesn't
+    match _VOCATIVE_WORDS yet and the comma splits early, stranding
+    "senpai," as its own phrase once the rest streams in.
+    """
+    return any(len(word) < len(v) and v.startswith(word) for v in _VOCATIVE_WORDS)
+
+
 def _next_boundary(buffer: str) -> tuple[int, bool] | None:
     """
     Earliest phrase boundary in `buffer`, or None if it should keep
@@ -169,6 +184,10 @@ def _next_boundary(buffer: str) -> tuple[int, bool] | None:
             word = look.group(1).strip(".,!?;:—").lower()
             if word in _VOCATIVE_WORDS:
                 continue  # merge this clause into the next boundary instead
+            if look.end(1) == len(buffer) and _is_vocative_prefix(word):
+                # Word is still mid-stream and could complete into a
+                # vocative (e.g. "sen" -> "senpai") — wait for more.
+                return None
 
         return idx, ch in ".!?"
 
@@ -764,7 +783,7 @@ async def _play_filler() -> None:
     clean  = _enhance_prosody(clean, "neutral")
 
     loop   = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, _synthesise_blocking, clean)
+    result = await _run_kokoro(_synthesise_blocking, clean)
 
     if result is not None:
         audio, samplerate = result
@@ -1101,7 +1120,7 @@ async def _ollama_streamer(
         await synth_q.put(result)
         logger.info(
             f"[TIMING] synth_q.put #{n} is_final={result[3]} qsize={synth_q.qsize()} "
-            f"t={ts:.3f} '{result[0][:30]}'"
+            f"t={ts:.3f} '{result[0]}'"
         )
         if n == 1:
             logger.info(f"[TIMING][TTFA] first usable phrase ready: +{ts-t_cmd_start:.3f}s since command start")
@@ -1204,7 +1223,7 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
 
         sentence, expression, actions, is_final, attitude, intensity = item
         logger.info(
-            f"[TIMING] synth_worker dequeued '{sentence[:30]}' t={t_dequeued:.3f} "
+            f"[TIMING] synth_worker dequeued '{sentence}' t={t_dequeued:.3f} "
             f"(queue_wait={t_dequeued - t_wait_start:.3f}s)"
         )
 
@@ -1221,7 +1240,7 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
                 logger.info(f"[TIMING][TTFA] Kokoro dispatch: +{t0-t_cmd_start:.3f}s since command start")
                 first_dispatch_logged = True
 
-            audio = await loop.run_in_executor(None, _synthesise_blocking, enhanced, expression)
+            audio = await _run_kokoro(_synthesise_blocking, enhanced, expression)
             t1 = time.perf_counter()
             logger.info(f"[TIMING] Kokoro synth DONE '{sentence[:30]}': {t1-t0:.3f}s (dispatch+compute) t={t1:.3f}")
             if not first_ready_logged:
@@ -1326,6 +1345,54 @@ def _get_kokoro():
         else:
             _kokoro_voice = primary
     return _kokoro_pipeline, _kokoro_voice
+
+
+# A stuck native call inside espeak/Kokoro's C extensions can't be
+# cancelled — Python threads aren't killable, so a hang here previously
+# froze the whole pipeline until the process was force-killed (see
+# Handoff bug log: 27s stall, unrecoverable even after barge-in, hung
+# thread blocked interpreter shutdown). _run_kokoro bounds the wait and
+# rebuilds the pipeline on timeout so a future call gets a fresh
+# instance instead of retrying the same stuck one.
+_KOKORO_SYNTH_TIMEOUT = 15.0
+
+
+def _reset_kokoro_pipeline() -> None:
+    global _kokoro_pipeline, _kokoro_voice
+    _kokoro_pipeline = None
+    _kokoro_voice = None
+    logger.warning("Kokoro pipeline reset after a synthesis timeout — will rebuild on next call.")
+
+
+async def _run_kokoro(fn, *args):
+    """
+    Runs a blocking Kokoro call on its own daemon thread (not the shared
+    executor) with a timeout. A stuck native call can't be cancelled, so
+    two things matter: (1) the wait is bounded so the pipeline recovers
+    within _KOKORO_SYNTH_TIMEOUT instead of stalling indefinitely, and
+    (2) the worker is a daemon thread so a still-stuck call afterward
+    can never block Python's interpreter shutdown (see Handoff bug: a
+    hung synth call left a non-daemon executor thread that made Ctrl+C
+    hang again at exit inside threading._shutdown's atexit join).
+    Returns None on timeout, exactly like a normal synth failure, so
+    callers don't need special-case handling.
+    """
+    fut = concurrent.futures.Future()
+
+    def _runner():
+        try:
+            fut.set_result(fn(*args))
+        except BaseException as e:
+            fut.set_exception(e)
+
+    threading.Thread(target=_runner, daemon=True, name="kokoro-synth").start()
+
+    try:
+        return await asyncio.wait_for(asyncio.wrap_future(fut), timeout=_KOKORO_SYNTH_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.error(f"Kokoro synthesis timed out after {_KOKORO_SYNTH_TIMEOUT}s.")
+        _reset_kokoro_pipeline()
+        return None
 
 
 def warmup() -> None:

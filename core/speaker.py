@@ -56,7 +56,9 @@ from config.settings import config
 from core.state import state, MayaState
 from core.mood import mood_manager
 from core.behavior_engine import behavior_engine
-from services.llm.llm_service import _enhance_prosody, _build_kokoro_pipeline, _log_cuda_memory
+from services.llm.llm_service import (
+    _enhance_prosody, _build_kokoro_pipeline, _log_cuda_memory, _run_kokoro,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +178,7 @@ class Speaker:
 
         try:
             loop = asyncio.get_running_loop()
-            audio = await loop.run_in_executor(None, self._synthesise, clean)
+            audio = await self._synthesise_guarded(clean)
             if audio is None:
                 return
 
@@ -214,6 +216,26 @@ class Speaker:
             await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
 
     # ── Private ───────────────────────────────────────────────────────
+
+    async def _synthesise_guarded(self, text: str) -> np.ndarray | None:
+        """
+        Runs _synthesise via llm_service._run_kokoro — a timeout-bounded
+        daemon-thread call, not the shared executor, so a stuck native
+        Kokoro/espeak call (a) can't stall this pipeline indefinitely and
+        (b) can't block interpreter shutdown either. On timeout this
+        Speaker's own pipeline instance is rebuilt too (separate from
+        llm_service's module-level one) so the next call gets a fresh
+        Kokoro/espeak backend instead of retrying the same stuck one.
+        """
+        audio = await _run_kokoro(self._synthesise, text)
+        if audio is None:
+            try:
+                lang = getattr(config.tts, "lang_code", "a")
+                self._pipeline = _build_kokoro_pipeline(lang)
+                self._voice    = _build_voice(self._pipeline)
+            except Exception as e:
+                logger.error(f"Speaker pipeline rebuild failed: {e}")
+        return audio
 
     def _synthesise(self, text: str) -> np.ndarray | None:
         """Blocking Kokoro synthesis — called in executor."""

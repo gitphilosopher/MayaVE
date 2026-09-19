@@ -107,7 +107,7 @@ async def _alert(name: str) -> None:
     rather than spinning up a new Speaker() instance (which would reload the
     entire Kokoro model from disk — slow and wasteful).
     """
-    from services.llm.llm_service import _synthesise_blocking
+    from services.llm.llm_service import _synthesise_blocking, _run_kokoro
     from core.speaker import _numpy_to_wav
     from services.ws_server import ws_server
     from core.behavior_engine import behavior_engine
@@ -117,7 +117,7 @@ async def _alert(name: str) -> None:
     logger.info(f"Timer alert: {msg_clean}")
 
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, _synthesise_blocking, msg_clean)
+    result = await _run_kokoro(_synthesise_blocking, msg_clean)
 
     if result is not None:
         audio, samplerate = result
