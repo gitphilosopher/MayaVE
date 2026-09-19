@@ -21,7 +21,7 @@ export const camera = new THREE.PerspectiveCamera(
 
 // Passport framing: face + shoulders only, waist hidden below window bottom
 // Z=1.6 close enough to fill frame, Y=1.35 centers between chin and shoulders
-camera.position.set(0.25, 1.35, 1.9);
+camera.position.set(-0.05, 1.35, 2.5);
 // camera.position.set(0.25, 1.35, 10);
 camera.lookAt(0, 1.32, 0);
 

@@ -1,6 +1,6 @@
 /**
  * electron/main.js
- * Maya avatar window — upper body, transparent, bottom-right of screen.
+ * Maya avatar window — upper body, transparent, bottom-left of screen.
  */
 
 import { app, BrowserWindow, screen } from "electron";
@@ -20,8 +20,8 @@ function createWindow() {
     win = new BrowserWindow({
         width:       W,
         height:      H,
-        x:           sw - W + 240,   // 16px from right edge
-        y:           sh - H + 48,        // flush to taskbar
+        x:           -260,               // mirror of the old right-side offset
+        y:           sh - H + 136,        // flush to taskbar
         transparent: true,
         frame:       false,
         alwaysOnTop: true,
@@ -32,6 +32,18 @@ function createWindow() {
             contextIsolation: true,
         },
     });
+
+    // Highest topmost band so she stays above the taskbar.
+    win.setAlwaysOnTop(true, "screen-saver");
+
+    // The taskbar re-raises itself on click; re-assert Maya's z-order.
+    const keepOnTop = () => {
+        if (!win || win.isDestroyed()) return;
+        win.setAlwaysOnTop(true, "screen-saver");
+        win.moveTop();
+    };
+    win.on("always-on-top-changed", (_e, isOnTop) => { if (!isOnTop) keepOnTop(); });
+    setInterval(keepOnTop, 500);
 
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
