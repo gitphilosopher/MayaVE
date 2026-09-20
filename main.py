@@ -34,6 +34,7 @@ from core.listener import Listener
 from core.wake_word import contains_wake_word
 from services.ws_server import ws_server
 from services.llm.llm_service import warmup as llm_warmup
+from services.llm.ollama_lifecycle import chat_keep_alive
 from brain.embeddings import _resolve_embedding_device, _embedding_gpu_options, describe_ollama_models
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -57,16 +58,19 @@ async def _warmup_ollama() -> None:
     """
     Fire a silent 1-token request so Ollama loads the model into RAM
     during Maya's startup. First real question will then respond instantly.
+    Sends the same keep_alive as real chat requests — without it the model
+    would expire on Ollama's 5-minute default if the first command is late.
     """
     url = f"{config.llm.base_url.rstrip('/')}/api/chat"
     payload = {
         "model":    config.llm.model,
         "messages": [{"role": "user", "content": "hi"}],
         "stream":   False,
+        "keep_alive": chat_keep_alive(),
         "options":  {"num_predict": 1},   # generate just 1 token — fast
     }
     try:
-        logger.info(f"Pre-warming Ollama model '{config.llm.model}'…")
+        logger.info(f"Pre-warming Ollama model '{config.llm.model}' (keep_alive={payload['keep_alive']})…")
         async with httpx.AsyncClient(timeout=60) as client:
             await client.post(url, json=payload)
         logger.info("✅ Ollama model is warm and ready.")

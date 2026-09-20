@@ -231,6 +231,7 @@ _STATE_TEXT_MAX     = 80  # keep state entries short — this is a pointer, not 
 _TOPIC_HISTORY_MAX  = 5
 _ENTITIES_MAX       = 10
 _TOPIC_OVERLAP_MIN  = 0.34  # jaccard threshold for "same topic, different wording"
+_OPEN_LOOPS_MAX     = 20    # unresolved loops kept (oldest dropped)
 
 # Short referential turns ("tell me more", "are you sure", "never mind") have
 # no content of their own to match memories against — retrieval skips the
@@ -646,6 +647,14 @@ class ContextManager:
                 await self._persist_memory(candidate)
         except Exception as e:
             logger.debug(f"Context bookkeeping failed (non-fatal): {e}")
+
+    def _add_open_loop(self, description: str, topic: str) -> None:
+        if any(not l.resolved and l.topic == topic and l.description == description
+               for l in self._open_loops):
+            return
+        self._open_loops.append(OpenLoop(description=description, topic=topic))
+        # Resolved loops are never read again — prune them and bound the list.
+        self._open_loops = [l for l in self._open_loops if not l.resolved][-_OPEN_LOOPS_MAX:]
 
     def _resolve_open_loop(self, topic: str | None) -> None:
         if not topic:

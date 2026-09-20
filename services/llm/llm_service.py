@@ -101,6 +101,12 @@ Interrupt handling (core/state.py):
     final out_text.append(...), so _last_response can come back empty.
     query() treats that as "nothing to add to conversation history",
     rather than recording a blank assistant turn.
+
+Model lifecycle (services/llm/ollama_lifecycle.py):
+  - The chat request sends keep_alive (chat_keep_alive()) so the model
+    isn't unloaded after Ollama's 5-minute default; main.py's warmup sends
+    the same value. Each finished turn logs cold/warm + tok/s and a
+    background /api/ps + GPU-memory snapshot (log_chat_turn()).
 """
 
 import asyncio
@@ -124,6 +130,7 @@ from brain.conversation import ConversationManager, context_manager
 from core.mood import mood_manager
 from core.behavior_engine import behavior_engine
 from core.state import state
+from services.llm.ollama_lifecycle import chat_keep_alive, log_chat_turn
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
@@ -1017,6 +1024,9 @@ async def _ollama_streamer(
         "model":    config.llm.model,
         "messages": messages,
         "stream":   True,
+        # Every chat request must carry this — omitting it resets the
+        # model's expiry to Ollama's 5-minute default (see ollama_lifecycle).
+        "keep_alive": chat_keep_alive(),
         "options": {
             "temperature": config.llm.temperature,
             "num_predict": config.llm.max_tokens,
@@ -1174,6 +1184,7 @@ async def _ollama_streamer(
                         data.get("prompt_eval_count"),
                         data.get("eval_count"),
                     )
+                    log_chat_turn(data)
                     break
 
     # Log raw Ollama output before any parsing so we can debug tag issues

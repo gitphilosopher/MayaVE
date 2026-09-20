@@ -42,7 +42,7 @@ class TTSConfig:
 @dataclass
 class LLMConfig:
     provider: str      = "ollama"
-    model: str         = "llama3.1"          # 3B params — 2x faster than llama3.1 8B
+    model: str         = "llama3.2"          # 3B params — 2x faster than llama3.1 8B
     api_key: str       = ""
     base_url: str      = "http://localhost:11434"
     max_tokens: int    = 150                 # short answers = faster response
