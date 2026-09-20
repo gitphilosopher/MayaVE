@@ -10,11 +10,11 @@ from core.speaker import Speaker
 # Skills
 from skills.system.open_app     import execute as open_app
 from skills.system.system_info  import execute as system_info
+from skills.system.lock_screen  import execute as lock_screen
 from skills.web.google_search   import execute as google_search
 from skills.web.open_website    import execute as open_website
 from skills.media.play_music    import execute as play_music
 from skills.utilities.datetime_skill import execute as get_datetime
-from skills.utilities.reminder  import execute as set_reminder
 from services.llm.llm_service   import query as llm_query
 from skills.web.weather          import execute as get_weather
 from skills.system.clipboard     import execute as clipboard
@@ -35,6 +35,7 @@ class Router:
             "open_app":      open_app,
             "system_info":   system_info,
             "screenshot":    system_info,
+            "lock_screen":   lock_screen,
             # Web
             "search_web":    google_search,
             "open_website":  open_website,
@@ -49,7 +50,7 @@ class Router:
             # Utilities
             "get_time":      get_datetime,
             "get_date":      get_datetime,
-            "set_reminder":  set_reminder,
+            "set_reminder":  timer,
             # Weather
             "get_weather":   get_weather,
             # Clipboard

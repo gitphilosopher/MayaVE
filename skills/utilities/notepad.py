@@ -43,6 +43,19 @@ def _handle(intent: dict, text: str) -> str:
     t    = text.lower()
     name = intent.get("intent", "")
 
+    # A specific note_* intent wins over word matching, so a note whose
+    # content contains "read"/"show"/etc. is saved instead of misrouted.
+    handlers = {
+        "note_create": _create,
+        "note_append": _append,
+        "note_read":   _read,
+        "note_list":   lambda _text: _list(),
+        "note_delete": _delete,
+        "note_open":   _open_in_editor,
+    }
+    if name in handlers:
+        return handlers[name](text)
+
     if name == "note_read"   or any(w in t for w in ("read", "show", "what's in", "whats in", "open note")):
         return _read(text)
     if name == "note_list"   or any(w in t for w in ("list notes", "my notes", "all notes", "what notes")):
