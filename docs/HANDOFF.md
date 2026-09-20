@@ -2,6 +2,8 @@
 
 **Basis:** static inspection of the repository snapshot. **No runtime was available** — "Confirmed" below means deterministic from source (code trace), not observed at runtime. Binary assets (`.vrm`, `.vrma`, `.vroid`) were Git LFS pointer stubs (text with `oid`/`size`) in the inspected snapshot, not real binaries; their contents are **UNVERIFIED**. If your checkout has the real assets, they were still not inspected. **`README.md` and `docs/architecture.md` are current, relevant project documentation. When documentation conflicts with the actual implementation, the code is the source of truth.**
 
+**Fix log:** Batch 1–2 fixes from §11 have been applied in source (timer duration, `perform_action` animation, requirements, `logs/` bootstrap, dismissal guard, screenshot, sleep persistence) — statically traced, **not runtime-tested**. See "Resolved" in §11.
+
 ---
 
 # 1. MAYAVI CURRENT STATE
@@ -9,7 +11,7 @@
 - **What:** Windows-first desktop voice assistant "Maya" with a transparent always-on-top 3D VRM avatar. Persona: FRIDAY-like, addresses user as `config.user_name` = "senpai".
 - **Two processes:** Python `asyncio` backend (`main.py`) ⇄ WebSocket `ws://localhost:8765` ⇄ Electron/Vite/Three.js frontend (`frontend/`). Frontend is a pure WS client.
 - **Models/services:** Ollama chat (`config.llm.model`) + Ollama embeddings (`nomic-embed-text`); Kokoro TTS (local, 24 kHz); Silero VAD (`torch.hub`); Google STT via `SpeechRecognition` (**online**, used for utterances *and* wake word); intent classifier = PyTorch BiLSTM + TF CNN ensemble; SQLite semantic memory.
-- **Capabilities present in code (several have known runtime/behavioral problems — sleep, skill-path barge-in, `perform_action` animation, timers; see §11):** wake word/VAD/STT; serial command queue; ML intent routing + regex guards; ~12 skills; streaming LLM with phrase-level TTS pipelining and emotion/attitude/intensity/action tags; persistent mood; behavior engine → Fcl_* morph recipes; VRMA animation system; idle fidgets; gaze/life-motion layers; barge-in; recent-window + semantic long-term memory; Expression Lab (dev tool).
+- **Capabilities present in code (several have known runtime/behavioral problems — skill-path barge-in, timers; see §11):** wake word/VAD/STT; serial command queue; ML intent routing + regex guards; ~12 skills; streaming LLM with phrase-level TTS pipelining and emotion/attitude/intensity/action tags; persistent mood; behavior engine → Fcl_* morph recipes; VRMA animation system; idle fidgets; gaze/life-motion layers; barge-in; recent-window + semantic long-term memory; Expression Lab (dev tool).
 - **Development focus (from code state):** expression realism/calibration, latency (`[TIMING]`/TTFA logging is everywhere), animation/fidget tuning, context/memory quality.
 
 ---
@@ -17,10 +19,10 @@
 # 2. ACTUAL ARCHITECTURE
 
 **Startup (`main.py::main`)**
-1. `asyncio.create_task(ws_server.serve())`; construct `Speaker()`, `Transcriber()`, `Processor(speaker)` (→ `IntentEngine()` load/auto-train — *synchronous, blocks loop*; `ConversationManager`; `Router(speaker)`).
+1. `os.makedirs(config.log_dir)` before logging setup. `asyncio.create_task(ws_server.serve())`; construct `Speaker()`, `Transcriber()`, `Processor(speaker)` (→ `IntentEngine()` load/auto-train — *synchronous, blocks loop*; `ConversationManager`; `Router(speaker)`).
 2. `state.register_stop_callback(_hard_stop_audio)`.
 3. Warmups (gathered): `_warmup_ollama` (1-token chat), `_warmup_embeddings`, `llm_service.warmup` (Kokoro, executor), `speaker.warmup` (executor). Then `describe_ollama_models()` diagnostic.
-4. Startup greeting: `ws_server.broadcast_animation("wave")` + `await speaker.speak(...)` — **before** the Listener exists.
+4. `state.set(IDLE)` (Maya starts awake), then startup greeting: `ws_server.broadcast_animation("wave")` + `await speaker.speak(...)` — **before** the Listener exists.
 5. `asyncio.TaskGroup`: `Listener.start()` + `queue_manager.run()` (**requires Python ≥3.11**).
 
 **Runtime flow**
@@ -61,13 +63,13 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 
 **Input handling (`core/listener.py`, `main.py::on_speech`)**
 - Listener runs VAD **even while SPEAKING** (no echo cancellation/gating in code). Each utterance spawns an independent `on_speech` task; queue order = STT *completion* order.
-- `on_speech`: `was_speaking = state.is_speaking()` snapshot before STT. If speaking and `contains_wake_word(text)` → `on_interrupt()` (→ `state.interrupt()`); otherwise queued normally. Then `_SLEEP_TRIGGERS` (`go to sleep, sleep, goodbye, bye, stop listening`, **substring** match) → SLEEPING + goodbye line. Else `queue_manager.put`.
+- `on_speech`: `was_speaking = state.is_speaking()` snapshot before STT. If speaking and `contains_wake_word(text)` → `on_interrupt()` (→ `state.interrupt()`); otherwise queued normally. Then `_SLEEP_TRIGGERS` (`go to sleep, sleep, goodbye, bye, stop listening`, **substring** match) → SLEEPING + goodbye line (`Speaker.speak` restores SLEEPING afterwards). Else `queue_manager.put`.
 - Effective wake triggers: `config.wake_word="wake up Maya"` → set `{"wake up maya","maya","hey/hello/hi/yo maya"}`; because `"maya"` is in the set (substring match), **any text containing "maya" wakes/interrupts**.
 
-**Queue/processor:** `QueueManager` single serial worker; `priority` field unused. `Processor.handle`: PROCESSING + WS state/transcript → `ConversationManager.add_user` → classify → `context_manager.observe_user_turn` → dispatch → if response ≠ `ALREADY_SPOKEN`: `add_assistant` (tagged text), transcript, `speaker.speak` (greet intent → `on_audio_start` broadcasts `wave`). Always ends with WS `idle` + baseline behavior; exceptions → IDLE.
+**Queue/processor:** `QueueManager` single serial worker; `priority` field unused. `Processor.handle`: PROCESSING + WS state/transcript → `ConversationManager.add_user` → classify → `context_manager.observe_user_turn` → dispatch → if response ≠ `ALREADY_SPOKEN`: `add_assistant` (tagged text), transcript, `speaker.speak` (`greet` intent → `on_audio_start` broadcasts `wave`; a skill-set `intent["action"]` (from `perform_action`) → `on_audio_start` broadcasts that animation). Always ends with WS `idle` + baseline behavior; exceptions → IDLE.
 
 **Intent engine (`brain/intent_engine.py`)** — `_predict` order:
-1. Dismissal guard (≤4 tokens; `t in _DISMISSAL_PHRASES or startswith(p)`) → `dismissal`.
+1. Dismissal guard: **exact** match (trailing `.!?,` stripped) against `_DISMISSAL_PHRASES` → `dismissal`. No prefix/token-count matching.
 2. `_PRESENCE_RE` → `smalltalk`. 3. `_ACTION_WORD_RE` (nod/giggl*/sigh/shrug/wink/wynk) → `perform_action`.
 4. Keyword-first if ≤3 tokens or `startswith` greeting prefix (and not comparison) → else `general_query` "short_input_fallback".
 5. Ensemble avg softmax (BiLSTM `_build_pytorch_model`, CNN `_build_tf_model`), `_CONF_THRESH=0.65` else `_KEYWORD_RULES` (substring).
@@ -80,7 +82,7 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 
 **Mood:** see §7. **Skills:** §9. **Error handling:** most paths log and degrade (memory/embedding `try/except` → recent-context-only; Kokoro timeout → phrase dropped; `ws_server._on_message` swallows all exceptions).
 
-**Blocking-on-loop calls (violates project rule "blocking → executor"):** `IntentEngine.classify`; `SQLiteVectorStore.search/has_records`; `expression_library.save_recipe` (file write); `system_info` CPU branch (`psutil.cpu_percent(interval=1)`).
+**Blocking-on-loop calls (violates project rule "blocking → executor"):** `IntentEngine.classify`; `SQLiteVectorStore.search/has_records`; `expression_library.save_recipe` (file write); `system_info` CPU branch (`psutil.cpu_percent(interval=1)`); screenshot branch (`pyautogui.screenshot`).
 
 ---
 
@@ -128,7 +130,7 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 - **Synthesis:** all Kokoro calls via `llm_service._run_kokoro` (new **daemon thread** per call, 15 s timeout, `_reset_kokoro_pipeline()` on timeout → returns None; `Speaker._synthesise_guarded` rebuilds its own pipeline). Output float32 24 kHz → `_numpy_to_wav` (executor) → base64 in JSON.
 - **Prosody (`_enhance_prosody(text, expression, is_final)`):** `_elongation_re_sub` → `_fix_caps` (+`_CAPS_WHITELIST`) → partial chunk: strip trailing punct only; final: `_expand_short_exclamation` → per-expression punctuation/fragmentation (`_fragment_for_energy` caps at 4 fragments). `EXPRESSION_SPEED` (0.84–1.13) applied **only** in `llm_service._synthesise_blocking`, not in `Speaker._synthesise`.
 - **Playback:** one WAV per phrase; browser `speakFromBytes` (WebAudio `AudioBufferSourceNode`), `source.onended` → `_onAudioDone` → WS `{"type":"audio_done"}` → `ws_server._audio_done_event`. `wait_for_audio_done(timeout=30)` **clears the single shared Event on entry**, warns and continues on timeout. `output="local"` uses `sounddevice`; `"both"` double-plays with the avatar (must stay `"avatar"` when frontend runs).
-- **Speaker path (`core/speaker.py::speak`):** first valid `[tag]` only (`_strip_tags`), whole text one synthesis, `mood_manager.observe_turn([expr])`, sets SPEAKING, broadcasts behavior/state/audio, waits `audio_done`, `finally`: state **IDLE** + WS `idle` + baseline behavior.
+- **Speaker path (`core/speaker.py::speak`):** first valid `[tag]` only (`_strip_tags`), whole text one synthesis, `mood_manager.observe_turn([expr])`, snapshots `was_sleeping`, sets SPEAKING, broadcasts behavior/state/audio (calls `on_audio_start` just before audio), waits `audio_done`, `finally`: state **SLEEPING if it was sleeping on entry, else IDLE** + WS `idle` + baseline behavior.
 - **Barge-in audio:** `stopCurrentAudio()` sets `onended=null` (no `audio_done` is sent after a stop) and stops lip-sync.
 - **Concurrency:** filler + first phrase synthesize concurrently on the same module pipeline (thread-safety UNVERIFIED); Ollama/Kokoro/embedding model may share GPU.
 - **Known problems:** see §11 (30 s stalls; wave-vs-speech sync — wave fires in `on_audio_start` *after* synthesis).
@@ -162,7 +164,7 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 - **Window (`electron/main.js`):** 820×440, x=-260 (bottom-left), transparent/frameless/always-on-top `"screen-saver"` with a 500 ms `keepOnTop` interval, `skipTaskbar`, `setIgnoreMouseEvents(true,{forward:true})` (click-through; injected drag CSS is inert). Loads `VITE_DEV_SERVER_URL` or `../dist/index.html`.
 - **Scene (`main.js`):** FOV 18 camera (-0.05,1.35,2.5), transparent renderer, 3 lights; animate loop: render → `vrm.update` → `updateVrmaAnimations(delta)` → `updateGaze(delta)`.
 - **VRM load (`avatar.js::loadAvatar`):** `assets/mayaaa.vrm`; `expressionController.attach`; eyes closed, arms posed, `startHeadMovement()` always running (also calls `lifeMotionController.update`). `window.vrm` and `window.maya.*` console helpers exposed.
-- **Sleep/wake:** `wakeAvatar()` on WS open (blink loop, eye loop, idle fidgets), `sleepAvatar()` on WS close. **Tied to socket connection only — backend SLEEPING state is never sent to the frontend.**
+- **Sleep/wake:** `wakeAvatar()` on WS open (blink loop, eye loop, idle fidgets), `sleepAvatar()` on WS close. **Tied to socket connection only — backend SLEEPING state is never sent to the frontend** (the avatar stays visually awake while Maya is voice-slept).
 - **WS (`websocket.js`):** reconnect every 2 s; handles `audio, state, behavior, stop_audio, transcript(no-op), animation(wave|nod|giggle|sigh|shrug|wink)`; sends `audio_done` only. No `interrupt` sender exists in the frontend. URL hard-coded `ws://localhost:8765`.
 - **Layering:** `expression-controller.js` (BASE<EMOTION<ACTION<LIPSYNC<BLINK per key; unresolved key → 0); `animation-controller.js` (bone owner tiers BASE<FIDGET<ACTION, `canWrite/claim/release`, 350 ms `handoffProgress`); `life-motion-controller.js` (BASE-tier breathing/posture/shoulders/hips, scaled down while speaking/observing); `gaze-controller.js` (attention session/boredom; `observeScreenActivity` has **no caller except `window.maya`** — no screen observer exists).
 - **Lip-sync:** AnalyserNode (fft 256, 5 bands) → `aa/ee/ih/oh/ou` + `happy` on LIPSYNC layer; token-guarded loop.
@@ -175,7 +177,7 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 
 # 9. SKILLS / TOOLS
 
-Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perform_action` also mutates `intent`.
+Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perform_action` also mutates `intent` (`intent["action"]`, consumed by `Processor`).
 
 | Skill (file) | Trigger | Behavior / output | Notes & failures |
 |---|---|---|---|
@@ -183,14 +185,14 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 | Google search (`web/google_search.py`) | `search_web` | opens Google query from `intent["target"]` | Prompts if empty. |
 | Weather (`web/weather.py`) | `get_weather` | Open-Meteo + geocoding, ip-api.com auto-location (executor, 8 s) | Emits 3 tags; Speaker keeps only the first. Location regex runs to end of string ("in London today" → "London today"). |
 | Open app (`system/open_app.py`) | `open_app` | `os.startfile(target)` (Win) | No name mapping; untagged reply; failure → "couldn't open". |
-| System info (`system/system_info.py`) | `system_info`, `screenshot` | psutil battery/cpu/ram/disk; battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")` | **Screenshot broken** (§11). CPU branch blocks loop 1 s. |
-| Clipboard (`system/clipboard.py`) | `clipboard_*` | pyperclip read(200-char)/write/clear | Top-level `import pyperclip` — missing package crashes startup (Router import). |
+| System info (`system/system_info.py`) | `system_info`, `screenshot` | psutil battery/cpu/ram/disk; battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")`; screenshot saves `screenshot_YYYYMMDD_HHMMSS.png` to `%OneDrive%/Pictures/Screenshots` (else `~/Pictures/Screenshots`, folder auto-created) | CPU branch blocks loop 1 s. Skill triggers only on the word "screenshot" — the intent-`screenshot` utterance "capture my screen" returns the generic "What system information do you need?" prompt. |
+| Clipboard (`system/clipboard.py`) | `clipboard_*` | pyperclip read(200-char)/write/clear | Top-level `import pyperclip` — missing package crashes startup (Router import); now listed in requirements. |
 | Media (`media/play_music.py`) | play/pause/next/prev/volume/mute | `keyboard.send` media keys (volume ×5) | Guarded import; message if missing. |
 | Date/time (`utilities/datetime_skill.py`) | `get_time`, `get_date` | formatted local time/date | — |
-| Timer (`utilities/timer.py`) | `set_timer`, `cancel_timer`, `timer_status` | named/numbered asyncio timers; `_alert` speaks via llm_service Kokoro | Bugs in §11. Skips Speaker/queue/state. |
+| Timer (`utilities/timer.py`) | `set_timer`, `cancel_timer`, `timer_status` | named/numbered asyncio timers; `_parse_duration` uses one pattern per unit (`hours?\|hrs?`, `minutes?\|mins?`, `seconds?\|secs?`); `_alert` speaks via llm_service Kokoro | Remaining bugs in §11. Skips Speaker/queue/state. |
 | Reminder (`utilities/reminder.py`) | `set_reminder` | `asyncio.sleep` then **`print` only** | No speech/WS on expiry. |
 | Notepad (`utilities/notepad.py`) | `note_*` | `.txt` in `~/Maya/Notes`; `_TIMESTAMP_RE` stripped on read | Bugs in §11. `_delete` removes latest note without confirmation. |
-| Perform action (`system/perform_action.py`) | guard-routed | picks nod/giggle/sigh/shrug/wink (+`wynk`), sets `intent["action"]`, returns confirmation | **Animation never fired** (§11). |
+| Perform action (`system/perform_action.py`) | guard-routed | picks nod/giggle/sigh/shrug/wink (+`wynk`), sets `intent["action"]`, returns confirmation; `Processor` fires `broadcast_animation(action)` via `on_audio_start` | Fires only via the `Speaker.speak()` avatar/both path. |
 | Built-ins (`brain/router.py`) | greet/farewell/thanks/help | canned strings; greet triggers wave | — |
 
 ---
@@ -202,30 +204,36 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 - **Env vars:** `MAYA_EMBEDDING_DEVICE` (`cpu` → embeddings `num_gpu=0`), `HF_HUB_OFFLINE` (`setdefault "1"` in `llm_service.py`), `TF_CPP_MIN_LOG_LEVEL` (`setdefault "3"`), `VITE_DEV_SERVER_URL` (Electron), `OneDrive` (screenshot path). Secrets: none in repo (`LLMConfig.api_key=""` unused) → nothing to `[REDACTED]`.
 - **Ports/services:** WS 8765; Ollama 11434 with `llama3.1` and `nomic-embed-text` pulled; Vite dev server default 5173 (not set in config); external: Google STT, Open-Meteo (+geocoding), `ip-api.com` (HTTP), `torch.hub` `snakers4/silero-vad`, HF cache for Kokoro voices.
 - **Runtime:** **Python ≥3.11** (`asyncio.TaskGroup`; README says 3.10+, wrong); Node per Vite 8; Windows 11 (`os.startfile`, `keyboard`, `OneDrive`). GPU optional but used by Ollama and both Kokoro pipelines when present.
-- **Dependencies:** `config/requirements.txt` (README references root `requirements.txt`) **omits `websockets` and `pyperclip`** (both hard imports); lists `wikipedia` (unused).
-- **Paths:** `models/` (auto-created, gitignored), `logs/maya.log` (**directory not auto-created**), `~/Maya/Notes`, `~/Maya/Memory/semantic_memory.sqlite3`, `frontend/assets/{mayaaa.vrm,expressions.json,vrmas/*.vrma}` (LFS via `.gitattributes`; `mmodel.vroid` unused by code).
+- **Dependencies:** `config/requirements.txt` (README references a root `requirements.txt`) now includes `websockets>=12.0` and `pyperclip>=1.8.2`; still lists `wikipedia` (unused).
+- **Paths:** `models/` (auto-created, gitignored), `logs/maya.log` (`logs/` auto-created by `main.py`), `~/Maya/Notes`, `~/Maya/Memory/semantic_memory.sqlite3`, `~/Pictures/Screenshots` or `%OneDrive%/Pictures/Screenshots`, `frontend/assets/{mayaaa.vrm,expressions.json,vrmas/*.vrma}` (LFS via `.gitattributes`; `mmodel.vroid` unused by code).
 - **Invariant:** `config.tts.output` must be `"avatar"` while the frontend runs.
 
 ---
 
 # 11. CURRENT PROBLEMS / FRAGILE AREAS
 
+### Resolved (Batch 1–2; statically traced, not runtime-tested)
+- Timer "N minutes/seconds" double-count → one pattern per unit (`timer._parse_duration`).
+- `perform_action` animation → `Processor` broadcasts `intent["action"]` via `on_audio_start`.
+- `websockets`/`pyperclip` added to `config/requirements.txt`; `logs/` auto-created in `main.py`.
+- Dismissal guard → exact-phrase match (no more `startswith` misroutes of "note…", "nod…", "stop the timer", etc.).
+- Screenshot skill → timestamped file path, folder auto-created, broken `logging.log` removed.
+- Sleep persistence → `Speaker.speak()` restores SLEEPING when it was sleeping on entry; `main.py` sets IDLE before the startup greeting so Maya still starts awake. Wake word is now actually active while asleep.
+
 ### Confirmed (deterministic from source; not runtime-tested)
-1. **Voice sleep doesn't stick.** `main.on_speech` sets SLEEPING then `await speaker.speak(goodbye)`; `Speaker.speak`'s `finally` sets IDLE. Same effect at startup: initial SLEEPING → IDLE after the greeting (Listener log says "Sleeping"). WakeWordDetector is therefore effectively never active. Frontend never learns about sleep either.
-2. **`perform_action` animation never plays.** `core/processor.py` only special-cases `greet`; nothing reads `intent["action"]` (skill docstring says processor does). LLM `*action*` animations work through the LLM playback path (`_play_worker` → `broadcast_animation`); the `perform_action` skill's `intent["action"]` is never consumed by `Processor`, so skill-triggered animations do not fire.
-3. **Dismissal guard uses `startswith` over `{"no","stop","cancel",...}`** (`intent_engine._predict`): "note …", "nod …", "now what", "nothing", "stop the timer/song", "cancel the timer" (≤4 tokens) → `dismissal` → LLM, bypassing note/timer/action/presence guards and ML.
-4. **Timer duration double-counted** (`timer._parse_duration`): patterns `minute` and `min` (and `second`/`sec`) both match "5 minutes" → 600 s. "1 hour" is fine.
-5. **Timer misc:** re-setting a *named* timer: old task's `finally` pops the new entry (untracked, uncancellable); `_alert` broadcasts `speaking` but never `idle` (frontend `_currentBackendState` stuck → fidgets stop), is not interruptible, and shares the single `_audio_done_event` with any concurrent speech.
-6. **Screenshot skill broken** (`system_info`): `pyautogui.screenshot(path)` is given a directory; `logging.log("…")` (missing level) raises when `OneDrive` is unset; exceptions surface as the generic router apology.
-7. **30 s stalls:** `wait_for_audio_done` waits the full timeout when (a) no frontend client connected (`broadcast_audio` returns early but the wait doesn't) — including the **startup greeting, which runs before the Listener starts**; (b) browser decode fails or `vrm` not loaded (no `audio_done`); (c) barge-in during any `Speaker.speak` path (`stopCurrentAudio` nulls `onended`, task not registered, so it isn't cancelled). Queue worker is blocked meanwhile.
-8. **No `listening` state is ever broadcast** (only processing/speaking/idle) → `handleState("listening")` branch is dead; server pushes no state on WS connect → frontend `_currentBackendState` stays `null` (no fidgets) until the first state broadcast.
-9. **Frontend reconnect leaks:** each `wakeAvatar()` starts another `startEyeMovement()` rAF loop + `setInterval` (never stopped) and may duplicate the blink loop (`_blinkingActive` re-armed before old timeout fires).
-10. **Config/router gaps:** no route for `shutdown/restart/lock_screen`; `set_reminder` vs `set_timer` share identical training utterances ("set a timer for 5 minutes", "remind me in …") → nondeterministic skill (reminder never speaks).
-11. **Notepad:** `_handle` checks `("read","show",…)` words in text regardless of intent (notes containing "read/show" are read, not saved); `_extract_content` strips verbs sequentially, so content after a later verb ("…write the report") is cut.
-12. **Code-hygiene traps:** `llm_service._elongation_re_sub` defined twice (first is self-recursive dead code; second wins); `_strip_markdown` does not exist (older docs claim it); `LLMConfig.system_prompt`, `provider`, `STTConfig` model fields unused; `logs/` must pre-exist.
-13. **Expression data reachability:** 22 of 33 `expressions.json` entries unreachable (§7).
+1. **Timer misc:** re-setting a *named* timer: old task's `finally` pops the new entry (untracked, uncancellable); `_alert` broadcasts `speaking` but never `idle` (frontend `_currentBackendState` stuck → fidgets stop), is not interruptible, and shares the single `_audio_done_event` with any concurrent speech.
+2. **30 s stalls:** `wait_for_audio_done` waits the full timeout when (a) no frontend client connected (`broadcast_audio` returns early but the wait doesn't) — including the **startup greeting, which runs before the Listener starts**; (b) browser decode fails or `vrm` not loaded (no `audio_done`); (c) barge-in during any `Speaker.speak` path (`stopCurrentAudio` nulls `onended`, task not registered, so it isn't cancelled). Queue worker is blocked meanwhile.
+3. **No `listening` state is ever broadcast** (only processing/speaking/idle) → `handleState("listening")` branch is dead; server pushes no state on WS connect → frontend `_currentBackendState` stays `null` (no fidgets) until the first state broadcast.
+4. **Frontend reconnect leaks:** each `wakeAvatar()` starts another `startEyeMovement()` rAF loop + `setInterval` (never stopped) and may duplicate the blink loop (`_blinkingActive` re-armed before old timeout fires).
+5. **Config/router gaps:** no route for `shutdown/restart/lock_screen`; `set_reminder` vs `set_timer` share identical training utterances ("set a timer for 5 minutes", "remind me in …") → nondeterministic skill (reminder never speaks).
+6. **Notepad:** `_handle` checks `("read","show",…)` words in text regardless of intent (notes containing "read/show" are read, not saved); `_extract_content` strips verbs sequentially, so content after a later verb ("…write the report") is cut.
+7. **Code-hygiene traps:** `llm_service._elongation_re_sub` defined twice (first is self-recursive dead code; second wins); `_strip_markdown` does not exist (older docs claim it); `LLMConfig.system_prompt`, `provider`, `STTConfig` model fields unused.
+8. **Expression data reachability:** 22 of 33 `expressions.json` entries unreachable (§7).
+9. **Screenshot trigger gap:** "capture my screen" → intent `screenshot` but `system_info` only matches the word "screenshot".
 
 ### Potential
+- **Sleep edge cases:** a command already queued/in flight when "go to sleep" is spoken can still overwrite SLEEPING (`llm_service._play_worker` sets IDLE at `_DONE`; `Processor` sets PROCESSING); Listener still logs "Sleeping — say …" at startup though Maya starts awake; the avatar never visually sleeps (§8).
+- **Dismissal exact match:** phrases with extra words ("no thanks please") no longer hit the guard and fall to keyword/ML routing (`keyword_fallback` still has a `dismissal` rule).
 - **Echo/self-transcription:** VAD+STT run while speaking with no AEC; her own speech (e.g., "I'm Maya") could queue as a command or trigger self-barge-in (setup-dependent).
 - **FSM overwrite:** `on_speech` sets LISTENING/IDLE regardless of PROCESSING; after a barge-in the FSM rests at LISTENING until the next command.
 - **Wake window** is 2 s non-overlapping (word straddling a boundary missed); sleep triggers/wake triggers are substring matches ("asleep").
@@ -244,6 +252,7 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 **Ordering/async**
 - All commands go through `queue_manager` (serial). Startup/wake/sleep lines and timer alerts already bypass it — don't add more.
 - Per phrase order in `_play_worker`: actions → **behavior (before audio)** → state `speaking` → audio → `wait_for_audio_done` → baseline behavior. `Speaker.speak` mirrors it.
+- `Speaker.speak()` restores the state it entered with only for SLEEPING (else IDLE): the go-to-sleep line depends on `main.on_speech` setting SLEEPING *before* calling it, and the startup greeting depends on `main.py` setting IDLE *before* calling it.
 - `audio_done` is sent only from `source.onended`; `stopCurrentAudio` nulls it deliberately. `wait_for_audio_done` clears a single shared Event — keep speech serialized.
 - Audio-callback thread → loop only via `run_coroutine_threadsafe`; `state.set_sync` exists for that thread.
 - All Kokoro calls through `_run_kokoro` (daemon thread + timeout + reset), never the default executor. Blocking work → `run_in_executor`.
@@ -275,27 +284,28 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 *(Static inspection only. "Implemented / internally consistent" means the code paths trace correctly end-to-end; it does NOT establish that mic/VAD/STT, Kokoro, Ollama or the avatar actually work at runtime.)*
 
 ### Implemented / internally consistent
-Mic/VAD/STT pipeline; serial queue; intent ensemble + auto-retrain; Ollama streaming with phrase splitting, tag parsing, filler gate; Kokoro synth path with timeout/reset; WS protocol; behavior engine + recipe generation/persistence; mood logic; recent-window + semantic memory pipeline (structure); VRMA player/fidget scheduler; lip-sync; datetime, clipboard, media, weather, open_website (listed sites), google_search, notepad (basic), LLM `*action*` animations via the LLM playback path (not the `perform_action` skill).
+Mic/VAD/STT pipeline; serial queue; intent ensemble + auto-retrain; Ollama streaming with phrase splitting, tag parsing, filler gate; Kokoro synth path with timeout/reset; WS protocol; behavior engine + recipe generation/persistence; mood logic; recent-window + semantic memory pipeline (structure); VRMA player/fidget scheduler; lip-sync; datetime, clipboard, media, weather, open_website (listed sites), google_search, notepad (basic), screenshot (via the word "screenshot"), timers' duration parsing, `perform_action` skill animation, LLM `*action*` animations via the LLM playback path, voice sleep/wake state handling.
 
 ### Present in code, with known limitations
-Barge-in (LLM path only; skill/greeting path stalls); sleep/wake (wake word exists, sleep doesn't hold); timers (double-count, name race, no idle broadcast); context state quality (§5); expression library (22/33 entries unreachable; naming split); gaze (no screen observer); `set_reminder` (silent); open_app (no name mapping); Expression Lab (dev only).
+Barge-in (LLM path only; skill/greeting path stalls); sleep/wake (state holds and wake word is active; frontend never sees sleep; in-flight command can overwrite SLEEPING); timers (name race, no idle broadcast, not interruptible); context state quality (§5); expression library (22/33 entries unreachable; naming split); gaze (no screen observer); `set_reminder` (silent); open_app (no name mapping); Expression Lab (dev only).
 
 ### Known broken
-`perform_action` animation; screenshot; dismissal-guard misroutes; timer "N minutes" duration; shutdown/restart/lock_screen skills (absent); `logs/` bootstrap; missing `websockets`/`pyperclip` in requirements.
+shutdown/restart/lock_screen skills (absent); "capture my screen" doesn't trigger the screenshot skill.
 
 ### Unverified
-VRM morph/expression names and VRMA track contents (LFS pointers); Ollama model availability/keep-alive env; STT accuracy/latency; GPU placement and VRAM contention; Kokoro thread-safety; audio echo behavior; production (`vite build`) packaging; actual `npm run dev` Electron launch.
+VRM morph/expression names and VRMA track contents (LFS pointers); Ollama model availability/keep-alive env; STT accuracy/latency; GPU placement and VRAM contention; Kokoro thread-safety; audio echo behavior; production (`vite build`) packaging; actual `npm run dev` Electron launch; runtime behavior of the Batch 1–2 fixes.
 
 ---
 
 # RUNTIME VERIFICATION CHECKLIST
 
 Things to actually test (not architectural requirements) before or while changing code:
-- Does "go to sleep" leave Maya IDLE (§11.1), and does the wake word ever fire afterward?
+- Does "go to sleep" now hold SLEEPING, and does saying "hey maya" wake her (§11 Resolved / Potential)?
+- Does "can you giggle/wink/nod" play the animation in sync with the reply? Does "set a timer for 5 minutes" fire at 300 s? Does "take a screenshot" write a file?
 - Which expression names/morphs the real VRM exposes (`vrm.expressionManager.expressions`, mesh `morphTargetDictionary`), including which `Fcl_*` keys exist and whether `joy/fun/sorrow` or `happy/relaxed` resolve.
 - `ollama ps`: chat/embedding model residency and keep-alive; GPU/VRAM split across Ollama, embeddings and the two Kokoro pipelines.
 - Echo behavior with headphones vs speakers (self-transcription/self-barge-in).
-- Environment: `logs/` exists; `websockets` and `pyperclip` installed; Python ≥3.11; `git lfs pull` done for assets.
+- Environment: Python ≥3.11; `git lfs pull` done for assets.
 
 ---
 
@@ -307,12 +317,12 @@ Things to actually test (not architectural requirements) before or while changin
 
 **Present in code:** everything under §13 (the "Implemented / internally consistent" group has no additional known source-level defect from static inspection, but none of it is runtime-verified). Edge-TTS/XTTS, transcript overlay, SQLite for the recent window, offline wake word, screen observation are **not** in code.
 
-**Top issues to know:** sleep doesn't stick; `perform_action` doesn't animate; dismissal `startswith` bug; timer minute double-count; 30 s `audio_done` stalls (no frontend / barge-in on skill path / greeting before Listener); degenerate context topic/entity data; unreachable calibrated expressions; requirements/Python-version/`logs/` bootstrap gaps.
+**Top issues to know (remaining):** 30 s `audio_done` stalls (no frontend / barge-in on skill path / greeting before Listener); timer name race + missing idle broadcast; degenerate context topic/entity data; unreachable calibrated expressions; frontend loop duplication on reconnect; notepad quirks; `set_reminder`/`set_timer` training overlap; missing shutdown/restart/lock_screen skills. Batch 1–2 fixes (see §11 Resolved) are applied but not runtime-tested.
 
 **Fragile:** Kokoro concurrency/timeouts; barge-in only on the LLM task; frontend loop duplication on reconnect; fidget/animation ownership; `expressions.json` dual writers; closed vocabularies duplicated across files.
 
-**Do not break:** §12 (queue order, per-phrase WS order, `audio_done` semantics, vocab sync, mood hook placement, `_run_kokoro`, TRAINING_DATA auto-retrain, `.quaternion/.weight` filtering).
+**Do not break:** §12 (queue order, per-phrase WS order, `audio_done` semantics, `Speaker.speak()` SLEEPING/IDLE contract, vocab sync, mood hook placement, `_run_kokoro`, TRAINING_DATA auto-retrain, `.quaternion/.weight` filtering).
 
-**Runtime checks:** see FIRST RUNTIME CHECKS above.
+**Runtime checks:** see RUNTIME VERIFICATION CHECKLIST above.
 
 **Inspect first:** `main.py`, `core/processor.py`, `core/speaker.py`, `services/llm/llm_service.py`, `core/state.py`, `services/ws_server.py`, `brain/intent_engine.py` (`_predict`), `brain/conversation.py`, `core/behavior_engine.py`, `frontend/js/{websocket,avatar,expression-composer}.js`, `config/settings.py`.

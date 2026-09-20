@@ -35,6 +35,10 @@ class TTSConfig:
     speed:       float = 1           # slightly faster feels more alive
     # Output mode: 'local' = sounddevice only, 'avatar' = WebSocket only, 'both' = both
     output:      str   = "avatar"
+    # Kokoro device: "cpu" | "cuda" | "auto". CPU keeps the GPU free for Ollama.
+    device:      str   = "cpu"
+    # Torch CPU threads for Kokoro when device="cpu". 0 = torch default.
+    cpu_threads: int   = 1
 
 
 # Replace your LLMConfig in config/settings.py with this:

@@ -168,6 +168,9 @@ class MayaWebSocketServer:
         await self._broadcast(json.dumps({"type": "animation", "name": animation}))
 
     async def wait_for_audio_done(self, timeout: float = 30.0) -> bool:
+        # No client → broadcast_audio sent nothing, so no audio_done will come.
+        if not self._clients:
+            return False
         self._audio_done_event.clear()
         try:
             await asyncio.wait_for(self._audio_done_event.wait(), timeout=timeout)
