@@ -19,6 +19,7 @@ Stop:  Ctrl+C
 import asyncio
 import datetime
 import logging
+import os
 import sys
 
 import httpx
@@ -38,6 +39,7 @@ from services.llm.ollama_lifecycle import chat_keep_alive
 from brain.embeddings import _resolve_embedding_device, _embedding_gpu_options, describe_ollama_models
 
 # ── Logging ───────────────────────────────────────────────────────────────────
+os.makedirs(config.log_dir, exist_ok=True)   # FileHandler fails if logs/ is missing
 logging.basicConfig(
     level=getattr(logging, config.log_level, logging.INFO),
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
@@ -257,6 +259,8 @@ async def main() -> None:
     print(f"  Stop      : Ctrl+C")
     print(f"{'─'*55}\n")
 
+    # Start awake — speak() now restores the prior state, so this must be set first.
+    await state.set(MayaState.IDLE)
     await ws_server.broadcast_animation("wave")
     await speaker.speak(
         f"GOOD {tod} {_U}! I'm {config.name}. "

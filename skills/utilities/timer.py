@@ -141,13 +141,12 @@ def _parse_duration(text: str) -> tuple[int | None, str]:
     total = 0
     found = False
 
+    # One pattern per unit — separate long/short-form patterns used to both
+    # match "5 minutes" and double-count it.
     patterns = [
-        (r'(\d+(?:\.\d+)?)\s*hour',   3600),
-        (r'(\d+(?:\.\d+)?)\s*hr',     3600),
-        (r'(\d+(?:\.\d+)?)\s*minute', 60),
-        (r'(\d+(?:\.\d+)?)\s*min',    60),
-        (r'(\d+(?:\.\d+)?)\s*second', 1),
-        (r'(\d+(?:\.\d+)?)\s*sec',    1),
+        (r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b',      3600),
+        (r'(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b',   60),
+        (r'(\d+(?:\.\d+)?)\s*(?:seconds?|secs?)\b',   1),
     ]
 
     for pattern, multiplier in patterns:

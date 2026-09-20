@@ -1034,9 +1034,10 @@ class IntentEngine:
 
     # ── Prediction ────────────────────────────────────────────────────────────
 
-    # Hard dismissal phrases — explicit cancellations only.
-    # Conversational reactions ("that means we are good", "sounds good") are
-    # NOT in this set — they should reach the LLM for a context-aware reply.
+    # Hard dismissal phrases — explicit cancellations only, matched EXACTLY
+    # (see _predict). Conversational reactions ("that means we are good",
+    # "sounds good") are NOT in this set — they should reach the LLM for a
+    # context-aware reply.
     _DISMISSAL_PHRASES: frozenset = frozenset([
         "not right now", "no thanks", "never mind", "nevermind",
         "forget it", "nah", "nope", "not now", "maybe later",
@@ -1087,14 +1088,11 @@ class IntentEngine:
         t = text.lower().strip()
 
         # ── Negation / dismissal guard ────────────────────────────────────────
-        # Only fire for exact short dismissal phrases.
-        # Longer sentences that happen to contain "no" or "stop" should go
-        # through ML so context is considered (e.g. "stop the timer" → cancel_timer).
+        # Exact phrase match only (trailing punctuation ignored). Prefix
+        # matching misrouted "note …", "nod …", "stop the timer" etc. —
+        # those now go through the normal guards/ML.
         tokens = re.findall(r"[a-z0-9]+", t)
-        if len(tokens) <= 4 and (
-            t in self._DISMISSAL_PHRASES or
-            any(t.startswith(p) for p in self._DISMISSAL_PHRASES)
-        ):
+        if t.rstrip(".!?,") in self._DISMISSAL_PHRASES:
             return "dismissal", 1.0, "negation_guard"
 
         # ── Presence / arrival guard ──────────────────────────────────────────

@@ -83,14 +83,16 @@ async def execute(intent: dict, text: str) -> str:
     if "screenshot" in t:
         try:
             import pyautogui
+            from datetime import datetime
             from pathlib import Path
             onedrive = os.environ.get("OneDrive")
             if onedrive:
-                path = Path(onedrive) / "Pictures" / "Screenshots"
+                folder = Path(onedrive) / "Pictures" / "Screenshots"
             else:
-                logging.log("OneDrive folder not found")
-                path = os.path.expanduser("~/Pictures/Screenshots")
-            pyautogui.screenshot(path)
+                folder = Path.home() / "Pictures" / "Screenshots"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
+            pyautogui.screenshot(str(path))
             return f"[happy] Screenshot saved to {path}"
         except ImportError:
             return "[sad] Install pyautogui for screenshots."

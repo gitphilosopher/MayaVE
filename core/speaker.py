@@ -40,6 +40,9 @@ Bug fixes:
     first real voice command flowed through processor.handle(). Doing it
     once here means every caller gets it for free instead of each call site
     needing to remember.
+  - speak() restores SLEEPING (instead of forcing IDLE) when it was
+    SLEEPING on entry, so the go-to-sleep goodbye line no longer wakes
+    Maya back up.
 """
 
 import asyncio
@@ -171,6 +174,10 @@ class Speaker:
 
         clean = _enhance_prosody(clean, expression)
 
+        # Snapshot before SPEAKING overwrites it — the go-to-sleep line is
+        # spoken while SLEEPING and must not wake Maya back up.
+        was_sleeping = state.is_sleeping()
+
         await state.set(MayaState.SPEAKING)
         logger.info(f"Speaking [{expression}]: '{clean}'")
 
@@ -203,7 +210,7 @@ class Speaker:
         except Exception as e:
             logger.error(f"Speaker error: {e}", exc_info=True)
         finally:
-            await state.set(MayaState.IDLE)
+            await state.set(MayaState.SLEEPING if was_sleeping else MayaState.IDLE)
             # Tell the browser too — not just the internal FSM. Every
             # caller of speak() (main.py's greeting/wake/sleep lines,
             # timer.py's alert, processor.py's skill responses) gets this

@@ -79,11 +79,19 @@ class Processor:
                 self._conversation.add_assistant(response)
                 await ws_server.broadcast_transcript(response, "maya")
 
+                # Set by skills/system/perform_action.py on the intent dict.
+                action = intent.get("action")
+
                 if intent.get("intent") == "greet":
                     # Fire wave exactly when audio starts playing, not before synthesis
                     await self._speaker.speak(
                         response,
                         on_audio_start=lambda: ws_server.broadcast_animation("wave"),
+                    )
+                elif action:
+                    await self._speaker.speak(
+                        response,
+                        on_audio_start=lambda: ws_server.broadcast_animation(action),
                     )
                 else:
                     await self._speaker.speak(response)
