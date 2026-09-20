@@ -82,6 +82,10 @@
     "Fcl_EYE_Natural": 0.3,
     "Fcl_MTH_Neutral": 0.25
   },
+  "neutral|sincere|low": {
+    "Fcl_EYE_Natural": 0.085,
+    "Fcl_MTH_Neutral": 0.061
+  },
   "neutral|sincere|medium": {
     "Fcl_EYE_Natural": 0.158,
     "Fcl_MTH_Neutral": 0.102
@@ -212,5 +216,10 @@
     "Fcl_EYE_Spread": 1.0,
     "Fcl_EYE_Surprised": 1.0,
     "Fcl_MTH_Surprised": 1.0
+  },
+  "surprised|sincere|medium": {
+    "Fcl_BRW_Surprised": 0.486,
+    "Fcl_EYE_Surprised": 0.474,
+    "Fcl_MTH_Surprised": 0.409
   }
 }
