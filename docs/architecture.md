@@ -40,6 +40,7 @@ flowchart LR
         Router["brain/router.py"]
         Skills["skills/*"]
         LLM["services/llm/llm_service.py\nOllama streaming"]
+        Lifecycle["services/llm/ollama_lifecycle.py\nkeep_alive + turn diagnostics"]
         Context["brain/conversation.py\nContextManager"]
         VectorStore["brain/vector_store.py\nSQLite"]
         Mood["core/mood.py"]
@@ -64,6 +65,7 @@ flowchart LR
     Processor --> Intent --> Router
     Router --> Skills
     Router --> LLM
+    LLM --> Lifecycle
     LLM <--> Context
     Context <--> VectorStore
     Processor --> Mood
@@ -135,7 +137,8 @@ new items (logged as a warning).
    skill coroutine or `llm_query`; unknown intents fall back to the LLM.
 6. If the skill's return value is not `ALREADY_SPOKEN`, the response is added to conversation
    memory, broadcast as a transcript, and spoken via `Speaker.speak()` (with a wave animation
-   fired via `on_audio_start` when intent is `greet`).
+   fired via `on_audio_start` when intent is `greet`, or the skill-resolved animation when
+   `intent["action"]` is set by `perform_action`).
 7. Broadcasts `state:idle` + a mood-baseline `behavior` packet. Exceptions are caught, logged,
    and Maya returns to IDLE gracefully (no crash propagation to the queue worker).
 
@@ -152,7 +155,7 @@ new items (logged as a warning).
   (`models/training_hash.txt`); on startup, a mismatch triggers a full retrain automatically
   (no manual step required). `train_intent.py` remains for a full manual wipe + test report.
 - **Guards that bypass the ML models entirely** (checked in this order before ML inference):
-  1. Dismissal guard — exact/short dismissal phrases (`stop`, `nah`, `never mind`, ≤4 tokens).
+  1. Dismissal guard — exact match against `_DISMISSAL_PHRASES` (`stop`, `nah`, `never mind`, …).
   2. Presence/arrival guard — regex `_PRESENCE_RE` (e.g. "I'm here now", "just got back") forces
      `smalltalk`, added specifically because the ML models spuriously associate "now"/"here" with
      `get_time`/`get_date`.
@@ -174,18 +177,21 @@ Static `dict[intent_name -> coroutine]` built in `Router.__init__`. Categories:
 
 | Category | Intents | Handler |
 |---|---|---|
-| System | `open_app`, `system_info`, `screenshot` | `skills/system/*` |
+| System | `open_app`, `system_info`, `screenshot`, `lock_screen` | `skills/system/*` (`lock_screen.py`: Windows `LockWorkStation()` via ctypes; other OS → apology line) |
 | Web | `search_web`, `open_website` | `skills/web/*` |
 | Media | `play_music`, `pause_music`, `next_track`, `prev_track`, `volume_up`, `volume_down`, `mute` | `skills/media/play_music.py` (OS media-key simulation via `keyboard`) |
 | Datetime | `get_time`, `get_date` | `skills/utilities/datetime_skill.py` |
-| Reminder | `set_reminder` | `skills/utilities/reminder.py` (fire-and-forget `print()`, **not TTS-announced** — see §10) |
+| Reminder | `set_reminder` | `skills/utilities/reminder.py` (fire-and-forget `print()`, **not TTS-announced** — see §12) |
 | Weather | `get_weather` | `skills/web/weather.py` (Open-Meteo + ip-api.com geolocation) |
 | Clipboard | `clipboard_read/write/clear` | `skills/system/clipboard.py` (`pyperclip`) |
 | Timer | `set_timer`, `cancel_timer`, `timer_status` | `skills/utilities/timer.py` — separate system from `set_reminder`; timers speak an alert via `_alert()` on expiry using the shared Kokoro pipeline from `llm_service` |
-| Notepad | `note_create/append/read/list/delete/open` | `skills/utilities/notepad.py` — plain `.txt` files in `~/Maya/Notes` |
-| Action animations | `perform_action` | `skills/system/perform_action.py` — **referenced by router/intent engine but file content not in this snapshot; contract [UNVERIFIED]** |
+| Notepad | `note_create/append/read/list/delete/open` | `skills/utilities/notepad.py` — plain `.txt` files in `~/Maya/Notes`; a `note_*` intent dispatches directly to its handler |
+| Action animations | `perform_action` | `skills/system/perform_action.py` — resolves the requested action (nod/giggle/sigh/shrug/wink, incl. `wynk`) from the text, stores it in `intent["action"]` and returns a confirmation line; `Processor` fires the matching `animation` message via `on_audio_start` |
 | Conversational built-ins | `greet`, `farewell`, `thanks`, `help` | inline `Router` methods, canned strings |
 | LLM-routed | `confirm`, `dismissal`, `smalltalk`, `identity`, `joke`, `motivate`, `opinion`, `followup`, `general_query`, `unknown` | `services/llm/llm_service.py::query` |
+
+`shutdown` and `restart` exist as labels in `TRAINING_DATA` but have **no route** — they fall
+through to the LLM with a warning log.
 
 Convention: any skill that performs its own TTS (currently only the LLM path) returns the
 sentinel `ALREADY_SPOKEN` so `Processor` doesn't double-speak. All other skills return a string
@@ -244,7 +250,8 @@ Layered on top of §6.1, tracks per-turn:
 ### 6.3 Long-term semantic memory
 - **Embeddings** (`brain/embeddings.py`): `OllamaEmbedder` calls Ollama's `/api/embeddings`
   with `config.context.embedding_model` (default `nomic-embed-text`, must be pulled separately).
-  Reuses one pooled `httpx.AsyncClient`; `keep_alive: "30m"` to avoid repeated cold loads.
+  Reuses one pooled `httpx.AsyncClient`; `keep_alive: "30m"` to avoid repeated cold loads;
+  64-entry exact-text LRU cache; calls ≥2 s log a warning plus an `/api/ps` snapshot.
   Degrades to `None` (semantic memory silently disabled) if the model 404s.
 - **Store** (`brain/vector_store.py::SQLiteVectorStore`): SQLite table (`~/Maya/Memory/semantic_memory.sqlite3`
   by default, `config.context.memory_dir`), brute-force cosine similarity via numpy — no ANN
@@ -256,7 +263,8 @@ Layered on top of §6.1, tracks per-turn:
   rather than accumulate.
 - **Read**: top-`k` (`max_semantic_memories`, default 3) memories above `similarity_threshold`
   (0.75), excluded if their timestamp is within `semantic_recency_guard_seconds` (120 s) of now
-  (already covered by recent-window context).
+  (already covered by recent-window context). Skipped for short followup/confirm/dismissal turns
+  and when the store is empty.
 - **Compaction**: every time §6.1 evicts 10 turns, they're compacted into one keyword-gist
   `conversation_summary` memory rather than being lost outright.
 
@@ -330,6 +338,12 @@ Key mechanics:
   `[attitude:sincere|playful|teasing|mock]` and `[intensity:low|medium|high]`; at most one
   `*action*` tag per sentence from a closed vocabulary (`nod, giggle, sigh, shrug, wink`).
   Anything outside these vocabularies is stripped from TTS text but produces no side effect.
+- **Model residency** (`services/llm/ollama_lifecycle.py`): every chat request and the startup
+  chat warmup send `keep_alive` (`chat_keep_alive()`: default `"60m"`, overridable via
+  `config.llm.keep_alive`; numeric strings such as `"-1"` are sent as numbers) so the model isn't
+  unloaded after Ollama's 5-minute default. After each turn `log_chat_turn()` logs COLD/warm
+  status, prompt/generation tok/s and the gap since the previous chat, then snapshots
+  `/api/ps` + CUDA memory in the background. Diagnostics only — never raises.
 - **Text sanitization for TTS**: `_fix_caps()` (title-cases non-whitelisted ALL-CAPS to avoid
   Kokoro/espeak spelling them letter-by-letter), `_elongation_re_sub()` (collapses `YESSSS`→`YES`),
   `_expand_short_exclamation()` (bare "yes"/"no"/"wow"/etc. expanded to an expression-specific
@@ -358,8 +372,11 @@ Key mechanics:
 - Kokoro (`kokoro.KPipeline`), fully offline, 24 kHz output. **Two separate KPipeline instances
   exist**: one owned by `Speaker` (used for skill/canned responses and the startup greeting), one
   module-level singleton in `llm_service.py` (used for the streaming LLM path and reused by
-  `timer.py`'s alert to avoid a cold reload). Both are warmed up at startup
-  (`main.py`: `speaker.warmup()` + `llm_warmup()` via `run_in_executor`).
+  `timer.py`'s alert to avoid a cold reload). Both are built by `llm_service._build_kokoro_pipeline()`
+  and warmed up at startup (`main.py`: `speaker.warmup()` + `llm_warmup()` via `run_in_executor`).
+- Device: `config.tts.device` (currently `"cpu"`, keeping the GPU free for Ollama; `"cuda"`/`"auto"`
+  also accepted). `KPipeline(device=...)` is only used if the installed kokoro supports that
+  keyword. `config.tts.cpu_threads` is defined but not read by any backend code.
 - Voice blending: `config.tts.voice` blended with `config.tts.voice_blend` at `blend_ratio`
   (currently `af_sky` + `jf_alpha` at 0.92 — heavily weighted toward the blend voice despite the
   comment saying "35%").
@@ -465,8 +482,9 @@ code; not scoped/authenticated). One handler per connection, tracked in a `Set`.
 | `interrupt` | manual stop-talking button → routed to `state.interrupt()` via `set_interrupt_handler` |
 | `audio_done` | one queued sentence finished playing client-side → sets `_audio_done_event`, gating the next `play_q` item server-side |
 
-`wait_for_audio_done()` has a 30 s timeout, after which it logs a warning and continues anyway
-rather than deadlocking the pipeline.
+`wait_for_audio_done()` returns `False` immediately when no client is connected (nothing was
+sent, so no `audio_done` will come). Otherwise it has a 30 s timeout, after which it logs a
+warning and continues anyway rather than deadlocking the pipeline.
 
 ---
 
@@ -476,17 +494,19 @@ Single `MayaConfig` dataclass singleton (`config`), sub-configs:
 - `AudioConfig`: 16 kHz/mono/30 ms VAD frames, 800 ms silence cutoff, 200 ms pre-roll.
 - `STTConfig`: fields for a local Whisper-style model (`model_size`, `device`, `compute_type`)
   exist but **`core/transcriber.py` uses Google's cloud STT, not a local model** — these fields
-  appear unused by the current transcriber. **[UNVERIFIED whether dead code or used elsewhere]**.
-- `TTSConfig`: Kokoro voice/blend/speed/output-mode.
+  appear unused by the current transcriber. **[UNVERIFIED whether dead code or used elsewhere]**
+- `TTSConfig`: Kokoro voice/blend/speed/output-mode, plus `device` (`"cpu"`) and `cpu_threads`
+  (unused).
 - `LLMConfig`: `provider="ollama"`, `model="llama3.2"`, `base_url="http://localhost:11434"`,
   `max_tokens=150`, `temperature=0.7`, plus the base system prompt (overridden at call time by
   `llm_service._SYSTEM_PROMPT`, which is far more detailed — the `LLMConfig.system_prompt` field
   itself does not appear to be read anywhere in `llm_service.py`; it constructs its own constant).
-  **[UNVERIFIED — dead config field vs. used by an unseen caller]**
+  **[UNVERIFIED — dead config field vs. used by an unseen caller]** `config.llm.keep_alive` is not
+  a declared field; `ollama_lifecycle.chat_keep_alive()` reads it via `getattr` (default `"60m"`).
 - `ContextConfig`: recent-window size 6, embedding model `nomic-embed-text`, similarity/dedup
   thresholds, memory dir default `~/Maya/Memory`.
 - `ws_host="localhost"`, `ws_port=8765`.
-- `requirements.txt` lists both `torch`/`torchaudio` (BiLSTM + Silero VAD) and `tensorflow`
+- `config/requirements.txt` lists both `torch`/`torchaudio` (BiLSTM + Silero VAD) and `tensorflow`
   (CNN model) as hard dependencies — the intent engine requires both ML frameworks
   simultaneously. `SpeechRecognition` (Google STT, needs internet), `kokoro` (offline TTS),
   `wikipedia`/`psutil`/`keyboard`/`pyautogui` for skills, `httpx` for Ollama/weather/embeddings.
@@ -510,10 +530,8 @@ Verified in code:
   it only `print()`s to the console, unlike `timer.py` which properly re-enters the avatar/audio
   pipeline via the shared Kokoro instance. These are two separate, inconsistent "reminder" systems
   (`set_reminder` intent vs. `set_timer` intent) with different UX guarantees.
-- **`skills/system/perform_action.py`** is imported by `router.py` and referenced extensively by
-  `intent_engine.py`'s comments/regex, but its source was **not included in this repository
-  snapshot** — its exact behavior (mapping to `animation` WS messages, expected return string
-  format) is **[UNVERIFIED]**, inferred only by analogy to the other skills' `[tag]` convention.
+- **`shutdown` / `restart` intents have no skill** — they exist in `TRAINING_DATA` and keyword
+  rules but `Router` has no route, so they are answered by the LLM (nothing is shut down).
 - **Wave/speech sequencing latency** is called out in project notes as a known unresolved issue
   (Kokoro synthesis stacking sequentially after a lead-in delay); a concurrent `asyncio.gather`
   fix was attempted and rolled back in favor of the current `on_audio_start` callback pattern.
@@ -550,5 +568,4 @@ Verified in code:
 
 *This document reflects the repository contents provided for analysis. It was not cross-checked
 against a running instance; any runtime-only behavior (actual model accuracy, actual network
-latencies, actual `perform_action.py` contract) is necessarily inferred from static code and is
-flagged accordingly above.*
+latencies) is necessarily inferred from static code and is flagged accordingly above.*

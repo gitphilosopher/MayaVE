@@ -15,13 +15,14 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
 
 - **Wake-word activation** ("hey maya" / "maya") with name-gated barge-in interruption.
 - **Voice pipeline**: Silero VAD → Google STT → dual-model ML intent classification → skill dispatch or Ollama LLM.
-- **20+ voice skills**: web search, open website/app, weather, clipboard, notes, timers/reminders, system info (battery/CPU/RAM/disk/screenshot), media/volume control, date/time, physical action animations (nod/giggle/sigh/shrug/wink).
+- **13 voice skills**: web search, open website/app, weather, clipboard, notes, timers/reminders, system info (battery/CPU/RAM/disk/screenshot), lock screen, media/volume control, date/time, physical action animations (nod/giggle/sigh/shrug/wink).
 - **Streaming LLM responses** with phrase-level TTS pipelining (synthesis starts before the full sentence has streamed).
 - **Emotion & nuance tags**: `[expression]`, optional `[attitude:word]`, `[intensity:word]`, and `*action*` stage-direction tags, parsed and enforced against closed vocabularies.
 - **Persistent mood engine**: Maya's anger/sadness persists and decays across turns instead of resetting every response.
 - **Behavioral Engine**: composes emotion + mood + attitude + personality into a blended VRM expression (six-knob legacy blend or a calibrated fine-grained morph "recipe").
 - **3D avatar (VRM)**: idle fidgets, gaze/screen-attention system, lip-sync, life-motion (breathing/posture), bone-ownership arbitration between concurrent animation systems.
 - **Stage 2/3 conversational intelligence**: recent-turn memory, topic reconciliation (continuation/subtopic/digression/return/switch), open-loop tracking, and SQLite + Ollama-embedding semantic long-term memory.
+- **Model residency control**: chat requests send Ollama `keep_alive`, and each turn logs cold/warm status and tokens/sec.
 - **Expression Lab**: standalone browser tool for calibrating the VRM morph-target "recipes" behind each emotion/attitude/intensity combination.
 
 ---
@@ -34,7 +35,7 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
  │  mic ──▶ Listener (Silero VAD +      ──▶ QueueManager ──▶ Processor ──▶ Router         │
  │          WakeWordDetector)               (asyncio.Queue,      │            │             │
  │              │                            serial FIFO)        │            ├─▶ Skills   │
- │              ▼                                                │            │  (20+)      │
+ │              ▼                                                │            │  (13)       │
  │        Transcriber (Google STT)                               │            │             │
  │                                                               ▼            ▼             │
  │                                                          IntentEngine   llm_service      │
@@ -81,6 +82,7 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
 | `brain/embeddings.py` | `OllamaEmbedder` — calls Ollama's `/api/embeddings` (`nomic-embed-text`). |
 | `brain/memory.py` | Bounded in-process recent-turn list with an eviction callback for compaction. |
 | `services/llm/llm_service.py` | Ollama streaming chat, phrase-level TTS pipelining (streamer → synth_worker → play_worker), expression/attitude/intensity/action tag parsing, prosody enhancement, filler phrases. |
+| `services/llm/ollama_lifecycle.py` | Chat-model `keep_alive` policy, per-turn cold/warm + tokens/sec logging, post-turn `/api/ps` + GPU-memory snapshot (diagnostics only). |
 | `services/ws_server.py` | WebSocket server (`:8765`) — broadcasts `audio`/`state`/`behavior`/`transcript`/`animation`/`stop_audio`; receives `interrupt`/`audio_done`. |
 | `skills/*` | Individual voice skills (see table below). |
 | `config/settings.py` | Single `MayaConfig` dataclass — audio, STT, TTS, LLM, context tuning, WS host/port. |
@@ -94,6 +96,7 @@ Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D 
 | Weather (Open-Meteo + ip-api.com) | `skills/web/weather.py` |
 | Open app | `skills/system/open_app.py` |
 | System info / screenshot | `skills/system/system_info.py` |
+| Lock screen (Windows) | `skills/system/lock_screen.py` |
 | Clipboard read/write/clear | `skills/system/clipboard.py` |
 | Physical action animations | `skills/system/perform_action.py` |
 | Media/volume control (media keys) | `skills/media/play_music.py` |
@@ -144,7 +147,7 @@ WebSocket server at `ws://localhost:8765` (see `services/ws_server.py` / `fronte
 
 **Backend (Python, asyncio)**
 - Ollama (LLM inference, default `llama3.2`, `http://localhost:11434`) + Ollama embeddings (`nomic-embed-text`)
-- Kokoro TTS (offline neural TTS, voice blend `af_sky` + `jf_alpha`)
+- Kokoro TTS (offline neural TTS, voice blend `af_sky` + `jf_alpha`, CPU by default)
 - Silero VAD (`torch.hub`) for speech segmentation
 - Google Speech Recognition (`SpeechRecognition`) for STT + wake-word (online, free, no key)
 - PyTorch (BiLSTM+Attention) and TensorFlow/Keras (1-D CNN) — dual-model intent ensemble
@@ -162,6 +165,7 @@ WebSocket server at `ws://localhost:8765` (see `services/ws_server.py` / `fronte
 ```
 config/
   settings.py            # MayaConfig — single source of runtime config
+  requirements.txt       # Python dependencies
 core/
   state.py listener.py transcriber.py speaker.py mood.py
   behavior_engine.py expression_library.py queue_manager.py
@@ -171,7 +175,7 @@ brain/
   embeddings.py memory.py train_intent.py
 services/
   ws_server.py
-  llm/llm_service.py
+  llm/llm_service.py ollama_lifecycle.py
 skills/
   web/ system/ media/ utilities/
 frontend/
@@ -184,7 +188,6 @@ frontend/
   expression-lab.html      # standalone calibration tool
 models/                   # generated: pytorch_intent.pt, tf_intent.keras, vocab.json, labels.json, training_hash.txt
 main.py
-requirements.txt
 ```
 
 External runtime data (created on demand, not in-repo): `~/Maya/Notes/` (notepad), `~/Maya/Memory/semantic_memory.sqlite3` (long-term memory), `logs/maya.log`.
@@ -193,8 +196,8 @@ External runtime data (created on demand, not in-repo): `~/Maya/Notes/` (notepad
 
 ## Prerequisites
 
-- **Windows 11** (skills use `os.startfile`; media-key control via `keyboard`).
-- **Python 3.10+** with PyTorch and TensorFlow support.
+- **Windows 11** (skills use `os.startfile`, `ctypes.windll` for lock screen; media-key control via `keyboard`).
+- **Python 3.11+** with PyTorch and TensorFlow support (`asyncio.TaskGroup` is required).
 - **[Ollama](https://ollama.com)** running locally with:
   - `ollama pull llama3.2` (or whichever model is set in `config.llm.model`)
   - `ollama pull nomic-embed-text` (semantic memory embeddings)
@@ -202,7 +205,7 @@ External runtime data (created on demand, not in-repo): `~/Maya/Notes/` (notepad
 - **Kokoro TTS** weights (installed via `pip install kokoro`).
 - A **VRM avatar model** at `frontend/assets/mayaaa.vrm` and matching `.vrma` animation clips at `frontend/assets/vrmas/` (not included in this repo — user-supplied).
 - Internet connectivity (Google STT for transcription + wake word are online APIs).
-- A Node/static file server (e.g. Vite) to serve `frontend/` — `ws_server.py` explicitly allows `http://localhost:5173` as an origin.
+- A Node/static file server (e.g. Vite) to serve `frontend/` — the WebSocket server accepts connections from any origin (`origins=None`), including the Vite dev server on `http://localhost:5173`.
 
 ---
 
@@ -210,7 +213,7 @@ External runtime data (created on demand, not in-repo): `~/Maya/Notes/` (notepad
 
 ```bash
 # Backend
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 
 # Ollama models
 ollama pull llama3.2
@@ -231,10 +234,10 @@ Place your VRM model at `frontend/assets/mayaaa.vrm` and animation clips under `
    ```bash
    python main.py
    ```
-   This pre-warms Ollama, the embedding model, and two Kokoro pipelines concurrently, opens the WebSocket server on `:8765`, and begins listening on the default mic — starting **SLEEPING**.
-3. Serve/open the frontend (`frontend/index.html`) — on connect it plays the wake/greeting animation and Maya enters **IDLE**.
-4. Say **"hey maya"** (configurable in `config.wake_word`) to wake her; say **"go to sleep"**, **"sleep"**, or **"goodbye"** to put her back to sleep.
-5. Interrupt her mid-sentence by calling her name again (`contains_wake_word` gate on barge-in).
+   This pre-warms Ollama, the embedding model, and two Kokoro pipelines concurrently, opens the WebSocket server on `:8765`, plays a startup greeting, and begins listening on the default mic. Maya starts **awake** (IDLE).
+3. Serve/open the frontend (`frontend/index.html`) — on connect the avatar wakes and idle animations begin.
+4. Say **"go to sleep"**, **"sleep"**, or **"goodbye"** to put her to sleep, and **"hey maya"** (configurable in `config.wake_word`) to wake her again.
+5. Interrupt her mid-sentence by calling her name (`contains_wake_word` gate on barge-in).
 
 `frontend/expression-lab.html` can be opened independently to calibrate expression morph recipes; it writes to browser `localStorage` and exports `expressions.json`.
 
@@ -248,10 +251,12 @@ All runtime tuning lives in `config/settings.py` (`MayaConfig`), notably:
 |---|---|
 | `AudioConfig` | `sample_rate=16000`, `chunk_ms=30`, `silence_ms=800`, `pre_roll_ms=200` |
 | `STTConfig` | `model_size`, `language="en"`, `device`, `compute_type` (currently unused directly — STT is Google, not Whisper) |
-| `TTSConfig` | `voice="af_sky"`, `voice_blend="jf_alpha"`, `blend_ratio=0.92`, `speed=1`, `output="avatar"` |
+| `TTSConfig` | `voice="af_sky"`, `voice_blend="jf_alpha"`, `blend_ratio=0.92`, `speed=1`, `output="avatar"`, `device="cpu"` (`cpu_threads` is defined but currently unused) |
 | `LLMConfig` | `provider="ollama"`, `model="llama3.2"`, `base_url="http://localhost:11434"`, `max_tokens=150`, `temperature=0.7`, `system_prompt` |
 | `ContextConfig` | `recent_turns=6`, `max_open_loops=3`, `max_semantic_memories=3`, `similarity_threshold=0.75`, `dedup_threshold=0.92`, `embedding_model="nomic-embed-text"` |
 | top-level | `wake_word="wake up Maya"` *(effective default trigger set derived from this — see `core/wake_word.py`)*, `ws_host="localhost"`, `ws_port=8765`, `log_dir="logs"` |
+
+Optional overrides read without being declared in the dataclasses: `config.llm.keep_alive` (Ollama chat `keep_alive`, default `"60m"`; `"-1"` = never unload).
 
 Optional env var: `MAYA_EMBEDDING_DEVICE=cpu` forces the embedding model off GPU (see `brain/embeddings.py`). `HF_HUB_OFFLINE=1` is set automatically to avoid cold-start network calls.
 
@@ -276,8 +281,9 @@ Intent training data lives inline in `brain/intent_engine.py::TRAINING_DATA`; mo
 - **Idle fidget system** is still being actively tuned (cooldowns, gaze-boredom modulation).
 - **Transcript overlay** message type exists on the wire (`type: "transcript"`) but has no frontend UI consumer yet.
 - **STT/wake-word require internet** (Google Speech API) — no fully offline fallback currently wired in.
-- **Windows-only** skill implementations (`os.startfile`, `keyboard` media-key sends); partial Darwin fallback exists in `open_app.py` only.
+- **Windows-only** skill implementations (`os.startfile`, `keyboard` media-key sends, `ctypes.windll` lock screen); partial Darwin fallback exists in `open_app.py` only.
 - Reminder skill (`skills/utilities/reminder.py`) only prints to console on expiry — it does not speak, unlike `timer.py`'s alert path.
+- `shutdown` and `restart` are recognised intents but have no skill — they are answered by the LLM.
 - No automated test suite; validation is manual functional testing of routing/trigger-matching/hash-detection before delivery.
 - VRM model and `.vrma` animation assets are not included in the repository — must be user-supplied.
 
