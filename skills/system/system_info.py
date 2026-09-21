@@ -10,21 +10,29 @@ reports it back on the loop after the executor call returns.
 import asyncio
 import logging
 import os
+import re
 
 from core.mood import mood_manager
 
 logger = logging.getLogger(__name__)
 
+_BATTERY_RE    = re.compile(r"\bbatter(?:y|ies)\b")
+_CPU_RE        = re.compile(r"\bcpus?\b")
+_RAM_RE        = re.compile(r"\b(?:ram|memory)\b")
+_DISK_RE       = re.compile(r"\bdisks?\b")
+_SCREENSHOT_RE = re.compile(r"\bscreen\s?shots?\b")
 
 async def execute(intent: dict, text: str) -> str:
     loop = asyncio.get_running_loop()
-    reply, event = await loop.run_in_executor(None, _build_reply, text)
+    reply, event = await loop.run_in_executor(
+        None, _build_reply, text, intent.get("intent", "")
+    )
     if event:
         mood_manager.report_event(**event)
     return reply
 
 
-def _build_reply(text: str) -> tuple[str, dict | None]:
+def _build_reply(text: str, intent_name: str = "") -> tuple[str, dict | None]:
     """Blocking. Returns (reply, mood_event_kwargs_or_None)."""
     try:
         import psutil
@@ -33,7 +41,7 @@ def _build_reply(text: str) -> tuple[str, dict | None]:
 
     t = text.lower()
 
-    if "battery" in t:
+    if _BATTERY_RE.search(t): 
         b = psutil.sensors_battery()
         if not b:
             return "[surprised] No battery detected.", None
@@ -63,7 +71,7 @@ def _build_reply(text: str) -> tuple[str, dict | None]:
                          reason=f"battery critical ({p:.0f}%), unplugged"),
                 )
 
-    if "cpu" in t:
+    if _CPU_RE.search(t):
         cpu = psutil.cpu_percent(interval=1)
         if cpu < 30:
             return f"[happy] The processor is taking it easy at {cpu}%, senpai. Plenty of headroom.", None
@@ -78,7 +86,7 @@ def _build_reply(text: str) -> tuple[str, dict | None]:
                      reason=f"CPU usage critical ({cpu}%)"),
             )
 
-    if "ram" in t or "memory" in t:
+    if _RAM_RE.search(t):
         r = psutil.virtual_memory()
         ram = r.percent
         if ram < 40:
@@ -94,14 +102,14 @@ def _build_reply(text: str) -> tuple[str, dict | None]:
                      reason=f"RAM usage critical ({ram}%)"),
             )
 
-    if "disk" in t:
+    if _DISK_RE.search(t):
         d = psutil.disk_usage("/")
         return (
             f"[relaxed] Disk: {d.used // 1024**3} GB used of "
             f"{d.total // 1024**3} GB ({d.percent}%)."
         ), None
 
-    if "screenshot" in t:
+    if _SCREENSHOT_RE.search(t) or intent_name == "screenshot":
         try:
             import pyautogui
             from datetime import datetime

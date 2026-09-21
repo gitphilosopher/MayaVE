@@ -32,6 +32,7 @@ _SITES = {
     "stack overflow": "https://stackoverflow.com",
 }
 
+_SITE_RES = {name: re.compile(rf"\b{re.escape(name)}\b") for name in _SITES}
 _LABEL_RE = re.compile(r"^[a-z0-9-]+$")
 _HOST_RE  = re.compile(r"^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/\S*)?$")
 _FILLER_RE = re.compile(r"^(?:the\s+)?(?:website\s+)?")
@@ -58,7 +59,7 @@ def _resolve_url(target: str) -> str | None:
 async def execute(intent: dict, text: str) -> str:
     t = text.lower()
     for name, url in _SITES.items():
-        if name in t:
+        if _SITE_RES[name].search(t):
             webbrowser.open(url)
             return f"[happy] Opening {name.capitalize()} for you senpai!"
     target = intent.get("target", "").strip()

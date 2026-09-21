@@ -50,6 +50,10 @@ _NUM_WORD_RE = re.compile(
     re.IGNORECASE,
 )
 
+_CANCEL_RE = re.compile(
+    r"\b(?:cancel(?:l?ed|l?ing|s)?|stop(?:s|ped|ping)?|clear(?:s|ed|ing)?|delete(?:s|d)?)\b")
+_STATUS_RE = re.compile(r"\b(?:status|how long|remaining|left|lists?)\b")
+_ALL_RE    = re.compile(r"\ball\b")
 
 @dataclass
 class Timer:
@@ -89,10 +93,9 @@ async def execute(intent: dict, text: str) -> str:
     # A reminder's own wording ("remind me to stop by...") must not hit
     # the cancel/status word checks.
     if intent.get("intent") != "set_reminder":
-        if any(w in t for w in ("cancel", "stop", "clear", "delete")):
+        if _CANCEL_RE.search(t):
             return _cancel(t)
-
-        if any(w in t for w in ("status", "how long", "remaining", "left", "list")):
+        if _STATUS_RE.search(t):
             return _status()
 
     seconds, label = _parse_duration(text)
@@ -147,7 +150,7 @@ def _cancel(text: str) -> str:
     if not _timers:
         return f"[neutral] No active timers, {_U}."
 
-    if "all" in text:
+    if _ALL_RE.search(text):
         for t in _timers.values():
             if not t.task.done():
                 t.task.cancel()

@@ -34,6 +34,8 @@ from typing import Callable, Awaitable, Optional
 
 import numpy as np
 import speech_recognition as sr
+import re
+from functools import lru_cache
 
 from config.settings import config
 from core.state import state, MayaState
@@ -75,11 +77,32 @@ def compute_wake_triggers(wake_word: Optional[str] = None) -> set[str]:
         triggers.add(f"{prefix} {name}")
     return triggers
 
+@lru_cache(maxsize=8)
+def _trigger_pattern(wake: str) -> re.Pattern:
+    # Longest first; \b so "maya" doesn't fire inside "Mayans"/"Amaya".
+    ordered = sorted(compute_wake_triggers(wake), key=len, reverse=True)
+    return re.compile(r"\b(?:" + "|".join(re.escape(t) for t in ordered) + r")\b")
+
 
 def contains_wake_word(text: str, wake_word: Optional[str] = None) -> bool:
-    """True if `text` contains one of the wake-phrase triggers."""
-    t = text.lower()
-    return any(trigger in t for trigger in compute_wake_triggers(wake_word))
+    """True if `text` contains one of the wake-phrase triggers as whole words."""
+    wake = (wake_word or config.wake_word).lower().strip()
+    return _trigger_pattern(wake).search(text.lower()) is not None
+
+# ── Sleep commands ────────────────────────────────────────────────────────
+# Unambiguous phrases count anywhere in the utterance; the bare words "sleep"/
+# "bye" only count as the whole utterance (optionally with please/name), so
+# "I didn't sleep well" / "she's asleep" no longer put Maya to sleep.
+_NAME = re.escape(config.name.lower())
+_ADDRESS_TAIL = rf"(?:\s+(?:please|{_NAME}|{re.escape(config.user_name.lower())}))*"
+_SLEEP_ANYWHERE_RE = re.compile(r"\b(?:go to sleep|good ?bye|stop listening)\b")
+_SLEEP_BARE_RE = re.compile(
+    rf"^(?:(?:ok|okay|hey|hi)\s+)*(?:{_NAME}\s+)?(?:sleep|bye(?:\s+bye)?){_ADDRESS_TAIL}$"
+)
+
+def is_sleep_command(text: str) -> bool:
+    t = " ".join(re.sub(r"[^a-z' ]+", " ", text.lower().replace("’", "'")).split())
+    return bool(_SLEEP_ANYWHERE_RE.search(t) or _SLEEP_BARE_RE.match(t))
 
 
 class WakeWordDetector:
@@ -97,6 +120,7 @@ class WakeWordDetector:
         self._pending   = False   # True while a transcription is in-flight
 
         self._triggers = compute_wake_triggers()
+        self._trigger_re = _trigger_pattern(config.wake_word.lower().strip())
 
         logger.info(
             f"WakeWordDetector ready — triggers: {self._triggers}  "
@@ -136,7 +160,7 @@ class WakeWordDetector:
             )
             if text:
                 logger.debug(f"Wake-word window heard: '{text}'")
-                if any(trigger in text for trigger in self._triggers):
+                if self._trigger_re.search(text):
                     logger.info(f"🔔 Wake word detected: '{text}'")
                     await self._on_wake()
         finally:

@@ -7,6 +7,7 @@ Uses ip-api.com to auto-detect location if user doesn't specify one.
 import asyncio
 import logging
 import httpx
+import re
 
 from config.settings import config
 
@@ -25,6 +26,9 @@ _WMO = {
     71: "light snow", 73: "snow", 75: "heavy snow",
     80: "rain showers", 81: "showers", 82: "heavy showers",
     95: "thunderstorms", 96: "thunderstorms with hail",
+    56: "light freezing drizzle", 57: "freezing drizzle",
+    66: "light freezing rain",   67: "heavy freezing rain",
+    77: "snow grains", 85: "light snow showers", 86: "heavy snow showers",
 }
 
 # Map weather codes to expressions
@@ -36,6 +40,8 @@ _WMO_EXPRESSION = {
     71: "surprised", 73: "surprised", 75: "angry",
     80: "sad", 81: "sad", 82: "angry",
     95: "angry", 96: "angry",
+    56: "sad", 57: "sad", 66: "sad", 67: "angry"
+    , 77: "surprised", 85: "surprised", 86: "angry",
 }
 
 
@@ -89,16 +95,20 @@ def _fetch(text: str) -> str:
         logger.error(f"Weather error: {e}", exc_info=True)
         return f"[sad] I couldn't fetch the weather right now, {_U}."
 
+_TRAILING_TIME_RE = re.compile(
+    r"(?:(?:^|\s+)(?:right\s+now|now|today|tonight|tomorrow|"
+    r"this\s+(?:morning|afternoon|evening|weekend|week)|please|thanks|thank\s+you))+\s*$",
+    re.IGNORECASE,
+)
 
 def _extract_location(text: str) -> str | None:
-    import re
-    m = re.search(r'\b(?:in|for|at)\s+([A-Za-z\s]+?)(?:\s*\?|$)', text, re.IGNORECASE)
-    if m:
-        loc = m.group(1).strip()
-        if loc.lower() not in ("today", "tomorrow", "now", "the", "a"):
-            return loc
-    return None
-
+    m = re.search(r'\b(?:in|for|at)\s+([A-Za-z\s]+?)\s*[?.!]*$', text, re.IGNORECASE)
+    if not m:
+        return None
+    loc = _TRAILING_TIME_RE.sub("", m.group(1)).strip()   # "London today" -> "London"
+    if not loc or loc.lower() in ("the", "a"):
+        return None                                        # "for today" -> auto-locate
+    return loc
 
 def _geocode(client: httpx.Client, location: str) -> tuple:
     resp = client.get(_GEO_URL, params={"name": location, "count": 1, "language": "en"})

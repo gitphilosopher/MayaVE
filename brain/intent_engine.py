@@ -56,6 +56,8 @@ from typing import Optional
 
 import numpy as np
 
+from config.settings import config
+
 logger = logging.getLogger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -701,7 +703,13 @@ _KEYWORD_RULES: list[tuple[str, list[str]]] = [
                        "tell me about", "tell me", "what are", "why is",
                        "where is", "when did", "define", "describe"]),
 ]
-
+_KEYWORD_SUFFIX = r"(?:s|es|d|ed|ing)?"
+_KEYWORD_PATTERNS: list[tuple[str, re.Pattern]] = [
+    (intent, re.compile(
+        r"\b(?:" + "|".join(re.escape(t.strip()) for t in triggers) + r")"
+        + _KEYWORD_SUFFIX + r"\b"))
+    for intent, triggers in _KEYWORD_RULES
+]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Automatic retrain detection
@@ -1046,6 +1054,17 @@ class IntentEngine:
         "drop it", "ignore that", "disregard that",
     ])
 
+    _DISMISSAL_TRIM_RE = re.compile(
+        r"^(?:(?:ok|okay|um|uh|hmm|well|actually)\s+)*(?P<core>.+?)"
+        rf"(?:\s+(?:please|{re.escape(config.name.lower())}|{re.escape(config.user_name.lower())}))*$"
+    )
+
+    @classmethod
+    def _is_dismissal(cls, t: str) -> bool:
+        norm = " ".join(re.sub(r"[^a-z0-9' ]+", " ", t.replace("’", "'")).split())
+        m = cls._DISMISSAL_TRIM_RE.match(norm)
+        return bool(m) and m.group("core") in cls._DISMISSAL_PHRASES
+
     # Patterns that indicate presence/arrival — these should ALWAYS go to
     # smalltalk regardless of what words like "now", "here", "back" might
     # spuriously activate in the datetime-trained ML models.
@@ -1074,9 +1093,12 @@ class IntentEngine:
     # STT sometimes mishears it that way — same word, same action, just a
     # common ASR typo (see skills/system/perform_action.py's _ACTION_WORDS
     # for the matching fix on the skill side).
-    _ACTION_WORD_RE = re.compile(
-        r"\b(nod|nods|nodding|giggl\w*|sigh|sighs|sighing|"
-        r"shrug|shrugs|shrugging|wink|winks|winking|wynk|wynks|wynking)\b",
+    # Questions ABOUT an action word ("what does nod mean", "why did you sigh",
+    # "do you giggle") are conversation, not a request to perform it.
+    _ACTION_QUESTION_RE = re.compile(
+        r"\b(what|why|how|when|where|who|which)\b"
+        r"|^\s*(does|do|did|is|are|was)\b"
+        r"|\b(mean|means|meaning|define|definition)\b",
         re.IGNORECASE,
     )
 
@@ -1092,7 +1114,7 @@ class IntentEngine:
         # matching misrouted "note …", "nod …", "stop the timer" etc. —
         # those now go through the normal guards/ML.
         tokens = re.findall(r"[a-z0-9]+", t)
-        if t.rstrip(".!?,") in self._DISMISSAL_PHRASES:
+        if self._is_dismissal(t):
             return "dismissal", 1.0, "negation_guard"
 
         # ── Presence / arrival guard ──────────────────────────────────────────
@@ -1108,27 +1130,19 @@ class IntentEngine:
         # "can you giggle", "give me a nod", "wink at me" etc. — route
         # straight to perform_action so testing/using these animations
         # doesn't depend on the ML model ever having seen this phrasing.
-        if self._ACTION_WORD_RE.search(t):
+        if self._ACTION_WORD_RE.search(t) and not self._ACTION_QUESTION_RE.search(t):
             logger.debug(f"Action-request guard fired for '{text}' → perform_action")
             return "perform_action", 1.0, "action_guard"
 
         # ── Keyword-first guard ───────────────────────────────────────────────
-        # For inputs up to 3 tokens, keyword rules are more reliable than ML
-        # (too few tokens = not enough signal for BiLSTM/CNN).
-        # Also runs for pure greeting inputs so "hey maya", "hi there" etc.
-        # are never misrouted to Ollama as general_query.
+        # Pure greetings like "hey maya" or "good evening maya" are ≤3 tokens, 
+        # so they still take the keyword path
+        # the guard covers short inputs only.
         # Comparison queries ("which", "vs", "or", "compare") always skip to ML.
-        _GREETING_PREFIXES = ("hey", "hi", "hello", "howdy", "yo", "sup",
-                               "good morning", "good evening", "good afternoon")
         _COMPARISON_WORDS  = ("which", "compare", " vs ", "difference between",
                                "pros and cons", "better than", "or hdd", "or ssd")
         is_comparison = any(w in t for w in _COMPARISON_WORDS)
-        use_keywords = (
-            not is_comparison and (
-                len(tokens) <= 3
-                or any(t.startswith(p) for p in _GREETING_PREFIXES)
-            )
-        )
+        use_keywords = not is_comparison and len(tokens) <= 3
         if use_keywords:
             kw_intent, kw_conf, _ = self._keyword_fallback(text)
             if kw_conf > 0:
@@ -1180,8 +1194,8 @@ class IntentEngine:
 
     def _keyword_fallback(self, text: str) -> tuple[str, float, str]:
         t = text.lower()
-        for intent, triggers in _KEYWORD_RULES:
-            if any(trigger in t for trigger in triggers):
+        for intent, pattern in _KEYWORD_PATTERNS:
+            if pattern.search(t):
                 return intent, 1.0, "keyword"
         return "unknown", 0.0, "keyword"
 
@@ -1196,10 +1210,16 @@ class IntentEngine:
             "set_reminder": ["remind me to", "remind me", "set a timer for",
                              "set a reminder for", "timer for", "alarm for"],
         }
+        trigger_hit = False
         for trigger in trigger_map.get(intent, []):
             if trigger in text:
+                trigger_hit = True
                 after = text.split(trigger, 1)[-1].strip()
                 after = re.sub(r"^(for|to|the|a|an|me)\s+", "", after)
                 if after:
                     return after
-        return text
+        # A trigger matched but nothing followed it ("search", "open"): return ""
+        # so the skill's own clarification prompt fires instead of echoing the
+        # trigger word back as the target. No trigger matched at all (ML-routed
+        # phrasing) keeps the old whole-utterance fallback.
+        return "" if trigger_hit else text

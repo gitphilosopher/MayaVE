@@ -39,7 +39,7 @@ from core.transcriber import Transcriber
 from core.speaker import Speaker
 from core.processor import Processor
 from core.listener import Listener
-from core.wake_word import contains_wake_word
+from core.wake_word import contains_wake_word, is_sleep_command
 from core.behavior_engine import behavior_engine
 from core.mood import mood_manager
 from services.ws_server import ws_server
@@ -66,8 +66,6 @@ for _noisy in ("httpx", "httpcore", "websockets", "urllib3", "tensorflow"):
 logger = logging.getLogger("main")
 
 _U = config.user_name
-_SLEEP_TRIGGERS = {"go to sleep", "sleep", "goodbye", "bye", "stop listening"}
-
 
 # ── Ollama warm-up ────────────────────────────────────────────────────────────
 
@@ -259,7 +257,7 @@ async def main() -> None:
                     f"word — not a barge-in, queuing normally: '{text}'"
                 )
 
-        if any(trigger in text_lower for trigger in _SLEEP_TRIGGERS):
+        if is_sleep_command(text_lower):
             await state.set(MayaState.SLEEPING)
             logger.info("💤 Maya going to sleep.")
             print(f"💤  {config.name} is sleeping — say '{config.wake_word}' to wake.")
