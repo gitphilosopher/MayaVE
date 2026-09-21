@@ -31,6 +31,11 @@ Behavioral Engine integration (core/behavior_engine.py):
   codebase — every prior call site now goes through
   behavior_engine.compose() + broadcast_behavior() instead, at the exact
   same point in the pipeline.
+
+State replay:
+  broadcast_state() remembers the last state (even with no clients
+  connected) and _handler() sends it to each new client, so the
+  frontend's idle-fidget gate isn't stuck on null after connect.
 """
 
 import asyncio
@@ -56,6 +61,7 @@ class MayaWebSocketServer:
         self._clients: Set[WebSocketServerProtocol] = set()
         self._audio_done_event: asyncio.Event = asyncio.Event()
         self._interrupt_handler: Optional[InterruptHandler] = None
+        self._last_state: str = "idle"
 
     # ── Server lifecycle ──────────────────────────────────────────────
 
@@ -77,6 +83,7 @@ class MayaWebSocketServer:
         addr = ws.remote_address
         logger.info(f"Avatar connected: {addr}  (clients={len(self._clients)})")
         try:
+            await ws.send(json.dumps({"type": "state", "value": self._last_state}))
             async for message in ws:
                 await self._on_message(ws, message)
         except websockets.exceptions.ConnectionClosedOK:
@@ -138,6 +145,7 @@ class MayaWebSocketServer:
         self._audio_done_event.set()
 
     async def broadcast_state(self, state_value: str) -> None:
+        self._last_state = state_value   # recorded even with no clients
         if not self._clients:
             return
         await self._broadcast(json.dumps({"type": "state", "value": state_value}))

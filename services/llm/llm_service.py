@@ -387,36 +387,6 @@ EXPRESSION_SPEED: dict[str, float] = {
 
 def _elongation_re_sub(text: str) -> str:
     """
-    Collapse TTS-breaking letter repetitions while preserving meaning.
-
-    Ollama sometimes writes excited words like YESSSS, NOOOO, PLEASEEE.
-    Kokoro reads these as spelled-out letters (Y-E-S-S-S-S) rather than
-    a drawn-out exclamation. We collapse any letter repeated 3+ times down
-    to a single instance, keeping the word recognizable to the TTS engine.
-
-    Examples:
-        YESSSS  → YES      (excited affirmative)
-        NOOOO   → NO       (emphatic denial)
-        pleaseee → please  (pleading tone)
-        AHHHH   → AH       (exclamation)
-        heyyyy  → hey      (casual elongation)
-        BEST    → BEST     (untouched — no repetition)
-        ohhh    → oh       (surprise)
-
-    All-caps is preserved for stress (Kokoro reads caps louder/higher).
-    """
-    def _collapse(m: re.Match) -> str:
-        prefix  = m.group(1)
-        char    = m.group(2)
-        suffix  = m.group(3)
-        # Reconstruct with single instance of the repeated char
-        word = prefix + char + suffix
-        return word
-
-    return _elongation_re_sub(text)
-
-def _elongation_re_sub(text: str) -> str:
-    """
     Collapse letter repetitions of 3+ down to 1.
     YESSSS -> YES  |  nooo -> no  |  pleaseee -> please
     Leaves legitimate words like ABSOLUTELY, BEST untouched.
