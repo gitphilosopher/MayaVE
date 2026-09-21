@@ -62,7 +62,3 @@ electron-builder/
 
 # Electron generated output
 dist-electron/
-
-# Local installation artifacts
-0.9.0
-12.0

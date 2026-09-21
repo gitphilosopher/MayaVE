@@ -116,9 +116,10 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 5. `main.py::on_speech` runs at utterance **end** (`listening` therefore covers the STT round trip, not speech onset). Before STT it snapshots `was_speaking = state.can_interrupt()` and `began_listening = not state.is_busy()`. Only when `began_listening`: FSM → LISTENING + WS `state:listening` (never overwrites PROCESSING/SPEAKING). Transcription: `core/transcriber.py` → `recognize_google(language=config.stt.language)` in the default executor; returns None on failure; **requires internet**, no offline fallback.
    - Empty STT → `_end_listening()`: if the FSM is still LISTENING → IDLE + WS `idle` + baseline behavior (clears the frontend's surprised-0.3 listening face).
    - Non-empty: if `was_speaking` and `contains_wake_word(text)` → `on_interrupt()` (→ `state.interrupt()`); **talking over Maya without her name does not interrupt her**. Then `_SLEEP_TRIGGERS` (`go to sleep, sleep, goodbye, bye, stop listening`; **substring** match) → SLEEPING + goodbye line spoken directly (bypasses the queue). Otherwise `queue_manager.put(text)`; the FSM is **left in LISTENING** and `Processor.handle` moves it to PROCESSING (no forced IDLE after `put`).
+6. sleep triggers are now `"is_sleep_command`: phrases anywhere, bare 'sleep'/'bye' whole-utterance only", not a substring match.
 
 ### 2.4 Wake word
-`WakeWordDetector` buffers 2 s non-overlapping windows of audio only while `state.is_sleeping()`, runs Google STT on each window, and fires `on_wake()` if any `compute_wake_triggers(config.wake_word)` trigger is found. `config.wake_word="wake up Maya"` yields `{"wake up maya","maya","hey/hello/hi/yo maya"}`; because `"maya"` is in the set (substring match), **any text containing "maya" wakes/interrupts**. The same `compute_wake_triggers`/`contains_wake_word` gate the barge-in check. `on_wake` sets IDLE and speaks `"I'm here {user}. How can I help?"`.
+`WakeWordDetector` buffers 2 s non-overlapping windows of audio only while `state.is_sleeping()`, runs Google STT on each window, and fires `on_wake()` if any `compute_wake_triggers(config.wake_word)` trigger is found. `config.wake_word="wake up Maya"` yields `{"wake up maya","maya","hey/hello/hi/yo maya"}`; because `"maya"` is in the set (substring match), **any text containing "maya" wakes/interrupts**. The same `compute_wake_triggers`/`contains_wake_word` gate the barge-in check. `on_wake` sets IDLE and speaks `"I'm here {user}. How can I help?"`. The wake/barge-in match is whole-word. "Any text containing the word 'maya' wakes/interrupts" replaces "any text containing 'maya'".
 
 ### 2.5 Command queue
 `core/queue_manager.py`: one bounded `asyncio.Queue` (maxsize=10) with a single serial worker (`QueueManager.run()`), so Maya never overlaps responses. A full queue drops new items (warning logged). The `priority` field is unused. Startup/wake/sleep lines and timer alerts already bypass the queue.
@@ -141,13 +142,11 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 - **Dual-model ensemble**: PyTorch BiLSTM+Attention (`_build_pytorch_model`) and TensorFlow 1-D CNN (`_build_tf_model`), trained on the same `TRAINING_DATA` (hand-labelled utterance→intent pairs, **45 intent labels**). Final class = argmax of the **averaged softmax**. Tokenizer: whitespace/regex `_tokenize` with `<PAD>`/`<UNK>`, sequences padded/truncated to `_MAX_LEN=30`.
 - **Auto-retrain**: SHA-256 of `TRAINING_DATA` is stored in `models/training_hash.txt`; a mismatch/missing file triggers a full retrain on startup. `python -m brain.train_intent` = wipe + retrain + test print.
 - **`_predict` order:**
-  1. **Dismissal guard** — exact match (trailing `.!?,` stripped) against `_DISMISSAL_PHRASES` (`stop`, `nah`, `never mind`, …) → `dismissal`. No prefix/token-count matching.
+  1. **Dismissal guard** — exact match after stripping punctuation, `leading fillers (ok/um/well/actually)` and trailing please/name.
   2. **Presence guard** — `_PRESENCE_RE` (e.g. "I'm here now", "just got back") → `smalltalk`; exists because the ML models associate "now"/"here" with `get_time`/`get_date`.
   3. **Action-word guard** — `_ACTION_WORD_RE` (`nod|giggl*|sigh|shrug|wink|wynk`, whole word anywhere in the utterance) → `perform_action` regardless of confidence.
-  4. **Keyword-first** for ≤3 tokens or a greeting-prefix `startswith` (not for comparison queries "which"/"vs"/"compare", which go to ML); if keywords miss → `general_query` (`short_input_fallback`).
-  5. **Ensemble**; if confidence < `_CONF_THRESH` (0.65) → ordered `_KEYWORD_RULES` (substring).
-- `result["model"]` values (`pytorch+tensorflow`, `keyword_fallback`, `short_input_fallback`, `negation_guard`, `presence_guard`, `action_guard`, `keyword_short_input`) are consumed by `_should_play_filler`.
-- `_extract_target()` strips a matched trigger to produce the entity (app name, search query) but **returns the full utterance when no trigger strips**, so `target` is almost never empty (see `### Issues` in `docs/CHANGELOG.md`).
+  4. **Keyword-first** applies to ≤3 tokens only. The greeting-prefix clause is gone.
+  5. **Ensemble**; `_KEYWORD_RULES` matching is word-boundary.
 
 ---
 
@@ -159,13 +158,13 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 
 | Skill (file) | Intents | Behavior | Notes |
 |---|---|---|---|
-| Open website (`web/open_website.py`) | `open_website` | `webbrowser.open` from an 8-site `_SITES` map (substring match on the utterance); else `https://{target}` | — |
+| Open website (`web/open_website.py`) | `open_website` | `webbrowser.open` from an 8-site `_SITES` map (substring match on the utterance); else `https://{target}`, with word-boundary match | — |
 | Google search (`web/google_search.py`) | `search_web` | Opens a Google query from `intent["target"]` | Prompts if the target is empty |
 | Weather (`web/weather.py`) | `get_weather` | Open-Meteo + geocoding, ip-api.com auto-location (executor, 8 s) | Emits 3 tags; Speaker keeps only the first |
 | Open app (`system/open_app.py`) | `open_app` | `os.startfile(target)` (Windows) | Untagged reply; failure → "couldn't open" |
 | Lock screen (`system/lock_screen.py`) | `lock_screen` | `ctypes.windll.user32.LockWorkStation()`; non-Windows → "[sad] I can only lock the screen on Windows" | **Immediate by design** (no confirmation; reversible). Windows-only |
 | Power (`system/power.py`) | `shutdown`, `restart` | `execute` only **asks** ("Say yes to confirm") and stores `(intent, expiry)`; `resolve_pending` confirms/declines. Confirm → `shutdown /s` or `/r /t 10` (executor via `power._run`, no `/f`) + goodbye line. Non-Windows → apology, nothing pending | `_DELAY_S=10`, `_CONFIRM_TTL_S=30`. Confirm: yes/yeah/yep/yup/confirm(ed)/affirmative/do it/go ahead/proceed (+ optional "please", "maya"/"senpai"); deny: no/nope/nah/cancel/abort/never mind/don't. Abort during the countdown with `shutdown /a` |
-| System info (`system/system_info.py`) | `system_info`, `screenshot` | psutil battery/cpu/ram/disk; battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")`. Screenshot (word "screenshot" **or** intent `screenshot`) saves `screenshot_YYYYMMDD_HHMMSS.png` to `%OneDrive%/Pictures/Screenshots` (else `~/Pictures/Screenshots`, auto-created) | — |
+| System info (`system/system_info.py`) | `system_info`, `screenshot` | psutil battery/cpu/ram/disk; battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")`. Screenshot (word "screenshot" **or** intent `screenshot`) saves `screenshot_YYYYMMDD_HHMMSS.png` to `%OneDrive%/Pictures/Screenshots` (else `~/Pictures/Screenshots`, auto-created)  | — |
 | Clipboard (`system/clipboard.py`) | `clipboard_read/write/clear` | pyperclip read (200-char) / write / clear | Top-level `import pyperclip` (Router import) |
 | Media (`media/play_music.py`) | `play_music`, `pause_music`, `next_track`, `prev_track`, `volume_up`, `volume_down`, `mute` | `keyboard.send` media keys (volume ×5) | Guarded import; message if missing |
 | Date/time (`utilities/datetime_skill.py`) | `get_time`, `get_date` | Formatted local time/date | — |

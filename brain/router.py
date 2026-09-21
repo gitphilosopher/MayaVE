@@ -23,7 +23,10 @@ from skills.utilities.timer      import (
     execute as timer, set_speaker as set_timer_speaker,
     resolve_pending as resolve_reminder_duration,
 )
-from skills.utilities.notepad    import execute as notepad
+from skills.utilities.notepad    import (
+    execute as notepad,
+    resolve_pending as resolve_note_delete_confirmation,
+)
 from skills.system.perform_action import execute as perform_action
 
 logger = logging.getLogger(__name__)
@@ -106,6 +109,13 @@ class Router:
         reminder_reply = await resolve_reminder_duration(raw_text)
         if reminder_reply is not None:
             return reminder_reply
+
+        # And for a note-delete confirmation ("yes" / "no"). Each resolver
+        # is one-shot and drops its request on an unrelated utterance, so at
+        # most one confirmation is ever pending at a time.
+        note_reply = await resolve_note_delete_confirmation(raw_text)
+        if note_reply is not None:
+            return note_reply
 
         intent_name = intent.get("intent", "unknown")
         handler = self._routes.get(intent_name)

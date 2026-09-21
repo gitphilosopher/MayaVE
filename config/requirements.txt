@@ -19,14 +19,16 @@ tensorflow>=2.13.0          # TensorFlow/Keras 1-D CNN model
 numpy>=1.24.0
 
 # ── Avatar WebSocket bridge ──────────────────────────────────────────────────
-websockets>=12.0            # services/ws_server.py
+# services/ws_server.py — written to work with both the legacy and the newer
+# asyncio websockets implementations; the upper bound just stops an untested
+# major release from being picked up silently. Raise it after testing.
+websockets>=12.0,<16.0
 
 # ── Skills – optional but recommended ────────────────────────────────────────
-wikipedia>=1.4.0            # offline Q&A summaries
 psutil>=5.9.0               # battery, CPU, RAM, disk
 keyboard>=0.13.5            # media key control
 pyautogui>=0.9.54           # screenshot
-pyperclip>=1.8.2            # skills/system/clipboard.py (hard import at startup)
+pyperclip>=1.8.2            # skills/system/clipboard.py (optional — without it only clipboard commands are disabled)
 
 # ── LLM backends (uncomment whichever you use) ────────────────────────────────
 # openai>=1.0.0             # set LLMConfig.provider = "openai" + OPENAI_API_KEY

@@ -8,6 +8,12 @@ _create() and _append(). When _read() returns file content prefixed with
 would be parsed as an expression tag and stripped silently.
 
 Fix: strip timestamp lines from note content before returning to speaker.
+
+Delete confirmation: _delete() only ASKS ("Say yes to confirm") and stores
+the resolved note path; resolve_pending() — called first by Router.dispatch,
+same pattern as skills/system/power.py — confirms, declines or drops it on
+the next utterance. One-shot with a 30 s TTL, so a stale request can never
+delete a note on a late "yes". Yes/no phrases come from core/confirmation.py.
 """
 
 import asyncio
@@ -15,18 +21,33 @@ import logging
 import os
 import re
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
 from config.settings import config
+from core.confirmation import is_confirm, is_deny
 
 logger = logging.getLogger(__name__)
 _U = config.user_name
 
 _NOTES_DIR = Path(getattr(config, "notes_dir", Path.home() / "Maya" / "Notes"))
 
+_CONFIRM_TTL_S = 30   # a stale delete request expires; a late "yes" does nothing
+
 # Matches timestamp lines written by _create/_append: [2026-06-15 12:00]
 _TIMESTAMP_RE = re.compile(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s*', re.MULTILINE)
+
+# Filename suffix added by _generate_filename ("_MMDD_HHMM") — not worth speaking.
+_STAMP_SUFFIX_RE = re.compile(r"_\d{4}_\d{4}$")
+
+# (note path, expiry on time.monotonic()) while awaiting delete confirmation.
+_pending_delete: tuple[Path, float] | None = None
+
+
+def _spoken_name(note: Path) -> str:
+    """'buy_milk_0615_1200' -> 'buy milk' (for the delete prompt/reply only)."""
+    return _STAMP_SUFFIX_RE.sub("", note.stem).replace("_", " ") or note.stem.replace("_", " ")
 
 
 def _ensure_dir() -> None:
@@ -36,6 +57,30 @@ def _ensure_dir() -> None:
 async def execute(intent: dict, text: str) -> str:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _handle, intent, text)
+
+
+async def resolve_pending(text: str) -> str | None:
+    """
+    Called by Router.dispatch before intent routing. One-shot: the next
+    utterance always consumes a pending delete request. Returns the spoken
+    reply if it confirmed or declined; None if nothing was pending, it
+    expired, or the utterance was unrelated (then it routes normally and the
+    request is dropped).
+    """
+    global _pending_delete
+    if _pending_delete is None:
+        return None
+    note, expires = _pending_delete
+    _pending_delete = None
+    if time.monotonic() > expires:
+        return None
+    if is_confirm(text):
+        return await asyncio.get_running_loop().run_in_executor(None, _run_delete, note)
+    if is_deny(text):
+        logger.info(f"Note delete declined: {note.name}")
+        return f"[relaxed] Okay {_U}, I kept the note."
+    logger.info(f"Note delete dropped — unrelated utterance: {note.name}")
+    return None
 
 
 def _handle(intent: dict, text: str) -> str:
@@ -135,6 +180,8 @@ def _list() -> str:
 
 
 def _delete(text: str) -> str:
+    """Only asks — the note is removed by resolve_pending() on a spoken yes."""
+    global _pending_delete
     notes = _get_notes()
     if not notes:
         return f"[neutral] You have no notes to delete, {_U}."
@@ -148,8 +195,26 @@ def _delete(text: str) -> str:
     else:
         note = max(notes, key=lambda p: p.stat().st_mtime)
 
-    note.unlink()
-    return f"[relaxed] Deleted note '{note.stem.replace('_', ' ')}', {_U}."
+    _pending_delete = (note, time.monotonic() + _CONFIRM_TTL_S)
+    logger.info(f"Note delete awaiting confirmation: {note.name}")
+    return (
+        f"[surprised] Delete the note '{_spoken_name(note)}', {_U}? "
+        "Say yes to confirm."
+    )
+
+
+def _run_delete(note: Path) -> str:
+    """Blocking — called in an executor after a spoken yes."""
+    label = _spoken_name(note)
+    try:
+        note.unlink()
+    except FileNotFoundError:
+        return f"[neutral] That note is already gone, {_U}."
+    except Exception as e:
+        logger.error(f"Note delete failed ({note.name}): {e}")
+        return f"[sad] I couldn't delete that note, {_U}."
+    logger.info(f"Note deleted: {note.name}")
+    return f"[relaxed] Deleted note '{label}', {_U}."
 
 
 def _open_in_editor(text: str) -> str:

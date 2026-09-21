@@ -3,10 +3,19 @@ services/ws_server.py
 =====================
 WebSocket server — bridges Maya's audio pipeline to the browser avatar.
 
-Fix: pass origins=None to websockets.serve() so connections from
-     http://localhost:5173 (Vite dev server) are accepted.
-     Without this, websockets >=12 rejects cross-origin connections silently
-     and the browser never gets past the opening handshake.
+Origin check:
+  websockets.serve(origins=...) is given config.ws_allowed_origins — by
+  default the Vite dev server (http://localhost:5173 / 127.0.0.1:5173) the
+  Electron window loads, plus None (clients that send no Origin header, i.e.
+  non-browser tools). A browser page from any OTHER origin is rejected during
+  the handshake (HTTP 403), so an arbitrary web page can't connect and send
+  {"type": "interrupt"} / {"type": "audio_done"}. If Vite ends up on another
+  port, add that origin to config.ws_allowed_origins — a mismatch shows up as
+  the avatar staying on 💤 with a 403 in the browser console. Setting the
+  config value to None disables the check (accept any origin).
+  The connection type is annotated as Any: websockets' server-connection
+  class differs between its legacy and asyncio implementations, so this
+  module no longer imports it.
 
 Interrupt handling (barge-in):
   Two directions now exist:
@@ -22,8 +31,8 @@ Interrupt handling (barge-in):
                        _hard_stop_audio(). It also releases any pending
                        wait_for_audio_done(), since a stopped clip never
                        sends audio_done. A stop that lands after
-                       broadcast_audio() but before wait_for_audio_done()
-                       is entered is caught via _stop_gen (see below).
+                       broadcast_audio() but before wait_for_audio_done() is
+                       entered is caught via _stop_gen (see below).
 
 Behavioral Engine integration (core/behavior_engine.py):
   broadcast_behavior() sends a composed communicative-intent packet
@@ -44,10 +53,9 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Awaitable, Callable, Optional, Set
+from typing import Any, Awaitable, Callable, Optional, Sequence, Set
 
 import websockets
-from websockets.server import WebSocketServerProtocol
 
 from config.settings import config
 
@@ -55,12 +63,20 @@ logger = logging.getLogger(__name__)
 
 InterruptHandler = Callable[[], Awaitable[None]]
 
+# A server-side connection. Its concrete class depends on the installed
+# websockets version, and it is only used for annotations here.
+WSConnection = Any
+
 
 class MayaWebSocketServer:
-    def __init__(self, host: str = "localhost", port: int = 8765):
+    def __init__(self, host: str = "localhost", port: int = 8765,
+                 origins: Optional[Sequence[Optional[str]]] = None):
         self._host    = host
         self._port    = port
-        self._clients: Set[WebSocketServerProtocol] = set()
+        # None = accept any origin; otherwise the exact Origin values allowed
+        # (a None entry allows connections that send no Origin header).
+        self._origins: Optional[list] = list(origins) if origins is not None else None
+        self._clients: Set[WSConnection] = set()
         self._audio_done_event: asyncio.Event = asyncio.Event()
         self._interrupt_handler: Optional[InterruptHandler] = None
         self._last_state: str = "idle"
@@ -75,14 +91,18 @@ class MayaWebSocketServer:
             self._handler,
             self._host,
             self._port,
-            origins=None,
+            origins=self._origins,
             ping_interval=20,
             ping_timeout=60,
         ):
-            logger.info(f"WebSocket server ready — accepting connections from any origin")
+            if self._origins is None:
+                logger.warning("WebSocket server ready — origin check DISABLED, accepting any origin")
+            else:
+                allowed = [o if o is not None else "<no Origin header>" for o in self._origins]
+                logger.info(f"WebSocket server ready — allowed origins: {allowed}")
             await asyncio.Future()
 
-    async def _handler(self, ws: WebSocketServerProtocol) -> None:
+    async def _handler(self, ws: WSConnection) -> None:
         self._clients.add(ws)
         addr = ws.remote_address
         logger.info(f"Avatar connected: {addr}  (clients={len(self._clients)})")
@@ -100,7 +120,7 @@ class MayaWebSocketServer:
             self._clients.discard(ws)
             logger.info(f"Avatar disconnected: {addr}  (clients={len(self._clients)})")
 
-    async def _on_message(self, ws: WebSocketServerProtocol, message: str) -> None:
+    async def _on_message(self, ws: WSConnection, message: str) -> None:
         try:
             data = json.loads(message)
             if data.get("type") == "interrupt":
@@ -216,4 +236,5 @@ class MayaWebSocketServer:
 ws_server = MayaWebSocketServer(
     host=getattr(config, "ws_host", "localhost"),
     port=getattr(config, "ws_port", 8765),
+    origins=config.ws_allowed_origins,
 )

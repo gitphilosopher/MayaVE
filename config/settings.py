@@ -74,6 +74,15 @@ class MayaConfig:
     # WebSocket server for browser avatar
     ws_host: str       = "localhost"
     ws_port: int       = 8765
+    # Origins allowed to open the avatar WebSocket (services/ws_server.py).
+    # Exact Origin strings; a None entry also accepts clients that send no Origin
+    # header (non-browser tools). Vite moves to another port if 5173 is busy —
+    # add that origin here. Set the whole value to None to disable the check.
+    ws_allowed_origins: list[str | None] | None = field(default_factory=lambda: [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        None,
+    ])
 
 
 # Singleton — import this everywhere

@@ -1,18 +1,32 @@
 """
 skills/system/clipboard.py
 Read from and write to the system clipboard.
+
+pyperclip is imported defensively (same pattern as skills/media/play_music.py):
+a missing package only disables clipboard commands with a spoken hint instead
+of crashing startup through the Router import.
 """
 
 import logging
-import pyperclip
+import re
 
 from config.settings import config
+
+try:
+    import pyperclip
+    _PC = True
+except ImportError:
+    pyperclip = None
+    _PC = False
 
 logger = logging.getLogger(__name__)
 _U = config.user_name
 
 
 async def execute(intent: dict, text: str) -> str:
+    if not _PC:
+        return f"[sad] Install the 'pyperclip' library for clipboard control, {_U}."
+
     action = intent.get("intent", "")
 
     if action == "clipboard_read":
@@ -46,7 +60,6 @@ def _read() -> str:
 
 
 def _write(text: str) -> str:
-    import re
     content = re.sub(r'(?i)(copy|write|put|save|add|set)\s+', '', text, count=1).strip()
     content = re.sub(r'(?i)\s*(to|in(to)?|on)\s*(the\s+)?clipboard\s*$', '', content).strip()
 
