@@ -19,7 +19,7 @@ from skills.utilities.datetime_skill import execute as get_datetime
 from services.llm.llm_service   import query as llm_query
 from skills.web.weather          import execute as get_weather
 from skills.system.clipboard     import execute as clipboard
-from skills.utilities.timer      import execute as timer
+from skills.utilities.timer      import execute as timer, set_speaker as set_timer_speaker
 from skills.utilities.notepad    import execute as notepad
 from skills.system.perform_action import execute as perform_action
 
@@ -31,6 +31,7 @@ _U = config.user_name
 class Router:
     def __init__(self, speaker: Speaker):
         self._speaker = speaker
+        set_timer_speaker(speaker)
         self._routes: dict = {
             # System
             "open_app":      open_app,

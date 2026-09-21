@@ -182,6 +182,9 @@ def _next_boundary(buffer: str) -> tuple[int, bool] | None:
             continue
         ch = m.group(0)
 
+        if ch == "." and idx == len(buffer) and m.start() > 0 and buffer[m.start() - 1].isalnum():
+            return None  # "3." / "google." may continue as "3.14" / "google.com"
+
         if ch in ",;":
             look = _NEXT_WORD_RE.match(buffer, idx)
             if not look:
@@ -854,9 +857,18 @@ async def query(intent: dict, text: str) -> str:
         # cascades into _stream_and_speak()'s internal
         # streamer/synther/player tasks automatically, so no extra
         # cancellation plumbing is needed at those inner stages.
-        await state.run_interruptible(_do_stream())
+        _spoken_phrases.clear()
+        _reply_finished[0] = False
+        try:
+            await state.run_interruptible(_do_stream())
+        finally:
+            _filler_done.set()   # a cancelled filler never reopens the gate
 
-        full_response = _last_response[0] if _last_response else ""
+        # Finished reply -> full clean text; interrupted -> only what was played.
+        if _reply_finished[0]:
+            full_response = _last_response[0] if _last_response else ""
+        else:
+            full_response = " ".join(_spoken_phrases)
         _last_response.clear()
 
         if full_response:
@@ -895,6 +907,8 @@ async def query(intent: dict, text: str) -> str:
 # when running inside asyncio.gather (gather discards return values of coroutines
 # that don't return through the gather result list positionally).
 _last_response: list[str] = []
+_spoken_phrases: list[str] = []   # phrases whose playback started this turn
+_reply_finished = [False]         # set when _play_worker drains to _DONE
 
 
 async def _stream_and_speak(question: str, t_cmd_start: float) -> None:
@@ -1259,7 +1273,7 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
                 first_ready_logged = True
 
             if audio is not None:
-                await play_q.put((audio, expression, actions, attitude, intensity))
+                await play_q.put((audio, expression, actions, attitude, intensity, sentence))
         except Exception as e:
             logger.error(f"Synth error for '{sentence}': {e}", exc_info=True)
 
@@ -1480,12 +1494,13 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
         item = await play_q.get()
 
         if item is _DONE:
+            _reply_finished[0] = True
             await state.set(MayaState.IDLE)
             await _ws.broadcast_state("idle")
             await _ws.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
             return
 
-        (data, samplerate), expression, actions, attitude, intensity = item
+        (data, samplerate), expression, actions, attitude, intensity, phrase = item
 
         # Wait for filler to finish before sending first real sentence
         if first_sentence:
@@ -1509,6 +1524,7 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
             )
             first_played = True
 
+        _spoken_phrases.append(phrase)
         if output in ("avatar", "both"):
             from core.speaker import _numpy_to_wav
             wav_bytes = await loop.run_in_executor(None, _numpy_to_wav, data, samplerate)

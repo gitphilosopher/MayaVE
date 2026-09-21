@@ -2,10 +2,9 @@
 skills/utilities/timer.py
 Countdown timers with expression tags.
 
-Bug fix: _alert() no longer instantiates a new Speaker() (which would reload
-Kokoro from scratch on every alert). Instead it uses the module-level Kokoro
-pipeline from llm_service directly via _synthesise_blocking, same as the LLM
-pipeline does — fast, no cold-start.
+Expired timers are announced through the Speaker injected by Router
+(set_speaker), run under state.run_interruptible so a barge-in can cut
+the alert. The alert waits for any in-flight turn to finish first.
 """
 
 import asyncio
@@ -15,39 +14,62 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from config.settings import config
+from core.state import state
 
 logger = logging.getLogger(__name__)
 _U = config.user_name
+
+_ALERT_MAX_WAIT_S = 60    # longest an alert waits for Maya to finish a turn
+_MESSAGE_MAX      = 120   # cap on spoken reminder text
+
+_REMINDER_RE = re.compile(r"\bremind(?:er)?\b.*?\b(?:to|about|that)\s+(.+)", re.IGNORECASE)
+_DURATION_RE = re.compile(
+    r"\s*\b(?:(?:in|after|for)\s+)?\d+(?:\.\d+)?\s*"
+    r"(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)\b",
+    re.IGNORECASE,
+)
+_TRAILING_RE = re.compile(r"(?:\s+(?:and|please|thanks))+\s*$", re.IGNORECASE)
 
 
 @dataclass
 class Timer:
     name:    str
     seconds: int
+    message: str = ""
     task:    asyncio.Task = field(default=None, repr=False)
 
 
 _timers: Dict[str, Timer] = {}
 _timer_counter = 0
+_speaker = None
+
+
+def set_speaker(speaker) -> None:
+    """Called once by Router so alerts can speak through the shared Speaker."""
+    global _speaker
+    _speaker = speaker
 
 
 async def execute(intent: dict, text: str) -> str:
     t = text.lower()
 
-    if any(w in t for w in ("cancel", "stop", "clear", "delete")):
-        return _cancel(t)
+    # A reminder's own wording ("remind me to stop by...") must not hit
+    # the cancel/status word checks.
+    if intent.get("intent") != "set_reminder":
+        if any(w in t for w in ("cancel", "stop", "clear", "delete")):
+            return _cancel(t)
 
-    if any(w in t for w in ("status", "how long", "remaining", "left", "list")):
-        return _status()
+        if any(w in t for w in ("status", "how long", "remaining", "left", "list")):
+            return _status()
 
     seconds, label = _parse_duration(text)
     if seconds is None:
         return f"[surprised] How long should I set the timer for, {_U}?"
 
-    return await _set(seconds, label)
+    return await _set(seconds, label, _extract_reminder(text))
 
 
-async def _set(seconds: int, label: str) -> str:
+async def _set(seconds: int, label: str, message: str = "") -> str:
     global _timer_counter
     _timer_counter += 1
     name = label or f"timer {_timer_counter}"
@@ -55,12 +77,12 @@ async def _set(seconds: int, label: str) -> str:
     if name in _timers and not _timers[name].task.done():
         _timers[name].task.cancel()
 
-    t = Timer(name=name, seconds=seconds)
+    t = Timer(name=name, seconds=seconds, message=message)
     t.task = asyncio.create_task(_countdown(t))
     _timers[name] = t
 
     duration_str = _format_duration(seconds)
-    logger.info(f"Timer set: '{name}' for {duration_str}")
+    logger.info(f"Timer set: '{name}' for {duration_str}" + (f" — reminder: '{message}'" if message else ""))
     return f"[happy] Timer set for {duration_str}, {_U}."
 
 
@@ -90,50 +112,52 @@ def _status() -> str:
     return f"[relaxed] Active timers: {', '.join(parts)}, {_U}."
 
 
+def _forget(timer: Timer) -> None:
+    """Remove this timer from the registry — never a newer one with the same name."""
+    if _timers.get(timer.name) is timer:
+        del _timers[timer.name]
+
+
 async def _countdown(timer: Timer) -> None:
     try:
         await asyncio.sleep(timer.seconds)
         logger.info(f"Timer '{timer.name}' expired.")
-        await _alert(timer.name)
+        _forget(timer)   # expired — no longer listed/cancellable while the alert waits
+        await _alert(timer)
     except asyncio.CancelledError:
         logger.debug(f"Timer '{timer.name}' cancelled.")
     finally:
-        _timers.pop(timer.name, None)
+        _forget(timer)
 
 
-async def _alert(name: str) -> None:
-    """
-    Fire the timer alert using the existing Kokoro pipeline from llm_service
-    rather than spinning up a new Speaker() instance (which would reload the
-    entire Kokoro model from disk — slow and wasteful).
-    """
-    from services.llm.llm_service import _synthesise_blocking, _run_kokoro
-    from core.speaker import _numpy_to_wav
-    from services.ws_server import ws_server
-    from core.behavior_engine import behavior_engine
-    from config.settings import config as cfg
+async def _alert(timer: Timer) -> None:
+    """Speak the alert via the shared Speaker once Maya isn't mid-turn."""
+    if _speaker is None:
+        logger.warning("Timer alert skipped — no speaker registered.")
+        return
 
-    msg_clean = f"Time's up, {_U}! Your {name} is done."
-    logger.info(f"Timer alert: {msg_clean}")
+    for _ in range(_ALERT_MAX_WAIT_S * 2):
+        if not state.is_busy():
+            break
+        await asyncio.sleep(0.5)
 
-    loop = asyncio.get_running_loop()
-    result = await _run_kokoro(_synthesise_blocking, msg_clean)
+    if timer.message:
+        msg = f"[excited] Time's up, {_U}! Reminder: {timer.message}."
+    else:
+        msg = f"[excited] Time's up, {_U}! Your {timer.name} is done."
+    logger.info(f"Timer alert: {msg}")
 
-    if result is not None:
-        audio, samplerate = result
-        output = getattr(cfg.tts, "output", "avatar")
+    await state.run_interruptible(_speaker.speak(msg))
 
-        if output in ("avatar", "both"):
-            await ws_server.broadcast_behavior(behavior_engine.compose("excited", source="alert"))
-            await ws_server.broadcast_state("speaking")
-            wav = await loop.run_in_executor(None, _numpy_to_wav, audio, samplerate)
-            await ws_server.broadcast_audio(wav)
-            await ws_server.wait_for_audio_done()
-            await ws_server.broadcast_behavior(behavior_engine.compose("neutral", source="alert"))
 
-        if output in ("local", "both"):
-            import sounddevice as sd
-            await loop.run_in_executor(None, lambda: (sd.play(audio, samplerate), sd.wait()))
+def _extract_reminder(text: str) -> str:
+    """'remind me to X in 5 minutes' -> 'X'. Empty if there's no reminder wording."""
+    m = _REMINDER_RE.search(text)
+    if not m:
+        return ""
+    msg = re.sub(r"\s{2,}", " ", _DURATION_RE.sub("", m.group(1))).strip(" .,!?")
+    msg = _TRAILING_RE.sub("", msg).strip(" .,!?")
+    return msg[:_MESSAGE_MAX]
 
 
 def _parse_duration(text: str) -> tuple[int | None, str]:

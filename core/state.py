@@ -27,6 +27,11 @@ callback (register_stop_callback(), wired up once in main.py) *before*
 cancelling the task, so blocking calls like sd.wait() or
 ws_server.wait_for_audio_done() unblock immediately instead of waiting
 on hardware/network round trips.
+
+can_interrupt() defines when a barge-in is allowed: SPEAKING, or
+PROCESSING while a registered speech task is live (an LLM turn,
+including its filler and the wait before the first phrase). PROCESSING
+with no registered task (skill turns) is not interruptible.
 """
 
 import asyncio
@@ -73,6 +78,17 @@ class StateManager:
 
     def is_busy(self) -> bool:
         return self._state in (MayaState.PROCESSING, MayaState.SPEAKING)
+
+    def can_interrupt(self) -> bool:
+        """True if a barge-in would currently have something to stop."""
+        if self._state == MayaState.SPEAKING:
+            return True
+        task = self._current_task
+        return (
+            self._state == MayaState.PROCESSING
+            and task is not None
+            and not task.done()
+        )
 
     # ── Write ─────────────────────────────────────────────────────────
 
@@ -129,16 +145,17 @@ class StateManager:
 
     async def interrupt(self) -> bool:
         """
-        Barge-in: called when the listener detects speech while Maya is
-        SPEAKING. Hard-stops current audio, cancels the registered
-        speech task, and drops the state to LISTENING so the utterance
-        that triggered the interrupt gets processed normally once the
-        listener finishes capturing it.
+        Barge-in: called when the listener detects Maya being called by
+        name while can_interrupt() is True (SPEAKING, or an in-flight LLM
+        turn in PROCESSING). Hard-stops current audio, cancels the
+        registered speech task, and drops the state to LISTENING so the
+        utterance that triggered the interrupt gets processed normally
+        once the listener finishes capturing it.
 
         Returns True if there was actually something to interrupt.
         """
         async with self._lock:
-            if self._state != MayaState.SPEAKING:
+            if not self.can_interrupt():
                 return False
             old = self._state
             self._state = MayaState.INTERRUPTED

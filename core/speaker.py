@@ -72,6 +72,9 @@ _VALID_EXPRESSIONS = {
     "happy", "sad", "angry", "surprised", "relaxed", "neutral", "excited"
 }
 
+# Marks "synthesis ran but produced no audio" (vs None = _run_kokoro timeout).
+_NO_AUDIO = object()
+
 
 def _strip_tags(text: str) -> tuple[str, str]:
     """
@@ -229,20 +232,26 @@ class Speaker:
         Runs _synthesise via llm_service._run_kokoro — a timeout-bounded
         daemon-thread call, not the shared executor, so a stuck native
         Kokoro/espeak call (a) can't stall this pipeline indefinitely and
-        (b) can't block interpreter shutdown either. On timeout this
-        Speaker's own pipeline instance is rebuilt too (separate from
-        llm_service's module-level one) so the next call gets a fresh
-        Kokoro/espeak backend instead of retrying the same stuck one.
+        (b) can't block interpreter shutdown either. Only on a real
+        timeout is this Speaker's own pipeline instance rebuilt (separate
+        from llm_service's module-level one) so the next call gets a fresh
+        Kokoro/espeak backend instead of retrying the same stuck one. A
+        normal "no audio produced" result does not trigger a rebuild.
         """
-        audio = await _run_kokoro(self._synthesise, text)
-        if audio is None:
+        def _job():
+            audio = self._synthesise(text)
+            return _NO_AUDIO if audio is None else audio
+
+        result = await _run_kokoro(_job)
+        if result is None:   # _run_kokoro returns None only on timeout
             try:
                 lang = getattr(config.tts, "lang_code", "a")
                 self._pipeline = _build_kokoro_pipeline(lang)
                 self._voice    = _build_voice(self._pipeline)
             except Exception as e:
                 logger.error(f"Speaker pipeline rebuild failed: {e}")
-        return audio
+            return None
+        return None if result is _NO_AUDIO else result
 
     def _synthesise(self, text: str) -> np.ndarray | None:
         """Blocking Kokoro synthesis — called in executor."""

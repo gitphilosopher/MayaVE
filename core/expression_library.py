@@ -68,6 +68,7 @@ _INTENSITY_EXPONENT = {
 }
 
 _cache: dict | None = None
+_load_failed = False   # file existed but was unreadable — never overwrite it
 
 
 def _exponent_for(key: str) -> float:
@@ -82,23 +83,32 @@ def semantic_key(emotion: str, attitude: str, intensity_word: str) -> str:
 
 
 def _load() -> dict:
-    global _cache
+    global _cache, _load_failed
     if _cache is not None:
         return _cache
     try:
-        _cache = json.loads(_LIB_FILE.read_text(encoding="utf-8")) if _LIB_FILE.exists() else {}
+        data = json.loads(_LIB_FILE.read_text(encoding="utf-8")) if _LIB_FILE.exists() else {}
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        _cache = data
     except Exception as e:
-        logger.warning(f"expressions.json load failed (non-fatal): {e}")
+        logger.warning(f"expressions.json load failed — it will not be overwritten this session: {e}")
         _cache = {}
+        _load_failed = True
     return _cache
 
 
 def _save_all(data: dict) -> None:
     global _cache
     _cache = data
+    if _load_failed:
+        logger.warning("expressions.json was unreadable at load — skipping write to protect it.")
+        return
+    tmp = _LIB_FILE.with_name(_LIB_FILE.name + ".tmp")
     try:
         _LIB_DIR.mkdir(parents=True, exist_ok=True)
-        _LIB_FILE.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        tmp.replace(_LIB_FILE)   # atomic — a crash can't leave a half-written file
     except Exception as e:
         logger.warning(f"expressions.json save failed (non-fatal): {e}")
 

@@ -137,10 +137,17 @@ async def _end_listening() -> None:
     )
 
 
+def _on_ws_done(task: asyncio.Task) -> None:
+    """Surface a WebSocket server failure (e.g. port already in use)."""
+    if not task.cancelled() and task.exception() is not None:
+        logger.error(f"WebSocket server stopped: {task.exception()!r}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
-    asyncio.create_task(ws_server.serve())
+    ws_task = asyncio.create_task(ws_server.serve(), name="ws-server")   # kept so it can't be GC'd
+    ws_task.add_done_callback(_on_ws_done)
 
     logger.info(f"Starting {config.name}…")
 
@@ -206,7 +213,7 @@ async def main() -> None:
         # below is in flight, so we need to know what was true when
         # this utterance STARTED, not whatever happens to be true by
         # the time we're done deciding whether it's a barge-in.
-        was_speaking = state.is_speaking()
+        was_speaking = state.can_interrupt()
 
         # LISTENING is only taken from a quiet state, never over an
         # in-flight PROCESSING/SPEAKING turn.

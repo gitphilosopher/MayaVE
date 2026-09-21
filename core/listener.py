@@ -150,6 +150,12 @@ class Listener:
 
         # Skip VAD speech pipeline while sleeping
         if state.is_sleeping():
+            # Drop a half-captured utterance so it isn't delivered after wake.
+            if self._in_speech:
+                self._in_speech     = False
+                self._silence_count = 0
+                self._speech_buffer = []
+                self._pre_roll.clear()
             return
 
         self._pre_roll.append(frame)

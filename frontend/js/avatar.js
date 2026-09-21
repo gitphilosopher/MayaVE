@@ -37,6 +37,7 @@ function _isCalmPeriodActive() {
 // Tracks the in-flight audio source so stopCurrentAudio() can halt a
 // barge-in immediately — see Handoff §3.12 for the full backend chain.
 let _currentSource  = null;   // AudioBufferSourceNode from speakFromBytes
+let _audioGen = 0;   // bumped by stopCurrentAudio(); drops audio whose decode finished after a stop
 let _currentAudioEl = null;   // HTMLAudioElement from speak()
 
 // Callback set by websocket.js to send audio_done signal to backend
@@ -219,17 +220,23 @@ function _stopLipSync() {
 // ── speakFromBytes — called by websocket.js ───────────────────────────────────
 
 export async function speakFromBytes(arrayBuffer) {
-    if (!vrm) return;
+    if (!vrm) {
+        if (typeof _onAudioDone === "function") _onAudioDone();   // don't leave the backend waiting 30 s
+        return;
+    }
 
     const ctx = getAudioContext();
+    const gen = _audioGen;
 
     let decoded;
     try {
         decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
     } catch (e) {
         console.error("[Maya] decodeAudioData failed:", e);
+        if (gen === _audioGen && typeof _onAudioDone === "function") _onAudioDone();
         return;
     }
+    if (gen !== _audioGen) return;   // stop_audio arrived during decode
 
     const source   = ctx.createBufferSource();
     const analyser = ctx.createAnalyser();
@@ -282,6 +289,7 @@ export function speak(audioFile) {
 
 /** Halts whichever audio path is active + stops lip-sync. Safe no-op if idle. */
 export function stopCurrentAudio() {
+    _audioGen++;
     if (_currentSource) {
         const s = _currentSource;
         _currentSource = null;

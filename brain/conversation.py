@@ -295,6 +295,7 @@ class ContextManager:
         self._state = ConversationState()
         self._open_loops: list[OpenLoop] = []
         self._evicted_buffer: list[MemoryEntry] = []
+        self._bg_tasks: set[asyncio.Task] = set()
         # Tracks whether the most recent user turn was an unanswered
         # question, so leaving its topic without a reply can become a
         # genuine open loop (see observe_user_turn).
@@ -737,7 +738,9 @@ class ContextManager:
             topic=self._state.active_topic or "", importance=0.3, source="auto_compaction",
         )
         try:
-            asyncio.create_task(self._persist_memory(candidate))
+            task = asyncio.create_task(self._persist_memory(candidate))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
         except RuntimeError:
             # No running event loop (e.g. called outside the app's async
             # context, such as in a script) — drop rather than crash.

@@ -19,7 +19,9 @@ Interrupt handling (barge-in):
                        whatever it's currently playing immediately. This
                        is the registered core.state stop callback's
                        browser-side half — see main.py's
-                       _hard_stop_audio().
+                       _hard_stop_audio(). It also releases any pending
+                       wait_for_audio_done(), since a stopped clip never
+                       sends audio_done.
 
 Behavioral Engine integration (core/behavior_engine.py):
   broadcast_behavior() sends a composed communicative-intent packet
@@ -131,6 +133,9 @@ class MayaWebSocketServer:
             return
         logger.debug("Broadcasting stop_audio (barge-in)")
         await self._broadcast(json.dumps({"type": "stop_audio"}))
+        # A stopped clip never sends audio_done — release any pending wait
+        # (e.g. an uncancellable Speaker.speak) instead of stalling 30 s.
+        self._audio_done_event.set()
 
     async def broadcast_state(self, state_value: str) -> None:
         if not self._clients:
@@ -181,7 +186,7 @@ class MayaWebSocketServer:
 
     async def _broadcast(self, msg: str) -> None:
         dead = set()
-        for ws in self._clients:
+        for ws in list(self._clients):   # copy — clients may connect/leave during send
             try:
                 await ws.send(msg)
             except websockets.exceptions.ConnectionClosed:
