@@ -16,6 +16,7 @@ logs/
 
 # Local/model files
 models/
+frontend/assets/mmodel.vroid
 
 # Environment & secrets
 .env
