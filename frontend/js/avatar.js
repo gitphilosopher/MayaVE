@@ -103,6 +103,8 @@ export function applyBehavioralGaze(mode) {
 
 let _awake          = false;
 let _blinkingActive = false;  // true while the blink loop is scheduled
+let _blinkTimeout   = null;   // pending blink tick — cleared on re-wake to avoid duplicate loops
+let _eyeLoopStarted = false;  // eye-movement loop is started once per page, not per wake
 
 /**
  * Called by websocket.js when WS connects.
@@ -932,6 +934,7 @@ export function loadAvatar(scene) {
 
 function startBlinking() {
     _blinkingActive = true;
+    clearTimeout(_blinkTimeout);   // a pending tick from before a reconnect would double the loop
 
     function blink() {
         if (!_blinkingActive || !vrm) return;  // exits loop when sleeping
@@ -942,7 +945,7 @@ function startBlinking() {
             expressionController.setValue(EXPRESSION_LAYER.BLINK, "blink", 0);
         }, 120);
 
-        setTimeout(blink, 2000 + Math.random() * 5000);
+        _blinkTimeout = setTimeout(blink, 2000 + Math.random() * 5000);
     }
     blink();
 }
@@ -990,6 +993,10 @@ function startEyeMovement() {
     const leftEye  = vrm.humanoid.getNormalizedBoneNode("leftEye");
     const rightEye = vrm.humanoid.getNormalizedBoneNode("rightEye");
     if (!leftEye || !rightEye) return;
+
+    // Started once per page — the loops below never stop, so a re-wake must not add another.
+    if (_eyeLoopStarted) return;
+    _eyeLoopStarted = true;
 
     let idleTargetX = 0, idleTargetY = 0;
 

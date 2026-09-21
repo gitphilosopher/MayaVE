@@ -11,6 +11,7 @@ from core.speaker import Speaker
 from skills.system.open_app     import execute as open_app
 from skills.system.system_info  import execute as system_info
 from skills.system.lock_screen  import execute as lock_screen
+from skills.system.power        import execute as power_action, resolve_pending as resolve_power_confirmation
 from skills.web.google_search   import execute as google_search
 from skills.web.open_website    import execute as open_website
 from skills.media.play_music    import execute as play_music
@@ -36,6 +37,8 @@ class Router:
             "system_info":   system_info,
             "screenshot":    system_info,
             "lock_screen":   lock_screen,
+            "shutdown":      power_action,
+            "restart":       power_action,
             # Web
             "search_web":    google_search,
             "open_website":  open_website,
@@ -89,6 +92,12 @@ class Router:
         }
 
     async def dispatch(self, intent: dict, raw_text: str) -> str:
+        # A pending shutdown/restart confirmation gets first claim on the
+        # next utterance ("yes" would otherwise be routed to the LLM).
+        power_reply = await resolve_power_confirmation(raw_text)
+        if power_reply is not None:
+            return power_reply
+
         intent_name = intent.get("intent", "unknown")
         handler = self._routes.get(intent_name)
 

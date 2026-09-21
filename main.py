@@ -33,6 +33,8 @@ from core.speaker import Speaker
 from core.processor import Processor
 from core.listener import Listener
 from core.wake_word import contains_wake_word
+from core.behavior_engine import behavior_engine
+from core.mood import mood_manager
 from services.ws_server import ws_server
 from services.llm.llm_service import warmup as llm_warmup
 from services.llm.ollama_lifecycle import chat_keep_alive
@@ -124,6 +126,17 @@ async def _hard_stop_audio() -> None:
     await ws_server.broadcast_stop_audio()
 
 
+async def _end_listening() -> None:
+    """Empty STT result — back to IDLE, unless something already moved the FSM on."""
+    if state.current != MayaState.LISTENING:
+        return
+    await state.set(MayaState.IDLE)
+    await ws_server.broadcast_state("idle")
+    await ws_server.broadcast_behavior(
+        behavior_engine.compose(mood_manager.baseline_expression(), source="idle")
+    )
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
@@ -195,14 +208,18 @@ async def main() -> None:
         # the time we're done deciding whether it's a barge-in.
         was_speaking = state.is_speaking()
 
-        if not was_speaking:
+        # LISTENING is only taken from a quiet state, never over an
+        # in-flight PROCESSING/SPEAKING turn.
+        began_listening = not state.is_busy()
+        if began_listening:
             await state.set(MayaState.LISTENING)
+            await ws_server.broadcast_state("listening")
 
         text = await transcriber.transcribe(audio)
 
         if not text:
-            if not was_speaking:
-                await state.set(MayaState.IDLE)
+            if began_listening:
+                await _end_listening()
             return
 
         print(f"\n👂 {_U}: {text}")
@@ -232,8 +249,7 @@ async def main() -> None:
             return
 
         await queue_manager.put(text)
-        if not was_speaking:
-            await state.set(MayaState.IDLE)
+        # FSM stays LISTENING; Processor.handle() moves it to PROCESSING.
 
     queue_manager.set_handler(processor.handle)
 
