@@ -21,7 +21,9 @@ Interrupt handling (barge-in):
                        browser-side half — see main.py's
                        _hard_stop_audio(). It also releases any pending
                        wait_for_audio_done(), since a stopped clip never
-                       sends audio_done.
+                       sends audio_done. A stop that lands after
+                       broadcast_audio() but before wait_for_audio_done()
+                       is entered is caught via _stop_gen (see below).
 
 Behavioral Engine integration (core/behavior_engine.py):
   broadcast_behavior() sends a composed communicative-intent packet
@@ -62,6 +64,8 @@ class MayaWebSocketServer:
         self._audio_done_event: asyncio.Event = asyncio.Event()
         self._interrupt_handler: Optional[InterruptHandler] = None
         self._last_state: str = "idle"
+        self._stop_gen: int = 0         # bumped by every stop_audio broadcast
+        self._audio_sent_gen: int = 0   # _stop_gen when the latest audio was sent
 
     # ── Server lifecycle ──────────────────────────────────────────────
 
@@ -125,6 +129,7 @@ class MayaWebSocketServer:
     # ── Broadcast helpers ─────────────────────────────────────────────
 
     async def broadcast_audio(self, wav_bytes: bytes) -> None:
+        self._audio_sent_gen = self._stop_gen   # snapshot before any await
         if not self._clients:
             return
         b64 = base64.b64encode(wav_bytes).decode("utf-8")
@@ -136,6 +141,7 @@ class MayaWebSocketServer:
         (and its lip-sync) — the client-side half of a barge-in. Safe to
         call even if nothing is playing.
         """
+        self._stop_gen += 1
         if not self._clients:
             return
         logger.debug("Broadcasting stop_audio (barge-in)")
@@ -185,6 +191,10 @@ class MayaWebSocketServer:
         if not self._clients:
             return False
         self._audio_done_event.clear()
+        # A stop landed after this audio was sent (possibly before the clear
+        # above wiped its set()) — the clip won't send audio_done.
+        if self._stop_gen != self._audio_sent_gen:
+            return False
         try:
             await asyncio.wait_for(self._audio_done_event.wait(), timeout=timeout)
             return True

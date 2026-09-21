@@ -1,0 +1,107 @@
+name: Sync Changelog Issues
+
+on:
+  push:
+    paths:
+      - CHANGELOG.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync unreleased changelog entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          changelog="CHANGELOG.md"
+
+          [[ -f "$changelog" ]] || {
+            echo "CHANGELOG.md not found."
+            exit 1
+          }
+
+          # Extract only ## [Unreleased].
+          unreleased="$(
+            awk '
+              /^## \[Unreleased\]/ { found=1; next }
+              found && /^## / { exit }
+              found { print }
+            ' "$changelog"
+          )"
+
+          [[ -n "$unreleased" ]] || {
+            echo "No [Unreleased] section found."
+            exit 0
+          }
+
+          category=""
+
+          while IFS= read -r line; do
+
+            # Supported changelog categories.
+            if [[ "$line" =~ ^###\ (Features|Improvements|Fixes|Architecture|Issues)$ ]]; then
+              category="${BASH_REMATCH[1]}"
+              continue
+            fi
+
+            [[ -n "$category" ]] || continue
+
+            # Expected format:
+            # - **Title** — Description
+            if [[ "$line" =~ ^-\ \*\*(.+)\*\*\ —\ (.+)$ ]]; then
+              title="${BASH_REMATCH[1]}"
+              description="${BASH_REMATCH[2]}"
+
+              issue_title="[Changelog][$category] $title"
+
+              echo "Checking: $issue_title"
+
+              exists="$(
+                gh issue list \
+                  --repo "$GH_REPO" \
+                  --state all \
+                  --limit 1000 \
+                  --json title \
+                  --jq --arg title "$issue_title" \
+                  'any(.[]; .title == $title)'
+              )"
+
+              if [[ "$exists" == "true" ]]; then
+                echo "Already exists."
+                continue
+              fi
+
+              body="$(
+                cat <<EOF
+          ## Changelog entry
+
+          **Category:** $category
+
+          $description
+
+          <!-- Automatically created from CHANGELOG.md -->
+          EOF
+              )"
+
+              gh issue create \
+                --repo "$GH_REPO" \
+                --title "$issue_title" \
+                --body "$body"
+
+              echo "Created: $issue_title"
+            fi
+
+          done <<< "$unreleased"

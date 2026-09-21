@@ -18,10 +18,7 @@ class AudioConfig:
 
 @dataclass
 class STTConfig:
-    model_size: str    = "small"   # UNUSED (STT is Google) — tiny | base | small | medium | large
     language: str      = "en"
-    device: str        = "cpu"    # UNUSED (STT is Google) — "cpu" or "cuda"
-    compute_type: str  = "int8"   # UNUSED (STT is Google) — int8 | float16 | float32
 
 
 @dataclass
@@ -37,27 +34,16 @@ class TTSConfig:
     output:      str   = "avatar"
     # Kokoro device: "cpu" | "cuda" | "auto". CPU keeps the GPU free for Ollama.
     device:      str   = "cpu"
-    # UNUSED — not read by any code. Torch CPU threads for Kokoro when device="cpu". 0 = torch default.
-    cpu_threads: int   = 1
 
 
 # Replace your LLMConfig in config/settings.py with this:
 
 @dataclass
 class LLMConfig:
-    provider: str      = "ollama"            # UNUSED — Ollama is hard-wired
     model: str         = "llama3.2"          # 3B params — 2x faster than llama3.1 8B
-    api_key: str       = ""                  # UNUSED/reserved — Ollama needs no key
     base_url: str      = "http://localhost:11434"
     max_tokens: int    = 150                 # short answers = faster response
     temperature: float = 0.7
-    # UNUSED — the live prompt is llm_service._SYSTEM_PROMPT
-    system_prompt: str = (
-        "You are Maya, a concise and intelligent voice assistant inspired by "
-        "Iron Man's FRIDAY. Address the user as 'senpai'. "
-        "Keep every answer under 3 sentences. "
-        "Speak naturally — your response will be read aloud."
-    )
 
 
 @dataclass

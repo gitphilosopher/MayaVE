@@ -1376,7 +1376,7 @@ def _reset_kokoro_pipeline() -> None:
     logger.warning("Kokoro pipeline reset after a synthesis timeout — will rebuild on next call.")
 
 
-async def _run_kokoro(fn, *args):
+async def _run_kokoro(fn, *args, on_timeout=None):
     """
     Runs a blocking Kokoro call on its own daemon thread (not the shared
     executor) with a timeout. A stuck native call can't be cancelled, so
@@ -1388,6 +1388,9 @@ async def _run_kokoro(fn, *args):
     hang again at exit inside threading._shutdown's atexit join).
     Returns None on timeout, exactly like a normal synth failure, so
     callers don't need special-case handling.
+
+    on_timeout: called on timeout instead of resetting this module's
+    pipeline — for callers that own a different pipeline (core/speaker.py).
     """
     fut = concurrent.futures.Future()
 
@@ -1403,7 +1406,7 @@ async def _run_kokoro(fn, *args):
         return await asyncio.wait_for(asyncio.wrap_future(fut), timeout=_KOKORO_SYNTH_TIMEOUT)
     except asyncio.TimeoutError:
         logger.error(f"Kokoro synthesis timed out after {_KOKORO_SYNTH_TIMEOUT}s.")
-        _reset_kokoro_pipeline()
+        (on_timeout or _reset_kokoro_pipeline)()
         return None
 
 

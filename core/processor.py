@@ -69,7 +69,12 @@ class Processor:
                 f"Intent: {intent['intent']} "
                 f"({intent['confidence']:.2f} via {intent['model']})"
             )
-            context_manager.observe_user_turn(text, intent)
+            # _extract_target falls back to the whole utterance when no trigger
+            # strips — that's not a topic/entity, so hide it from context state.
+            ctx_intent = intent
+            if intent.get("target") == text.strip().lower():
+                ctx_intent = {**intent, "target": ""}
+            context_manager.observe_user_turn(text, ctx_intent)
 
             t_dispatch = time.perf_counter()
             response = await self._router.dispatch(intent, text)

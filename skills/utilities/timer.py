@@ -4,23 +4,29 @@ Countdown timers with expression tags.
 
 Expired timers are announced through the Speaker injected by Router
 (set_speaker), run under state.run_interruptible so a barge-in can cut
-the alert. The alert waits for any in-flight turn to finish first.
+the alert. The alert is queued on the command worker (queue_manager.put_job)
+so it never overlaps a turn and commands spoken during it wait behind it.
+
+"remind me to X" with no duration asks for one and keeps X pending; Router
+calls resolve_pending() first so the next utterance supplies the duration.
 """
 
 import asyncio
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Dict
 
 from config.settings import config
+from core.queue_manager import queue_manager
 from core.state import state
 
 logger = logging.getLogger(__name__)
 _U = config.user_name
 
-_ALERT_MAX_WAIT_S = 60    # longest an alert waits for Maya to finish a turn
-_MESSAGE_MAX      = 120   # cap on spoken reminder text
+_MESSAGE_MAX = 120   # cap on spoken reminder text
+_PENDING_TTL_S = 30  # how long a reminder waits for its duration
 
 _REMINDER_RE = re.compile(r"\bremind(?:er)?\b.*?\b(?:to|about|that)\s+(.+)", re.IGNORECASE)
 _DURATION_RE = re.compile(
@@ -29,6 +35,20 @@ _DURATION_RE = re.compile(
     re.IGNORECASE,
 )
 _TRAILING_RE = re.compile(r"(?:\s+(?:and|please|thanks))+\s*$", re.IGNORECASE)
+
+_NUM_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+    "eighteen": 18, "nineteen": 19,
+}
+_TENS_WORDS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60}
+_NUM_WORD_RE = re.compile(
+    rf"\b(?:({'|'.join(_TENS_WORDS)})(?:[\s-]({'|'.join(list(_NUM_WORDS)[:9])}))?"
+    rf"|({'|'.join(_NUM_WORDS)}))"
+    r"(?=\s*(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -42,6 +62,7 @@ class Timer:
 _timers: Dict[str, Timer] = {}
 _timer_counter = 0
 _speaker = None
+_pending_reminder: tuple[str, float] | None = None   # (message, expiry on time.monotonic())
 
 
 def set_speaker(speaker) -> None:
@@ -50,7 +71,19 @@ def set_speaker(speaker) -> None:
     _speaker = speaker
 
 
+def _words_to_digits(text: str) -> str:
+    """'one hour' -> '1 hour' — only number words directly before a time unit."""
+    def repl(m: re.Match) -> str:
+        if m.group(1):
+            units = _NUM_WORDS[m.group(2).lower()] if m.group(2) else 0
+            return str(_TENS_WORDS[m.group(1).lower()] + units)
+        return str(_NUM_WORDS[m.group(3).lower()])
+    return _NUM_WORD_RE.sub(repl, text)
+
+
 async def execute(intent: dict, text: str) -> str:
+    global _pending_reminder
+    text = _words_to_digits(text)
     t = text.lower()
 
     # A reminder's own wording ("remind me to stop by...") must not hit
@@ -64,9 +97,33 @@ async def execute(intent: dict, text: str) -> str:
 
     seconds, label = _parse_duration(text)
     if seconds is None:
+        reminder = _extract_reminder(text)
+        if reminder:
+            _pending_reminder = (reminder, time.monotonic() + _PENDING_TTL_S)
+            return f"[surprised] How long from now should I remind you, {_U}?"
         return f"[surprised] How long should I set the timer for, {_U}?"
 
     return await _set(seconds, label, _extract_reminder(text))
+
+
+async def resolve_pending(text: str) -> str | None:
+    """
+    Called by Router.dispatch before intent routing. One-shot: the next
+    utterance always consumes a pending reminder. Returns the spoken reply
+    if it supplied a duration; None if nothing was pending, it expired, or
+    the utterance had no duration (then it routes normally, reminder dropped).
+    """
+    global _pending_reminder
+    if _pending_reminder is None:
+        return None
+    message, expires = _pending_reminder
+    _pending_reminder = None
+    if time.monotonic() > expires:
+        return None
+    seconds, _ = _parse_duration(_words_to_digits(text))
+    if seconds is None:
+        return None
+    return await _set(seconds, "", message)
 
 
 async def _set(seconds: int, label: str, message: str = "") -> str:
@@ -122,7 +179,7 @@ async def _countdown(timer: Timer) -> None:
     try:
         await asyncio.sleep(timer.seconds)
         logger.info(f"Timer '{timer.name}' expired.")
-        _forget(timer)   # expired — no longer listed/cancellable while the alert waits
+        _forget(timer)   # expired — no longer listed/cancellable while the alert is queued
         await _alert(timer)
     except asyncio.CancelledError:
         logger.debug(f"Timer '{timer.name}' cancelled.")
@@ -131,23 +188,21 @@ async def _countdown(timer: Timer) -> None:
 
 
 async def _alert(timer: Timer) -> None:
-    """Speak the alert via the shared Speaker once Maya isn't mid-turn."""
+    """Queue the alert on the command worker so it never overlaps a turn."""
     if _speaker is None:
         logger.warning("Timer alert skipped — no speaker registered.")
         return
-
-    for _ in range(_ALERT_MAX_WAIT_S * 2):
-        if not state.is_busy():
-            break
-        await asyncio.sleep(0.5)
 
     if timer.message:
         msg = f"[excited] Time's up, {_U}! Reminder: {timer.message}."
     else:
         msg = f"[excited] Time's up, {_U}! Your {timer.name} is done."
-    logger.info(f"Timer alert: {msg}")
 
-    await state.run_interruptible(_speaker.speak(msg))
+    async def _speak() -> None:
+        logger.info(f"Timer alert: {msg}")
+        await state.run_interruptible(_speaker.speak(msg))
+
+    await queue_manager.put_job(_speak)
 
 
 def _extract_reminder(text: str) -> str:
@@ -183,7 +238,7 @@ def _parse_duration(text: str) -> tuple[int | None, str]:
         return None, ""
 
     label_match = re.search(
-        r'(\b(?!set|a|an|the|for|me|timer|minute|second|hour|min|sec)\w+\b)\s+timer',
+        r'(\b(?!(?:set|a|an|the|for|me|timer|minute|second|hour|min|sec)\b)\w+\b)\s+timer',
         text
     )
     label = label_match.group(1) if label_match else ""

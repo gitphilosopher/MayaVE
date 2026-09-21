@@ -41,7 +41,7 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 
 ### 🧍 3D Avatar
 
-* Live **VRM** avatar powered by Three.js
+* Live **VRM** avatar powered by Three.js, shown in a transparent, always-on-top **Electron** window
 * Facial expressions
 * Lip-sync
 * Eye and head gaze
@@ -64,6 +64,7 @@ Maya can interact with the system and external services through dedicated skills
 * System information
 * Screenshots
 * Lock screen
+* Shutdown and restart (with spoken confirmation)
 * Media and volume control
 * Date and time
 * Avatar actions and animations
@@ -117,7 +118,7 @@ Intent Engine
 
 The Python backend communicates with the browser-based avatar through a local WebSocket connection.
 
-For the complete architecture and internal component breakdown, see **[`architecture.md`](architecture.md)**.
+For the complete architecture and internal component breakdown, see **[`docs/architecture.md`](docs/architecture.md)**.
 
 ---
 
@@ -140,6 +141,7 @@ For the complete architecture and internal component breakdown, see **[`architec
 ### Frontend
 
 * JavaScript
+* Electron + Vite
 * Three.js
 * `@pixiv/three-vrm`
 * `@pixiv/three-vrm-animation`
@@ -171,6 +173,7 @@ MayaVE/
 │   └── utilities/
 │
 ├── frontend/
+│   ├── electron/
 │   ├── js/
 │   ├── assets/
 │   ├── index.html
@@ -180,9 +183,11 @@ MayaVE/
 │
 ├── main.py
 │
-├── architecture.md
-├── HANDOFF.md
-├── CLAUDE.md
+├── docs/
+│   ├── architecture.md
+│   ├── CHANGELOG.md
+│   └── CONTRIBUTING.md
+│
 └── README.md
 ```
 
@@ -194,7 +199,8 @@ Runtime data such as logs, notes, and semantic memory is generated outside the r
 
 * **Windows 11**
 * **Python 3.11+**
-* **Node.js / npm**
+* **Node.js / npm** (version required by Vite 8: `^20.19` or `>=22.12`)
+* **Git LFS** (VRM/VRMA assets are stored with LFS)
 * **Ollama**
 * Microphone and audio output
 * Internet connection for Google Speech Recognition
@@ -243,7 +249,13 @@ ollama pull llama3.2
 ollama pull nomic-embed-text
 ```
 
-Place the required VRM and VRMA assets inside:
+If the VRM/VRMA assets are tracked with Git LFS, fetch them:
+
+```bash
+git lfs pull
+```
+
+Otherwise place the required VRM and VRMA assets inside:
 
 ```text
 frontend/assets/
@@ -259,7 +271,14 @@ Start the backend:
 python main.py
 ```
 
-Then start the frontend development server and open the MayaVE interface.
+Then start the frontend (Vite dev server + Electron shell):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Only dev-server mode is currently supported; `vite build` packaging of assets is not yet set up.
 
 The backend WebSocket server runs locally on:
 
@@ -283,13 +302,13 @@ She can be awakened again using the configured wake word.
 
 ## 📚 Project Documentation
 
-| File                                 | Purpose                                                                    |
-| ------------------------------------ | -------------------------------------------------------------------------- |
-| [`architecture.md`](architecture.md) | Detailed system architecture and component design                          |
-| [`HANDOFF.md`](HANDOFF.md)           | Current development state, pending work, known issues, and session handoff |
-| [`CLAUDE.md`](CLAUDE.md)             | Development context and instructions for Claude                            |
+| File                                   | Purpose                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [`docs/architecture.md`](docs/architecture.md)   | Detailed system architecture, invariants, known issues, and component design                |
+| [`docs/CHANGELOG.md`](docs/CHANGELOG.md)         | Chronological record of features, fixes, changes, and breaking changes                      |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)   | Development rules and persistent project context for handing work between sessions          |
 
-The README intentionally contains only the information needed to understand, install, and run MayaVE. Implementation-level details are maintained in the project documentation above.
+The README intentionally contains only the information needed to understand, install, and run MayaVE. Implementation-level details are maintained in the project documentation above; recent changes are tracked in the changelog.
 
 ---
 

@@ -8,9 +8,10 @@ responses no matter how fast the user speaks.
 
 Queue item schema:
   {
-    "text":      str,          # transcribed command
+    "text":      str,          # transcribed command ("" for jobs)
     "timestamp": float,        # time.time() at capture
     "priority":  int,          # 0 = normal, 1 = interrupt (future)
+    "job":       callable,     # optional — see put_job()
   }
 """
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Type alias for the async handler the worker calls
 CommandHandler = Callable[[dict], Awaitable[None]]
+Job = Callable[[], Awaitable[None]]
 
 
 class QueueManager:
@@ -45,6 +47,20 @@ class QueueManager:
             logger.info(f"Queued command: '{text}'  (depth={self._queue.qsize()})")
         except asyncio.QueueFull:
             logger.warning(f"Queue full — dropping command: '{text}'")
+
+    async def put_job(self, job: Job) -> None:
+        """
+        Enqueue an async callable to run on the worker, in order with
+        commands, so it never overlaps a turn (e.g. timer alerts).
+        Waits for room instead of dropping.
+        """
+        await self._queue.put({
+            "text":      "",
+            "timestamp": time.time(),
+            "priority":  0,
+            "job":       job,
+        })
+        logger.info(f"Queued job  (depth={self._queue.qsize()})")
 
     # ── Consumer side ─────────────────────────────────────────────────
 
@@ -70,9 +86,13 @@ class QueueManager:
                 continue   # nothing in queue — keep looping
 
             try:
-                await self._handler(item)
+                job = item.get("job")
+                if job is not None:
+                    await job()
+                else:
+                    await self._handler(item)
             except Exception as e:
-                logger.error(f"Handler error for '{item['text']}': {e}", exc_info=True)
+                logger.error(f"Handler error for '{item['text'] or 'job'}': {e}", exc_info=True)
             finally:
                 self._queue.task_done()
 

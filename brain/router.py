@@ -19,7 +19,10 @@ from skills.utilities.datetime_skill import execute as get_datetime
 from services.llm.llm_service   import query as llm_query
 from skills.web.weather          import execute as get_weather
 from skills.system.clipboard     import execute as clipboard
-from skills.utilities.timer      import execute as timer, set_speaker as set_timer_speaker
+from skills.utilities.timer      import (
+    execute as timer, set_speaker as set_timer_speaker,
+    resolve_pending as resolve_reminder_duration,
+)
 from skills.utilities.notepad    import execute as notepad
 from skills.system.perform_action import execute as perform_action
 
@@ -99,6 +102,11 @@ class Router:
         if power_reply is not None:
             return power_reply
 
+        # Same for a reminder still waiting on its duration ("in 10 minutes").
+        reminder_reply = await resolve_reminder_duration(raw_text)
+        if reminder_reply is not None:
+            return reminder_reply
+
         intent_name = intent.get("intent", "unknown")
         handler = self._routes.get(intent_name)
 
@@ -110,6 +118,7 @@ class Router:
             return await handler(intent, raw_text)
         except Exception as e:
             logger.error(f"Skill error ({intent_name}): {e}", exc_info=True)
+            intent["_no_history"] = True   # spoken, but kept out of conversation history
             return f"[sad] Sorry {_U}, I ran into a problem with that."
 
     # ── Built-in fast responses ───────────────────────────────────────────────
