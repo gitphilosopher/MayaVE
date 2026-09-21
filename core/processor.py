@@ -25,7 +25,7 @@ Context integration (Stage 2 — brain/conversation.py):
 import logging
 import time
 
-from core.speaker import Speaker
+from core.speaker import Speaker, _strip_tags
 from core.state import state, MayaState
 from core.mood import mood_manager
 from core.behavior_engine import behavior_engine
@@ -76,8 +76,13 @@ class Processor:
             logger.info(f"[TIMING] router.dispatch total: {time.perf_counter()-t_dispatch:.3f}s")
 
             if response and response != ALREADY_SPOKEN:
-                self._conversation.add_assistant(response)
-                await ws_server.broadcast_transcript(response, "maya")
+                # History/transcript get tag-free text; replies flagged
+                # _no_history (llm_service error strings) stay out of history.
+                clean, _ = _strip_tags(response)
+                if clean:
+                    if not intent.get("_no_history"):
+                        self._conversation.add_assistant(clean)
+                    await ws_server.broadcast_transcript(clean, "maya")
 
                 # Set by skills/system/perform_action.py on the intent dict.
                 action = intent.get("action")

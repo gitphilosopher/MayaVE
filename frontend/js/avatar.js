@@ -477,6 +477,8 @@ async function playVrmaAnimation(name) {
                 animationController.release(fidgetName);
             }
         }
+        // headTilt drives the neck too — stop it and restore its bone now.
+        _headTiltStop?.();
     }
 
     const url = _VRMA_ASSETS[name];
@@ -531,6 +533,10 @@ async function playVrmaAnimation(name) {
         }, fadeOutDelay);
 
         setTimeout(() => {
+            // Stale timer: this run was halted and a newer run of the same
+            // name now owns the entry/bones — don't touch them.
+            const current = _activeMixers.get(name);
+            if (current && current.mixer !== mixer) return;
             action.stop();
             mixer.update(0);   // forces THREE's pose restore before we stop ticking it (§3.11)
             _activeMixers.delete(name);
@@ -589,6 +595,7 @@ export function playWinkAnimation() {
 }
 
 let _headTiltActive = false;
+let _headTiltStop   = null;   // cancels the running tween and restores the neck
 
 export function playHeadTiltAnimation() {
     if (!vrm || _headTiltActive) return;
@@ -607,7 +614,17 @@ export function playHeadTiltAnimation() {
     const start = performance.now();
     function smoothstep(t) { return t * t * (3 - 2 * t); }
 
+    const stop = () => {
+        if (_headTiltStop !== stop) return;
+        _headTiltStop = null;
+        neck.rotation.z = origZ;
+        _headTiltActive = false;
+        animationController.release("headTilt");
+    };
+    _headTiltStop = stop;
+
     function tick(now) {
+        if (_headTiltStop !== stop) return;   // halted by an action
         const elapsed = now - start;
         let p;
         if (elapsed < TILT_MS) {
@@ -617,9 +634,7 @@ export function playHeadTiltAnimation() {
         } else if (elapsed < TOTAL_MS) {
             p = 1 - smoothstep((elapsed - TILT_MS - HOLD_MS) / RETURN_MS);
         } else {
-            neck.rotation.z = origZ;
-            _headTiltActive = false;
-            animationController.release("headTilt");
+            stop();
             return;
         }
         neck.rotation.z = origZ + TILT_ANGLE * p;

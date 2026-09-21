@@ -7,8 +7,8 @@
  * Every emotion|attitude|intensity combination is edited and persisted
  * independently in this browser's localStorage (versioned schema, see
  * STORAGE_KEY/SCHEMA_VERSION below) — slider edits save immediately and
- * survive a page reload. expressions.json itself is only ever written by
- * the explicit Export action, which dumps every locally-saved combination
+ * survive a page reload. expressions.json itself is only ever written
+ * by the explicit Export action, which dumps every locally-saved combination
  * at once (not just the one currently open) without clearing localStorage.
  * Import seeds/merges an existing expressions.json into localStorage.
  *
@@ -125,6 +125,7 @@ function _saveStore() {
 
 let store = _loadStore();         // { version, recipes: { semanticKey: recipe } }
 let _activeKey = null;            // the combination currently shown/edited
+let _dirty = false;               // true once a slider was moved on the open combination
 
 function persistRecipe(key, recipe) {
     if (!key) return;
@@ -157,6 +158,7 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
             const recipe = { ...store.recipes[_activeKey] };
             buildSliders(recipe);
             applyRecipeToVrm(recipe);
+            _dirty = false;
         }
     } catch (err) {
         setStatus(`Failed to parse ${file.name}: ${err}`);
@@ -165,9 +167,9 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
 });
 
 document.getElementById("exportLib").addEventListener("click", () => {
-    // Include the currently-open combination's live edits even if the
-    // last slider tweak hasn't otherwise triggered a save.
-    if (_activeKey) persistRecipe(_activeKey, currentRecipe());
+    // Only an edited combination needs saving here; an untouched one must
+    // not be pinned into the export as if it were calibrated.
+    if (_activeKey && _dirty) persistRecipe(_activeKey, currentRecipe());
 
     const blob = new Blob([JSON.stringify(store.recipes, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -312,6 +314,7 @@ function buildSliders(recipe) {
             valLabel.textContent = parseFloat(input.value).toFixed(2);
             const recipe = currentRecipe();
             applyRecipeToVrm(recipe);
+            _dirty = true;
             persistRecipe(_activeKey, recipe);   // immediate local persistence — never expressions.json here
         });
         slidersDiv.appendChild(row);
@@ -319,17 +322,18 @@ function buildSliders(recipe) {
 }
 
 /**
- * Saves the outgoing combination's current recipe (if any was active),
- * then loads the target combination — from localStorage if it's been
- * edited before, otherwise a freshly generated default. Never touches
- * expressions.json (see Export).
+ * Saves the outgoing combination's recipe if it was edited, then loads
+ * the target combination — from localStorage if it's been edited before,
+ * otherwise a freshly generated default (not persisted until edited).
+ * Never touches expressions.json (see Export).
  */
 function switchCombination() {
-    if (_activeKey) {
+    if (_activeKey && _dirty) {
         persistRecipe(_activeKey, currentRecipe());
     }
 
     _activeKey = currentKey();
+    _dirty = false;
     const saved = store.recipes[_activeKey];
     const recipe = saved ? { ...saved } : composeDefault(emotionSel.value, attitudeSel.value, intensitySel.value);
 

@@ -8,7 +8,7 @@ Pipeline (concurrent tasks):
       ↓  phrase splitter + expression tag parser (see "Phrase-level
          streaming" below — splits earlier than a full sentence)
   [synth_queue]  — items: (phrase_text, expression, actions, is_final,
-                            attitude, intensity)
+                            attitude, intensity, continuation)
       ↓  synth_worker: Kokoro TTS → float32 audio array
   [play_queue]   — items: (audio_data, samplerate, expression, actions,
                             attitude, intensity)
@@ -556,13 +556,17 @@ def _fragment_for_energy(text: str, terminator: str = "!") -> str:
     return (terminator + " ").join(cleaned) + terminator
 
 
-def _enhance_prosody(text: str, expression: str, is_final: bool = True) -> str:
+def _enhance_prosody(text: str, expression: str, is_final: bool = True,
+                     continuation: bool = False) -> str:
     """
     Emotion-aware text rewriting before Kokoro synthesis.
 
     Four passes (is_final=True — a complete sentence):
       1. Elongation normalisation  — YESSSS -> YES (Kokoro spells out repeats)
       2. Short-word expansion      — bare 'YES!' -> 'Oh yes, absolutely!'
+                                     (skipped when continuation=True: the
+                                     chunk ends a sentence already split
+                                     earlier, so it isn't a bare exclamation)
       3. Sentence fragmentation    — long excited/surprised/happy/angry sentences
                                      are split into short punchy units so Kokoro
                                      has natural pitch-reset points between beats.
@@ -587,7 +591,8 @@ def _enhance_prosody(text: str, expression: str, is_final: bool = True) -> str:
     if not is_final:
         return _PARTIAL_TRAIL_RE.sub('', text).rstrip()
 
-    text = _expand_short_exclamation(text, expression)
+    if not continuation:
+        text = _expand_short_exclamation(text, expression)
     base = _TRAIL_PUNCT.sub("", text).rstrip()
 
     if expression == "excited":
@@ -887,17 +892,22 @@ async def query(intent: dict, text: str) -> str:
 
         return ALREADY_SPOKEN
 
+    # Error replies below are spoken by Processor but must not enter
+    # conversation history (Processor checks intent["_no_history"]).
     except httpx.ConnectError:
         logger.error("Ollama ConnectError.")
+        intent["_no_history"] = True
         return (
             f"I can't reach my AI core right now, {config.user_name}. "
             "Please make sure Ollama is running."
         )
     except httpx.TimeoutException:
         logger.error("Ollama timeout.")
+        intent["_no_history"] = True
         return f"That's taking too long, {config.user_name}. Try again in a moment."
     except Exception as e:
         logger.error(f"Ollama error: {e}", exc_info=True)
+        intent["_no_history"] = True
         return f"Something went wrong, {config.user_name}. ({type(e).__name__})"
 
 
@@ -1061,6 +1071,10 @@ async def _ollama_streamer(
     _pending_attitude: str | None = None
     _pending_intensity: str | None = None
 
+    # True after a non-final phrase of the current sentence was emitted —
+    # the next emitted phrase is then a continuation, not a bare sentence.
+    _in_sentence = False
+
     # Every resolved sentence expression in this reply, gathered here and
     # reported to mood_manager ONCE at the end — a sentence's delivery tone
     # (e.g. a factual [neutral] line inside an angry reply) must not be
@@ -1071,10 +1085,10 @@ async def _ollama_streamer(
         """
         Parse a raw phrase/sentence fragment from the buffer.
         Returns (clean_text, expression, actions, is_final, attitude,
-        intensity) or None if nothing to speak. Uses and updates the
-        _pending_* closures.
+        intensity, continuation) or None if nothing to speak. Uses and
+        updates the _pending_* closures.
         """
-        nonlocal _pending_expression, _pending_attitude, _pending_intensity
+        nonlocal _pending_expression, _pending_attitude, _pending_intensity, _in_sentence
         raw = raw.strip()
         if not raw:
             return None
@@ -1118,6 +1132,9 @@ async def _ollama_streamer(
         _pending_attitude    = None if is_final else resolved_attitude
         _pending_intensity   = None if is_final else resolved_intensity
 
+        continuation = _in_sentence
+        _in_sentence = not is_final
+
         combined_actions = _pending_actions + actions
         _pending_actions.clear()
 
@@ -1131,7 +1148,7 @@ async def _ollama_streamer(
 
         turn_expressions.append(resolved)
 
-        return clean, resolved, combined_actions, is_final, resolved_attitude, resolved_intensity
+        return clean, resolved, combined_actions, is_final, resolved_attitude, resolved_intensity, continuation
 
     # Diagnostic only (see llm_service.py investigation, no behavior change):
     # counts phrases in put order so producer/consumer logs can be matched.
@@ -1246,7 +1263,7 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
             await play_q.put(_DONE)
             return
 
-        sentence, expression, actions, is_final, attitude, intensity = item
+        sentence, expression, actions, is_final, attitude, intensity, continuation = item
         logger.info(
             f"[TIMING] synth_worker dequeued '{sentence}' t={t_dequeued:.3f} "
             f"(queue_wait={t_dequeued - t_wait_start:.3f}s)"
@@ -1255,7 +1272,7 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
         try:
             # Enhance prosody before synthesis so Kokoro renders with feeling
             t_pros0  = time.perf_counter()
-            enhanced = _enhance_prosody(sentence, expression, is_final)
+            enhanced = _enhance_prosody(sentence, expression, is_final, continuation)
             t_pros1  = time.perf_counter()
             logger.info(f"[TIMING] _enhance_prosody '{sentence[:30]}': {t_pros1 - t_pros0:.4f}s")
 
