@@ -1,6 +1,6 @@
 **Source of truth:** This document describes the currently implemented architecture. If it conflicts with assumptions elsewhere, verify against the actual source code before making changes.
 
-# MayaVI (Maya) — Technical Architecture
+# MayaVE (Maya) — Technical Architecture
 
 Status: derived strictly from the code/config present in this repository snapshot.
 Where behavior could not be verified from code, it is marked **[UNVERIFIED]**.

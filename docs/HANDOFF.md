@@ -1,11 +1,11 @@
-# MayaVI — Technical Handoff
+# MayaVE — Technical Handoff
 
 **Basis:** static inspection of the repository snapshot. **No runtime was available** — "Confirmed" below means deterministic from source (code trace), not observed at runtime. Binary assets (`.vrm`, `.vrma`, `.vroid`) were Git LFS pointer stubs (text with `oid`/`size`) in the inspected snapshot, not real binaries; their contents are **UNVERIFIED**. If your checkout has the real assets, they were still not inspected. **`README.md` and `docs/architecture.md` are current, relevant project documentation. When documentation conflicts with the actual implementation, the code is the source of truth.** Known doc conflict: README/architecture describe `set_reminder` as routed to `skills/utilities/reminder.py` (silent); the code routes it to `timer.py` (§9/§11). The README's Python-version and requirements-path statements were corrected in a later audit — re-check the README rather than trusting older notes.
 
 **Fix log:** consolidated from three Handoff revisions; a fix reported in any revision is treated as applied. Batch 1–4 fixes (timer/reminder routing and race, `perform_action` animation, `keep_alive` + lifecycle logging, `lock_screen`, `shutdown`/`restart`, sleep persistence, `listening` broadcast + state replay, screenshot, notepad, dismissal guard, requirements/`logs/`, reconnect-loop leak) are applied in source — statically traced, **not runtime-tested**. Bugs found by the later static audit are listed in §11 Confirmed. See "Resolved" in §11.
 ---
 
-# 1. MAYAVI CURRENT STATE
+# 1. MAYAVE CURRENT STATE
 
 - **What:** Windows-first desktop voice assistant "Maya" with a transparent always-on-top 3D VRM avatar. Persona: FRIDAY-like, addresses user as `config.user_name` = "senpai".
 - **Two processes:** Python `asyncio` backend (`main.py`) ⇄ WebSocket `ws://localhost:8765` ⇄ Electron/Vite/Three.js frontend (`frontend/`). Frontend is a pure WS client.

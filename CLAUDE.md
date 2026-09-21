@@ -1,6 +1,6 @@
-# MayaVI Development Context
+# MayaVE Development Context
 
-MayaVI is a locally hosted AI companion with:
+MayaVE is a locally hosted AI companion with:
 - Python backend
 - Ollama LLM
 - semantic memory

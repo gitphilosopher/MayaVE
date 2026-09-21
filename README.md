@@ -1,6 +1,9 @@
-# MayaVI — Maya (MARK 10)
+# MayaVE — Maya (VE10)
 
-Maya is a **local-first, Windows 11 desktop AI voice assistant** with a live 3D VRM avatar — a FRIDAY-style companion (Iron Man) that listens, thinks, speaks, and emotes, running entirely on local infrastructure (Ollama for LLM inference, Kokoro for TTS, Silero for VAD) with no cloud AI dependency for the core assistant loop. Google's free STT API is currently used for transcription (requires internet).
+MayaVE is **Maya, Virtual Entity 10 (VE10)** — a **local-first Windows desktop AI voice assistant** with a live 3D VRM avatar. Designed as a warm, expressive FRIDAY-style companion inspired by Iron Man, Maya listens, thinks, speaks, remembers, and emotes while running primarily on local infrastructure.
+
+The core assistant loop runs locally using **Ollama** for LLM inference, **Kokoro** for text-to-speech, and **Silero** for voice activity detection, with no cloud AI dependency for its core reasoning, memory, behavior, or voice pipeline. **Google's free STT API** is currently used for speech transcription and therefore requires an internet connection.
+
 
 ## Goals
 
