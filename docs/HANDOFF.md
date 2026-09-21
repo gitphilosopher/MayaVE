@@ -222,7 +222,7 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 - **`ws_server.py` has no `_last_state`/state replay on connect** in the current snapshot, although the Resolved list below, §2, §12 and §13 describe it as applied. Effect: the frontend's `_currentBackendState` stays `null` until the first `broadcast_state`, so fidgets can't run after connect until then. Either add it (`_last_state` written by `broadcast_state` even with no clients, default `"idle"`, sent to each new client) or correct those doc lines.
 - **`llm_service.py` still contains a shadowed, dead first `_elongation_re_sub`** (recursive; overridden by the second definition), although the Resolved list says it was removed. No behavior impact.
 
-### Resolved (Batch 1–4; statically traced, not runtime-tested)
+### Resolved (statically traced, not runtime-tested)
 - Timer "N minutes/seconds" double-count → one pattern per unit (`timer._parse_duration`).
 - `perform_action` animation → `Processor` broadcasts `intent["action"]` via `on_audio_start`.
 - `websockets`/`pyperclip` added to `config/requirements.txt`; `logs/` auto-created in `main.py`.
@@ -240,8 +240,6 @@ Convention: `async execute(intent, text) -> str` returning `"[tag] text"`; `perf
 - Duplicate dead `_elongation_re_sub` removal (**still present, see mismatch above**).
 - Timer name race → `_countdown`'s `finally` removes only its own `_timers` entry; `timer.execute` skips cancel/status word checks for `set_reminder` (no more "remind me to stop by…" hijack).
 - Frontend reconnect leak → `startBlinking()` clears `_blinkTimeout`; `startEyeMovement()` starts once per page (`_eyeLoopStarted`).
-
-### Resolved (Batch A/B; statically traced, not runtime-tested)
 - **Decimals/versions split mid-token (was #5):** `_next_boundary` waits when a `.` ends the buffer right after an alphanumeric.
 - **Spurious Kokoro pipeline rebuild (was #6, part):** `Speaker._synthesise_guarded` rebuilds only on a real timeout (`_NO_AUDIO` sentinel for "no audio").
 - **`expressions.json` wipe-on-corrupt (was #10):** `_load_failed` blocks overwrites; atomic `.tmp` + replace.
