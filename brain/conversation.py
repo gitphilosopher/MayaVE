@@ -39,9 +39,16 @@ Stage 3 — conversational state:
 Every retrieval/persistence path is wrapped so a missing or broken
 embedding backend / vector store degrades to recent-context-only
 behaviour — Maya must keep working without them.
+
+Event-loop rule:
+  SQLiteVectorStore is synchronous (sqlite3 + brute-force numpy cosine).
+  Every store call made from an async path here (has_records, search,
+  find_similar, update, add) goes through run_in_executor. The store opens
+  a fresh sqlite3 connection per call, so worker-thread use is safe.
 """
 
 import asyncio
+import functools
 import logging
 import re
 import time
@@ -616,7 +623,8 @@ class ContextManager:
             if self._skips_semantic(question):
                 logger.info("[TIMING]     semantic retrieval skipped: short referential turn")
                 return []
-            if not self._store.has_records():
+            loop = asyncio.get_running_loop()
+            if not await loop.run_in_executor(None, self._store.has_records):
                 logger.info("[TIMING]     semantic retrieval skipped: no stored memories")
                 return []
             t0 = time.perf_counter()
@@ -625,9 +633,13 @@ class ContextManager:
             if embedding is None:
                 return []
             t1 = time.perf_counter()
-            results = self._store.search(
-                embedding, top_k=config.context.max_semantic_memories,
-                min_similarity=config.context.similarity_threshold,
+            results = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    self._store.search, embedding,
+                    top_k=config.context.max_semantic_memories,
+                    min_similarity=config.context.similarity_threshold,
+                ),
             )
             logger.info(f"[TIMING]     store.search(): {time.perf_counter()-t1:.4f}s")
             cutoff = time.time() - config.context.semantic_recency_guard_seconds
@@ -695,17 +707,23 @@ class ContextManager:
             return
         candidate.embedding = embedding
 
-        existing = self._store.find_similar(
-            embedding, candidate.mem_type, candidate.topic,
-            threshold=config.context.dedup_threshold,
+        loop = asyncio.get_running_loop()
+        existing = await loop.run_in_executor(
+            None,
+            functools.partial(
+                self._store.find_similar, embedding, candidate.mem_type, candidate.topic,
+                threshold=config.context.dedup_threshold,
+            ),
         )
         if existing and existing.id is not None:
             # Prefer the newer statement over a stale duplicate rather than
             # accumulating near-identical or contradictory entries.
-            self._store.update(existing.id, candidate.content, embedding, candidate.timestamp)
+            await loop.run_in_executor(
+                None, self._store.update, existing.id, candidate.content, embedding, candidate.timestamp,
+            )
             logger.debug(f"Semantic memory updated (id={existing.id}): '{candidate.content[:50]}'")
         else:
-            new_id = self._store.add(candidate)
+            new_id = await loop.run_in_executor(None, self._store.add, candidate)
             logger.debug(f"Semantic memory stored (id={new_id}, type={candidate.mem_type}): '{candidate.content[:50]}'")
 
     # ── Long-conversation compaction ───────────────────────────────────────

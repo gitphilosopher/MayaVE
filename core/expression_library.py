@@ -15,10 +15,21 @@ jitter on top of the looked-up/generated base, never persists it.
 File location: frontend/assets/expressions.json (same folder as the VRM
 asset, alongside frontend/js/expression-lab.js's Export output — the
 canonical shared file both the Lab and the backend read/write against).
+
+Event-loop rule:
+  save_recipe() is called from BehaviorEngine.compose(), which runs on the
+  asyncio loop on the per-phrase path. The in-memory cache is updated
+  immediately (so lookups see the new recipe at once) and the JSON is
+  serialised on the caller, but the .tmp write + atomic replace happens on
+  a dedicated single-thread writer. One worker means writes are applied in
+  submission order — the last save always wins — and the non-daemon thread
+  lets queued writes finish at interpreter exit. The first _load() (a small
+  file read) is still synchronous.
 """
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -70,6 +81,9 @@ _INTENSITY_EXPONENT = {
 _cache: dict | None = None
 _load_failed = False   # file existed but was unreadable — never overwrite it
 
+# Single worker → writes land in submission order; see module docstring.
+_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="expr-lib-writer")
+
 
 def _exponent_for(key: str) -> float:
     for prefix, exp in _INTENSITY_EXPONENT.items():
@@ -98,19 +112,31 @@ def _load() -> dict:
     return _cache
 
 
+def _write_payload(payload: str) -> None:
+    """Runs on the writer thread: .tmp write + atomic replace (a crash can't
+    leave a half-written file). Never raises."""
+    tmp = _LIB_FILE.with_name(_LIB_FILE.name + ".tmp")
+    try:
+        _LIB_DIR.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(payload, encoding="utf-8")
+        tmp.replace(_LIB_FILE)
+    except Exception as e:
+        logger.warning(f"expressions.json save failed (non-fatal): {e}")
+
+
 def _save_all(data: dict) -> None:
     global _cache
     _cache = data
     if _load_failed:
         logger.warning("expressions.json was unreadable at load — skipping write to protect it.")
         return
-    tmp = _LIB_FILE.with_name(_LIB_FILE.name + ".tmp")
     try:
-        _LIB_DIR.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
-        tmp.replace(_LIB_FILE)   # atomic — a crash can't leave a half-written file
+        # Serialise here (microseconds for a few dozen small recipes) so the
+        # writer thread receives an immutable string, not a live dict.
+        payload = json.dumps(data, indent=2, sort_keys=True)
+        _writer.submit(_write_payload, payload)
     except Exception as e:
-        logger.warning(f"expressions.json save failed (non-fatal): {e}")
+        logger.warning(f"expressions.json save could not be scheduled (non-fatal): {e}")
 
 
 def get_recipe(emotion: str, attitude: str, intensity_word: str) -> dict | None:
@@ -119,7 +145,8 @@ def get_recipe(emotion: str, attitude: str, intensity_word: str) -> dict | None:
 
 
 def save_recipe(emotion: str, attitude: str, intensity_word: str, recipe: dict) -> None:
-    """Persist (or overwrite) a calibrated recipe for this semantic key."""
+    """Persist (or overwrite) a calibrated recipe for this semantic key.
+    Cache updates immediately; the disk write is asynchronous."""
     data = dict(_load())
     data[semantic_key(emotion, attitude, intensity_word)] = recipe
     _save_all(data)

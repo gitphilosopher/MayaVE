@@ -20,8 +20,16 @@ Context integration (Stage 2 — brain/conversation.py):
   topic/state/open-loop tracking for every command (not just LLM-routed
   ones). This is state tracking only — conversation.add_user() above it
   remains the single place user turns are written to history.
+
+Event-loop rule:
+  IntentEngine.classify() runs a PyTorch + TensorFlow ensemble forward
+  pass — tens of milliseconds of CPU that would otherwise stall the loop
+  (WS pings, audio_done handling, timers). It runs in the default
+  executor. Commands are serialized by queue_manager, so classify() is
+  never called concurrently.
 """
 
+import asyncio
 import logging
 import time
 
@@ -62,7 +70,8 @@ class Processor:
         self._conversation.add_user(text)
 
         try:
-            intent = self._intent_engine.classify(text)
+            loop = asyncio.get_running_loop()
+            intent = await loop.run_in_executor(None, self._intent_engine.classify, text)
             intent["_t_cmd_start"] = t0
             logger.info(f"[TIMING] intent_classify: {time.perf_counter()-t0:.3f}s")
             logger.info(

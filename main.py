@@ -1,6 +1,6 @@
 """
 main.py
-Maya – Audio Operating System
+MayaVE – Maya Virtual Entity
 ==============================
 
 States:
@@ -16,10 +16,16 @@ Interrupt (barge-in): say her name while she's speaking — e.g. "hey
 Stop:  Ctrl+C
 """
 
+# Must run before ANY import that can pull in kokoro / huggingface_hub
+# (core.speaker and services.llm.llm_service both do, directly or not):
+# huggingface_hub reads HF_HUB_OFFLINE once, at import time. Setting it in
+# llm_service.py after `from kokoro import KPipeline` was too late.
+import os
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import asyncio
 import datetime
 import logging
-import os
 import sys
 from logging.handlers import RotatingFileHandler
 
