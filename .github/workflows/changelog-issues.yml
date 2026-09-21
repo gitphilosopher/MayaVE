@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sync unreleased changelog entries
+      - name: Sync changelog issues
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -62,23 +62,21 @@ jobs:
               description="${BASH_REMATCH[2]}"
               issue_title="[Changelog][$category] $title"
 
+              # Only Issues and Fixes become GitHub Issues.
+              if [[ "$category" != "Issues" && "$category" != "Fixes" ]]; then
+                echo "Skipping $category: $title"
+                continue
+              fi
+
               echo "Checking: $issue_title"
 
-              exists="$(
-                if gh issue list \
-                    --repo "$GH_REPO" \
-                    --state all \
-                    --limit 1000 \
-                    --json title \
-                    --jq '.[].title' |
-                    grep -Fxq "$issue_title"; then
-                  echo true
-                else
-                  echo false
-                fi
-              )"
-
-              if [[ "$exists" == "true" ]]; then
+              if gh issue list \
+                  --repo "$GH_REPO" \
+                  --state all \
+                  --limit 1000 \
+                  --json title \
+                  --jq '.[].title' |
+                  grep -Fxq "$issue_title"; then
                 echo "Already exists."
                 continue
               fi
@@ -91,12 +89,24 @@ jobs:
 
           <!-- Automatically created from docs/CHANGELOG.md -->"
 
-              gh issue create \
-                --repo "$GH_REPO" \
-                --title "$issue_title" \
-                --body "$body"
+              issue_url="$(
+                gh issue create \
+                  --repo "$GH_REPO" \
+                  --title "$issue_title" \
+                  --body "$body"
+              )"
 
-              echo "Created: $issue_title"
+              echo "Created: $issue_url"
+
+              # Fixes represent resolved work, so close them immediately.
+              if [[ "$category" == "Fixes" ]]; then
+                issue_number="${issue_url##*/}"
+
+                gh issue close "$issue_number" \
+                  --repo "$GH_REPO"
+
+                echo "Closed: $issue_title"
+              fi
             fi
 
           done <<< "$unreleased"
