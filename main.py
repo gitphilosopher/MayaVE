@@ -21,6 +21,7 @@ import datetime
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 
 import httpx
 import sounddevice as sd
@@ -47,9 +48,15 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(f"{config.log_dir}/maya.log", encoding="utf-8"),
+        RotatingFileHandler(
+            f"{config.log_dir}/maya.log",
+            maxBytes=5_000_000, backupCount=3, encoding="utf-8",
+        ),
     ],
 )
+# Third-party libs log every HTTP request / WS connection at INFO — warnings only.
+for _noisy in ("httpx", "httpcore", "websockets", "urllib3", "tensorflow"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logger = logging.getLogger("main")
 
 _U = config.user_name

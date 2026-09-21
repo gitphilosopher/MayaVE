@@ -15,6 +15,7 @@ All notable changes to MayaVE are documented here.
 - **Unused config fields marked** — `STTConfig.model_size/device/compute_type`, `LLMConfig.provider/api_key/system_prompt` and `TTSConfig.cpu_threads` are kept as config surface and commented `UNUSED` in `settings.py`.
 - **Barge-in history** — interrupted LLM turns now record only the phrases whose playback started (`_spoken_phrases`) while finished turns record the full reply (`_reply_finished`).
 - **Error strings and tags in history** — `query()` error replies set `intent["_no_history"]` (spoken, not stored) and `Processor` stores and broadcasts tag-stripped text for both skill and LLM replies.
+- **Log volume** — main.pywriteslogs/maya.logthrough aRotatingFileHandler(5 MB × 3 backups) and setshttpx/httpcore/websockets/urllib3/tensorflow loggers to WARNING to drop per-request noise.
 
 ### Architecture
 - **Listening state broadcast** — `main.on_speech` broadcasts `state:listening` only when Maya is not PROCESSING/SPEAKING, empty STT resets to IDLE with baseline behavior, and the FSM no longer overwrites an in-flight turn, giving the sequence `listening → processing → speaking → idle`.
