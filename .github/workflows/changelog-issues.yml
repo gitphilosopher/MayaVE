@@ -46,6 +46,26 @@ jobs:
             exit 0
           }
 
+          # Prints "<number> <STATE>" for the issue with this exact title
+          # (an OPEN one is preferred if duplicates exist), or nothing.
+          find_issue() {
+            gh issue list --repo "$GH_REPO" --state all --limit 1000 \
+              --json number,title,state |
+              jq -r --arg t "$1" '
+                [.[] | select(.title == $t)]
+                | sort_by(.state != "OPEN")
+                | first // empty
+                | "\(.number) \(.state)"'
+          }
+
+          # Creates an issue and prints its number.
+          create_issue() {
+            local url body
+            body="$(printf '%s\n\n%s' "$2" '<!-- Automatically created from docs/CHANGELOG.md -->')"
+            url="$(gh issue create --repo "$GH_REPO" --title "$1" --body "$body")"
+            echo "${url##*/}"
+          }
+
           category=""
 
           while IFS= read -r line; do
@@ -55,58 +75,39 @@ jobs:
               continue
             fi
 
-            [[ -n "$category" ]] || continue
+            # Only Issues and Fixes drive GitHub Issues.
+            [[ "$category" == "Issues" || "$category" == "Fixes" ]] || continue
 
             if [[ "$line" =~ ^-\ \*\*(.+)\*\*\ —\ (.+)$ ]]; then
               title="${BASH_REMATCH[1]}"
               description="${BASH_REMATCH[2]}"
-              issue_title="[Changelog][$category] $title"
+              issue_title="[Changelog] $title"
 
-              # Only Issues and Fixes become GitHub Issues.
-              if [[ "$category" != "Issues" && "$category" != "Fixes" ]]; then
-                echo "Skipping $category: $title"
-                continue
-              fi
+              found="$(find_issue "$issue_title")"
+              read -r number state <<< "$found"
 
-              echo "Checking: $issue_title"
-
-              if gh issue list \
-                  --repo "$GH_REPO" \
-                  --state all \
-                  --limit 1000 \
-                  --json title \
-                  --jq '.[].title' |
-                  grep -Fxq "$issue_title"; then
-                echo "Already exists."
-                continue
-              fi
-
-              body="## Changelog entry
-
-          **Category:** $category
-
-          $description
-
-          <!-- Automatically created from docs/CHANGELOG.md -->"
-
-              issue_url="$(
-                gh issue create \
-                  --repo "$GH_REPO" \
-                  --title "$issue_title" \
-                  --body "$body"
-              )"
-
-              echo "Created: $issue_url"
-
-              # Fixes represent resolved work, so close them immediately.
-              if [[ "$category" == "Fixes" ]]; then
-                issue_number="${issue_url##*/}"
-
-                gh issue close "$issue_number" \
-                  --repo "$GH_REPO"
-
-                echo "Closed: $issue_title"
-              fi
+              case "$category:${state:-}" in
+                Issues:)
+                  number="$(create_issue "$issue_title" "$description")"
+                  echo "Created open #$number: $issue_title"
+                  ;;
+                Issues:CLOSED)
+                  gh issue reopen "$number" --repo "$GH_REPO"
+                  echo "Reopened #$number: $issue_title"
+                  ;;
+                Fixes:)
+                  number="$(create_issue "$issue_title" "$description")"
+                  gh issue close "$number" --repo "$GH_REPO"
+                  echo "Created and closed #$number: $issue_title"
+                  ;;
+                Fixes:OPEN)
+                  gh issue close "$number" --repo "$GH_REPO"
+                  echo "Closed #$number: $issue_title"
+                  ;;
+                *)
+                  echo "Already ${state}: #$number $issue_title"
+                  ;;
+              esac
             fi
 
           done <<< "$unreleased"
