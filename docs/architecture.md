@@ -97,7 +97,7 @@ sounddevice callback thread → Listener._process_frame
    └─ Silero VAD → utterance → run_coroutine_threadsafe(main.on_speech)
 on_speech → [if not busy: FSM LISTENING + WS "listening"] → Transcriber.transcribe (Google STT, executor)
    → empty: back to IDLE (+WS idle, baseline behavior)
-   → barge-in check (was_speaking snapshot + contains_wake_word) / sleep-trigger check
+   → barge-in check (was_speaking snapshot + contains_wake_word) / sleep-command check (is_sleep_command)
    → queue_manager.put(text)                 [maxsize=10, drops when full]
 QueueManager.run → Processor.handle          [FSM → PROCESSING + WS "processing"]
    → IntentEngine.classify (sync) → context_manager.observe_user_turn
@@ -115,11 +115,10 @@ ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expressio
 4. Each utterance spawns an independent `on_speech` task, so queue order = STT *completion* order.
 5. `main.py::on_speech` runs at utterance **end** (`listening` therefore covers the STT round trip, not speech onset). Before STT it snapshots `was_speaking = state.can_interrupt()` and `began_listening = not state.is_busy()`. Only when `began_listening`: FSM → LISTENING + WS `state:listening` (never overwrites PROCESSING/SPEAKING). Transcription: `core/transcriber.py` → `recognize_google(language=config.stt.language)` in the default executor; returns None on failure; **requires internet**, no offline fallback.
    - Empty STT → `_end_listening()`: if the FSM is still LISTENING → IDLE + WS `idle` + baseline behavior (clears the frontend's surprised-0.3 listening face).
-   - Non-empty: if `was_speaking` and `contains_wake_word(text)` → `on_interrupt()` (→ `state.interrupt()`); **talking over Maya without her name does not interrupt her**. Then `_SLEEP_TRIGGERS` (`go to sleep, sleep, goodbye, bye, stop listening`; **substring** match) → SLEEPING + goodbye line spoken directly (bypasses the queue). Otherwise `queue_manager.put(text)`; the FSM is **left in LISTENING** and `Processor.handle` moves it to PROCESSING (no forced IDLE after `put`).
-6. sleep triggers are now `"is_sleep_command`: phrases anywhere, bare 'sleep'/'bye' whole-utterance only", not a substring match.
+   - Non-empty: if `was_speaking` and `contains_wake_word(text)` → `on_interrupt()` (→ `state.interrupt()`); **talking over Maya without her name does not interrupt her**. Then `is_sleep_command(text)` (`core/wake_word.py`): the phrases "go to sleep", "goodbye" and "stop listening" match **anywhere** in the utterance, while the bare words "sleep"/"bye" match only as the **whole utterance** (optionally with ok/hey, her name, the user name or "please") — so "I didn't sleep well" or "she's asleep" do not sleep her. A match → SLEEPING + goodbye line spoken directly (bypasses the queue). Otherwise `queue_manager.put(text)`; the FSM is **left in LISTENING** and `Processor.handle` moves it to PROCESSING (no forced IDLE after `put`).
 
 ### 2.4 Wake word
-`WakeWordDetector` buffers 2 s non-overlapping windows of audio only while `state.is_sleeping()`, runs Google STT on each window, and fires `on_wake()` if any `compute_wake_triggers(config.wake_word)` trigger is found. `config.wake_word="wake up Maya"` yields `{"wake up maya","maya","hey/hello/hi/yo maya"}`; because `"maya"` is in the set (substring match), **any text containing "maya" wakes/interrupts**. The same `compute_wake_triggers`/`contains_wake_word` gate the barge-in check. `on_wake` sets IDLE and speaks `"I'm here {user}. How can I help?"`. The wake/barge-in match is whole-word. "Any text containing the word 'maya' wakes/interrupts" replaces "any text containing 'maya'".
+`WakeWordDetector` buffers 2 s non-overlapping windows of audio only while `state.is_sleeping()`, runs Google STT on each window, and fires `on_wake()` if the window matches the wake-trigger pattern. `compute_wake_triggers(config.wake_word)` builds the phrase set (`config.wake_word="wake up Maya"` yields `{"wake up maya","maya","hey/hello/hi/yo maya"}`); `_trigger_pattern` (cached) compiles it into one `\b(...)\b` regex, longest phrase first, so matching is **whole-word** — "Mayans" or "Amaya" do not match. Because `"maya"` is in the set, **any text containing the word "maya" wakes/interrupts**. The same pattern (`contains_wake_word`) gates the barge-in check. `on_wake` sets IDLE and speaks `"I'm here {user}. How can I help?"`.
 
 ### 2.5 Command queue
 `core/queue_manager.py`: one bounded `asyncio.Queue` (maxsize=10) with a single serial worker (`QueueManager.run()`), so Maya never overlaps responses. A full queue drops new items (warning logged). The `priority` field is unused. Startup/wake/sleep lines and timer alerts already bypass the queue.
@@ -140,38 +139,43 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 ## 3. Intent Classification (`brain/intent_engine.py`)
 
 - **Dual-model ensemble**: PyTorch BiLSTM+Attention (`_build_pytorch_model`) and TensorFlow 1-D CNN (`_build_tf_model`), trained on the same `TRAINING_DATA` (hand-labelled utterance→intent pairs, **45 intent labels**). Final class = argmax of the **averaged softmax**. Tokenizer: whitespace/regex `_tokenize` with `<PAD>`/`<UNK>`, sequences padded/truncated to `_MAX_LEN=30`.
-- **Auto-retrain**: SHA-256 of `TRAINING_DATA` is stored in `models/training_hash.txt`; a mismatch/missing file triggers a full retrain on startup. `python -m brain.train_intent` = wipe + retrain + test print.
+- **Auto-retrain**: SHA-256 of `TRAINING_DATA` is stored in `models/training_hash.txt`; a mismatch/missing file triggers a full retrain on startup. `python -m brain.train_intent` = wipe + retrain + test print. Guards and keyword rules are not part of `TRAINING_DATA`, so editing them does not retrain.
 - **`_predict` order:**
-  1. **Dismissal guard** — exact match after stripping punctuation, `leading fillers (ok/um/well/actually)` and trailing please/name.
+  1. **Dismissal guard** — `_is_dismissal`: the utterance is lowercased and punctuation-stripped, then leading fillers (`ok/okay/um/uh/hmm/well/actually`) and trailing `please`/`config.name`/`config.user_name` are trimmed (`_DISMISSAL_TRIM_RE`); the remaining core must **exactly** equal one of `_DISMISSAL_PHRASES` (`stop`, `nah`, `never mind`, …) → `dismissal`. No prefix/token-count matching, so "stop the timer" is not a dismissal.
   2. **Presence guard** — `_PRESENCE_RE` (e.g. "I'm here now", "just got back") → `smalltalk`; exists because the ML models associate "now"/"here" with `get_time`/`get_date`.
-  3. **Action-word guard** — `_ACTION_WORD_RE` (`nod|giggl*|sigh|shrug|wink|wynk`, whole word anywhere in the utterance) → `perform_action` regardless of confidence.
-  4. **Keyword-first** applies to ≤3 tokens only. The greeting-prefix clause is gone.
-  5. **Ensemble**; `_KEYWORD_RULES` matching is word-boundary.
+  3. **Action-word guard** — `_ACTION_WORD_RE` (`nod|giggl*|sigh|shrug|wink|wynk`, whole word anywhere in the utterance) → `perform_action` regardless of confidence, **unless** `_ACTION_QUESTION_RE` also matches (a wh-word, a leading does/do/did/is/are/was, or mean/define). Questions about an action word ("what does nod mean") fall through to the later guards/ML instead.
+  4. **Keyword-first** for inputs of **≤3 tokens only** (the former greeting-prefix `startswith` clause was removed, so longer greeting-led utterances go to ML); not for comparison queries ("which"/"vs"/"compare"), which go to ML; if keywords miss → `general_query` (`short_input_fallback`). Pure greetings such as "hey maya" are ≤3 tokens and still take this path.
+  5. **Ensemble**; if confidence < `_CONF_THRESH` (0.65) → ordered keyword rules.
+- **Keyword rules:** `_KEYWORD_RULES` (ordered; multi-word phrases before single words) is compiled once into `_KEYWORD_PATTERNS`: each trigger is matched with `\b…\b` plus an optional inflection suffix (`s|es|d|ed|ing`), so "started"/"searching"/"muted" match while "quite"→`quit`, "commute"→`mute` and "program"→`ram` do not. Drop-the-e inflections ("muting") do not match. `_keyword_fallback` returns the first matching rule.
+- `result["model"]` values (`pytorch+tensorflow`, `keyword_fallback`, `short_input_fallback`, `negation_guard`, `presence_guard`, `action_guard`, `keyword_short_input`) are consumed by `_should_play_filler`.
+- `_extract_target()` strips a matched trigger to produce the entity (app name, search query). If a trigger matched but **nothing followed it** (bare "search", "open") it returns `""`, so the skill's own clarification prompt fires; if **no trigger matched at all** (ML-routed phrasing) it returns the full utterance (which `Processor` blanks before `observe_user_turn`).
 
 ---
 
 ## 4. Skill Routing and Skills (`brain/router.py`, `skills/`)
 
-`Router.__init__` builds a static `dict[intent → coroutine]`; every labelled intent is routed and unknown/unrouted intents fall back to `llm_query`. Before intent routing, `dispatch` calls `skills.system.power.resolve_pending(raw_text)`: a pending shutdown/restart request is **consumed by the next utterance** (one-shot, 30 s TTL) — confirm phrase → OS action + spoken reply; deny phrase → "cancelled"; anything else → request dropped and the utterance routes normally. Skill exceptions return `"[sad] Sorry senpai, I ran into a problem with that."` (this string enters history; see `### Issues` in `docs/CHANGELOG.md`). The `farewell` intent only replies; it does not sleep.
+`Router.__init__` builds a static `dict[intent → coroutine]`; every labelled intent is routed and unknown/unrouted intents fall back to `llm_query`. Before intent routing, `dispatch` calls `skills.system.power.resolve_pending(raw_text)`: a pending shutdown/restart request is **consumed by the next utterance** (one-shot, 30 s TTL) — confirm phrase → OS action + spoken reply; deny phrase → "cancelled"; anything else → request dropped and the utterance routes normally. It then does the same for a reminder awaiting its duration (`timer.resolve_pending`). Skill exceptions return `"[sad] Sorry senpai, I ran into a problem with that."` (spoken but kept out of history via `_no_history`). The `farewell` intent only replies; it does not sleep.
 
 **Convention:** `async execute(intent, text) -> str` returning `"[tag] text"`; `perform_action` also mutates `intent` (`intent["action"]`, consumed by `Processor`). The LLM path returns the sentinel `ALREADY_SPOKEN` because it speaks itself. `Speaker._strip_tags` strips only `\[\w+\]`, so other brackets (e.g. `[2026-06-15 12:00]`) reach TTS — which is why `notepad.py` strips timestamps itself.
 
+**Trigger matching:** skills that decide behavior from the utterance text use word-boundary regexes (not substring tests), so words embedded in longer words ("program", "call", "commute") do not trigger them.
+
 | Skill (file) | Intents | Behavior | Notes |
 |---|---|---|---|
-| Open website (`web/open_website.py`) | `open_website` | `webbrowser.open` from an 8-site `_SITES` map (substring match on the utterance); else `https://{target}`, with word-boundary match | — |
-| Google search (`web/google_search.py`) | `search_web` | Opens a Google query from `intent["target"]` | Prompts if the target is empty |
-| Weather (`web/weather.py`) | `get_weather` | Open-Meteo + geocoding, ip-api.com auto-location (executor, 8 s) | Emits 3 tags; Speaker keeps only the first |
-| Open app (`system/open_app.py`) | `open_app` | `os.startfile(target)` (Windows) | Untagged reply; failure → "couldn't open" |
+| Open website (`web/open_website.py`) | `open_website` | A known name from the 12-entry `_SITES` map found as a **whole word** in the utterance (`_SITE_RES`) → its URL; else `intent["target"]` via `_resolve_url` (explicit URL, dotted host, spoken "dot", bare label → `https://www.<label>.com`); multi-word/junk targets get a clarification reply, not a URL | Empty target → "Which website…?" |
+| Google search (`web/google_search.py`) | `search_web` | Opens a Google query from `intent["target"]` | Prompts if the target is empty (a bare "search" now yields an empty target) |
+| Weather (`web/weather.py`) | `get_weather` | Open-Meteo + geocoding, ip-api.com auto-location (executor, 8 s). `_extract_location` finds "in/for/at X", tolerates trailing `?.!` and strips trailing time words (`_TRAILING_TIME_RE`: "London today" → "London"; "for today" → auto-locate). `_WMO`/`_WMO_EXPRESSION` cover the common codes including 56/57/66/67/77/85/86 | Emits 3 tags; Speaker keeps only the first |
+| Open app (`system/open_app.py`) | `open_app` | `os.startfile(target)` (Windows) | Untagged reply; failure → "couldn't open"; empty target → "Which app…?" |
 | Lock screen (`system/lock_screen.py`) | `lock_screen` | `ctypes.windll.user32.LockWorkStation()`; non-Windows → "[sad] I can only lock the screen on Windows" | **Immediate by design** (no confirmation; reversible). Windows-only |
 | Power (`system/power.py`) | `shutdown`, `restart` | `execute` only **asks** ("Say yes to confirm") and stores `(intent, expiry)`; `resolve_pending` confirms/declines. Confirm → `shutdown /s` or `/r /t 10` (executor via `power._run`, no `/f`) + goodbye line. Non-Windows → apology, nothing pending | `_DELAY_S=10`, `_CONFIRM_TTL_S=30`. Confirm: yes/yeah/yep/yup/confirm(ed)/affirmative/do it/go ahead/proceed (+ optional "please", "maya"/"senpai"); deny: no/nope/nah/cancel/abort/never mind/don't. Abort during the countdown with `shutdown /a` |
-| System info (`system/system_info.py`) | `system_info`, `screenshot` | psutil battery/cpu/ram/disk; battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")`. Screenshot (word "screenshot" **or** intent `screenshot`) saves `screenshot_YYYYMMDD_HHMMSS.png` to `%OneDrive%/Pictures/Screenshots` (else `~/Pictures/Screenshots`, auto-created)  | — |
+| System info (`system/system_info.py`) | `system_info`, `screenshot` | `_build_reply(text, intent_name)` in the executor; word-boundary checks `_BATTERY_RE`/`_CPU_RE`/`_RAM_RE` (`ram\|memory`)/`_DISK_RE`/`_SCREENSHOT_RE`. Battery/CPU/RAM extremes call `mood_manager.report_event(source="skill", "angry")`. Screenshot (word "screenshot" **or** intent `screenshot`, so "capture my screen" works) saves `screenshot_YYYYMMDD_HHMMSS.png` to `%OneDrive%/Pictures/Screenshots` (else `~/Pictures/Screenshots`, auto-created) | — |
 | Clipboard (`system/clipboard.py`) | `clipboard_read/write/clear` | pyperclip read (200-char) / write / clear | Top-level `import pyperclip` (Router import) |
 | Media (`media/play_music.py`) | `play_music`, `pause_music`, `next_track`, `prev_track`, `volume_up`, `volume_down`, `mute` | `keyboard.send` media keys (volume ×5) | Guarded import; message if missing |
-| Date/time (`utilities/datetime_skill.py`) | `get_time`, `get_date` | Formatted local time/date | — |
-| Timer (`utilities/timer.py`) | `set_timer`, `cancel_timer`, `timer_status`, **and `set_reminder`** | Named/numbered asyncio timers. `_parse_duration`: one pattern per unit, digits only. `_countdown` removes an expired timer from `_timers` (its own entry only) **before** the alert. `_extract_reminder` captures "remind me to X" (`_REMINDER_RE`, duration stripped, ≤120 chars). `_alert` waits (≤60 s) until `state.is_busy()` is false, then `state.run_interruptible(_speaker.speak(msg))` via the Speaker injected by `Router`: "Time's up, senpai! Reminder: X." / "…Your {name} is done." `execute` skips cancel/status word checks for `set_reminder` | The alert waits for a free turn because `run_interruptible` holds a single `_current_task` |
+| Date/time (`utilities/datetime_skill.py`) | `get_time`, `get_date` | Formatted local time/date | Substring word checks ("time"/"date"/"day") |
+| Timer (`utilities/timer.py`) | `set_timer`, `cancel_timer`, `timer_status`, **and `set_reminder`** | Named/numbered asyncio timers. `_parse_duration`: one pattern per unit, digits only. `_countdown` removes an expired timer from `_timers` (its own entry only) **before** the alert. `_extract_reminder` captures "remind me to X" (`_REMINDER_RE`, duration stripped, ≤120 chars). `_alert` is queued on the command worker (`queue_manager.put_job`) and speaks through the Speaker injected by `Router` under `state.run_interruptible`: "Time's up, senpai! Reminder: X." / "…Your {name} is done." `execute` skips cancel/status checks for `set_reminder`; those checks are word-boundary regexes (`_CANCEL_RE`, `_STATUS_RE`), and `_cancel` uses `_ALL_RE` (`\ball\b`) so "call" does not mean "all timers" | Queued alerts run in order with commands, so they never overlap a turn |
 | Reminder (`utilities/reminder.py`) | **none — dead code** | `asyncio.sleep` then `print` only; imported nowhere. `set_reminder` is routed to `timer.py` | Do not "fix" without first deciding whether to delete it |
 | Notepad (`utilities/notepad.py`) | `note_create/append/read/list/delete/open` | `.txt` files in `~/Maya/Notes`; `_TIMESTAMP_RE` stripped on read; a `note_*` intent dispatches directly to its handler (word matching is only a fallback for other intents); `_extract_content` strips only the **leading** command phrase | — |
-| Perform action (`system/perform_action.py`) | `perform_action` (guard-routed) | Picks nod/giggle/sigh/shrug/wink (+`wynk`), sets `intent["action"]`, returns a confirmation; `Processor` fires `broadcast_animation` via `on_audio_start` | Fires via the `Speaker.speak()` avatar/both path |
+| Perform action (`system/perform_action.py`) | `perform_action` (guard-routed) | Picks nod/giggle/sigh/shrug/wink (+`wynk`), sets `intent["action"]`, returns a confirmation; `Processor` fires `broadcast_animation` via `on_audio_start` | Routed by the action-word guard (§3) except for question phrasings; `Speaker.speak` calls `on_audio_start` on both the avatar and local output paths |
 | Built-ins (`router.py`) | `greet`, `farewell`, `thanks`, `help` | Canned strings; `greet` triggers wave | — |
 | LLM-routed | `confirm`, `dismissal`, `smalltalk`, `identity`, `joke`, `motivate`, `opinion`, `followup`, `general_query`, `unknown` | `services/llm/llm_service.py::query` | — |
 
@@ -185,7 +189,7 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 
 Tasks are registered via `run_interruptible` by `llm_service.query()` and the timer alert (`timer._alert`). **`Speaker.speak()` from processor/main is never wrapped**, so skill turns register no task and are not interruptible: a barge-in during a skill/greeting/wake/sleep line is stopped only by the stop callback (audio halts, no task cancel).
 
-**Sleep:** `on_speech` sets SLEEPING *before* speaking the goodbye line; `Speaker.speak()` restores SLEEPING afterwards if it was sleeping on entry (else IDLE). Backend SLEEPING is never sent to the frontend (§10).
+**Sleep:** `on_speech` sets SLEEPING *before* speaking the goodbye line (triggered by `is_sleep_command`, §2.3); `Speaker.speak()` restores SLEEPING afterwards if it was sleeping on entry (else IDLE). Backend SLEEPING is never sent to the frontend (§10).
 
 ---
 
@@ -375,6 +379,7 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
   - `tts`, `llm`: see §8. `context`: `recent_turns=6, max_open_loops=3, max_semantic_memories=3, similarity_threshold=0.75, dedup_threshold=0.92, semantic_recency_guard_seconds=120, embedding_model="nomic-embed-text", memory_dir=None`.
 - **Unused fields** (kept as config/API surface, commented `UNUSED` in `settings.py`): `STTConfig.model_size/device/compute_type`, `LLMConfig.provider/api_key/system_prompt`, `TTSConfig.cpu_threads`. `api_key` is reserved (Ollama needs none) — candidate for removal in a dedicated config cleanup only.
 - **`getattr`-only settings** (not dataclass fields): `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `"60m"`).
+- **Config-derived patterns:** `core/wake_word.py` (sleep/wake regexes) and `brain/intent_engine.py` (`_DISMISSAL_TRIM_RE`) compile `config.name`/`config.user_name` (and `config.wake_word`) into module-level regexes at import, so those values are read once at startup.
 - **Env vars:** `MAYA_EMBEDDING_DEVICE` (`cpu` → embeddings `num_gpu=0`), `HF_HUB_OFFLINE` (`setdefault "1"` in `llm_service.py`), `TF_CPP_MIN_LOG_LEVEL` (`setdefault "3"`), `VITE_DEV_SERVER_URL` (Electron), `OneDrive` (screenshot path). No secrets in the repo.
 - **Ports/services:** WS 8765; Ollama 11434 with `llama3.2` and `nomic-embed-text` pulled; Vite dev server default 5173 (not set in config). External: Google STT, Open-Meteo (+ geocoding), `ip-api.com` (HTTP), `torch.hub` `snakers4/silero-vad`, HF cache for Kokoro voices.
 - **Runtime:** Python ≥3.11 (`asyncio.TaskGroup`); Node per Vite 8; Windows 11 (`os.startfile`, `keyboard`, `ctypes.windll`, `shutdown.exe`, `OneDrive`). GPU optional: used by Ollama; Kokoro runs on CPU unless `config.tts.device` changes.
@@ -393,7 +398,7 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 - Audio-callback thread → loop only via `run_coroutine_threadsafe`; `state.set_sync` exists for that thread.
 - All Kokoro calls through `_run_kokoro` (daemon thread + timeout + reset), never the default executor.
 - `query()` reads/clears module-level `_last_response` and resets `_spoken_phrases`/`_reply_finished` at the start of each turn; `_filler_done` starts **set** and is re-set in `query()`'s `finally`.
-- `state` holds **one** `_current_task`: anything registering via `run_interruptible` (LLM turn, timer alert) must not start while another is live — `timer._alert` waits for `not state.is_busy()` for this reason.
+- `state` holds **one** `_current_task`: anything registering via `run_interruptible` (LLM turn, timer alert) must not start while another is live — timer alerts are queued via `queue_manager.put_job` so they run in order with commands.
 - `interrupt()` is allowed when `can_interrupt()`; `on_speech` must snapshot `state.can_interrupt()` (not `is_speaking()`) before STT.
 - **`on_speech` must take LISTENING only when `not state.is_busy()`** and must not force IDLE after `queue_manager.put` — `Processor.handle` owns LISTENING → PROCESSING. `_end_listening()` resets only if the FSM is still LISTENING.
 - **`Router.dispatch` must call `resolve_pending` before intent routing** — otherwise the confirming "yes" is classified as `general_query` and sent to the LLM. Pending requests are one-shot with a TTL; never let a stale one execute.
@@ -403,6 +408,8 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 - Skills return `"[tag] text"`; the LLM path returns `ALREADY_SPOKEN`. `Processor` stores/broadcasts `_strip_tags` output and skips history when `intent["_no_history"]` is set.
 - `_enhance_prosody(text, expression, is_final, continuation)`; queue tuple shapes are defined in §8.2.
 - Closed vocabularies (§9.1) must be edited together across all listed files. `_next_boundary` vocative handling depends on `config.user_name`.
+- **Wake, barge-in and sleep phrase matching live in `core/wake_word.py`** (`compute_wake_triggers`, `contains_wake_word`, `is_sleep_command`) and must stay whole-word/whole-utterance as described in §2.3–2.4 (so "Mayans", "asleep" and "I didn't sleep well" don't match). `main.py` must not reintroduce its own substring trigger set; changing `config.wake_word` moves wake and barge-in together.
+- Intent keyword triggers (`_KEYWORD_RULES` → `_KEYWORD_PATTERNS`) and skill word checks are word-boundary matches; a new trigger must be added to `_KEYWORD_RULES` (compiled automatically) rather than tested with `in` on the raw string. `_extract_target` returning `""` is meaningful: skills rely on it to ask for a missing target.
 - Every request touching the chat model (chat + warmup) must send `keep_alive` via `chat_keep_alive()`; omitting it resets expiry to Ollama's 5-minute default.
 - `broadcast_state` must keep writing `_last_state` even with no clients, and `_handler` must keep replaying it to each new client (the fidget gate depends on it).
 - `config.tts.output` must stay `"avatar"` while the frontend runs; assets are LFS-tracked.
@@ -410,7 +417,7 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 **Memory / mood**
 - `Processor` is the only place that adds the user turn; `observe_user_turn` must run before `build_context_package`.
 - `observe_user_text` before routing/LLM; `observe_turn` once per turn; `baseline_expression()` (not "neutral") for every rest reset; `report_event` events are consumed by the next `observe_turn`.
-- Editing `TRAINING_DATA` triggers a full retrain on next start — don't hand-edit `models/`.
+- Editing `TRAINING_DATA` triggers a full retrain on next start — don't hand-edit `models/`. Editing guards or keyword rules does not.
 - `OllamaEmbedder` keep-alive/warmup and the pooled client are latency workarounds — keep.
 
 **Expressions / frontend**
