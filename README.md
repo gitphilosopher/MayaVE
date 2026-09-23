@@ -1,6 +1,6 @@
 # MayaVE — Maya Virtual Entity
 
-**Maya VE10**, a local-first Windows desktop AI voice assistant with a live 3D VRM avatar.
+**Maya VE11**, a local-first Windows desktop AI voice assistant with a live 3D VRM avatar.
 
 Inspired by AI companions such as FRIDAY from *Iron Man*, Maya is designed to be conversational, expressive, and context-aware rather than simply acting as a voice-controlled utility.
 
