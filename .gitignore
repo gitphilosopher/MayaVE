@@ -9,6 +9,7 @@ __pycache__/
 #Temp/Testing
 tests/
 temp.py
+edge-automation-profile
 
 # Runtime logs
 logs/
