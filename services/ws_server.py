@@ -47,6 +47,17 @@ State replay:
   broadcast_state() remembers the last state (even with no clients
   connected) and _handler() sends it to each new client, so the
   frontend's idle-fidget gate isn't stuck on null after connect.
+
+Voice-sleep state (Batch 4 — "Avatar never visually sleeps"):
+  broadcast_state() takes any string value as before — no functional
+  change here. main.py's on_speech() now sets the FSM to SLEEPING before
+  the go-to-sleep goodbye line, and core/speaker.py's Speaker.speak()
+  broadcasts state "sleeping" (instead of "idle") once that line finishes
+  playing, alongside the existing "listening"/"processing"/"speaking"/
+  "idle" values. frontend/js/websocket.js's handleState() is what actually
+  reacts to it (closing the avatar's eyes independent of the WebSocket
+  connection, which stays open the whole time) — this module only carries
+  the value through like any other state broadcast.
 """
 
 import asyncio
@@ -171,6 +182,12 @@ class MayaWebSocketServer:
         self._audio_done_event.set()
 
     async def broadcast_state(self, state_value: str) -> None:
+        """
+        state_value: "listening" | "processing" | "speaking" | "idle" |
+        "sleeping" (Batch 4 — see module docstring). Any string is
+        accepted and carried through as-is; the frontend decides what
+        each value means.
+        """
         self._last_state = state_value   # recorded even with no clients
         if not self._clients:
             return

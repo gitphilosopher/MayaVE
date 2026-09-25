@@ -31,14 +31,33 @@ on hardware/network round trips.
 can_interrupt() defines when a barge-in is allowed: SPEAKING, or
 PROCESSING while a registered speech task is live (an LLM turn,
 including its filler and the wait before the first phrase). PROCESSING
-with no registered task (skill turns) is not interruptible.
+with no registered task (skill turns) is not interruptible — see
+core/processor.py and skills/system/power.py's shutdown/restart line
+for the two current exceptions (their own speak() calls DO register a
+task; a skill's own blocking dispatch work before it starts speaking
+still doesn't).
+
+Observers (Batch 4 — "Listening state edge cases")
+----------------------------------------------------
+add_observer() lets other modules react to every genuine transition
+without this module importing anything about WHY they'd want to (no
+sounddevice/ws_server imports here — deliberately kept decoupled from
+the audio backends). main.py uses this to run a watchdog that resets a
+LISTENING state stuck with no follow-up (a dropped queued command, or a
+client-side "interrupt" with no speech behind it) back to IDLE instead
+of leaving the FSM — and the frontend's idle-fidget gate — stuck
+forever. Observers are synchronous and best-effort: a raising observer
+is logged and skipped, never allowed to break a transition. set_sync()
+runs on the sounddevice callback thread, so an observer that needs to
+touch asyncio must hop back onto the loop itself (e.g.
+loop.call_soon_threadsafe) rather than assume it's already there.
 """
 
 import asyncio
 import logging
 from enum import Enum, auto
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +72,7 @@ class MayaState(Enum):
 
 
 StopCallback = Callable[[], Awaitable[None]]
+StateObserver = Callable[[MayaState, MayaState], None]   # (old, new) — sync, best-effort
 
 
 @dataclass
@@ -63,6 +83,9 @@ class StateManager:
     # ── Interrupt plumbing ───────────────────────────────────────────
     _current_task: Optional[asyncio.Task] = field(default=None, init=False, repr=False)
     _stop_cb: Optional[StopCallback] = field(default=None, init=False, repr=False)
+
+    # ── Transition observers ─────────────────────────────────────────
+    _observers: List[StateObserver] = field(default_factory=list, init=False, repr=False)
 
     # ── Read ──────────────────────────────────────────────────────────
 
@@ -98,6 +121,7 @@ class StateManager:
             self._state = new_state
             if old != new_state:
                 logger.debug(f"State: {old.name} → {new_state.name}")
+        self._notify(old, new_state)
 
     def set_sync(self, new_state: MayaState) -> None:
         """Non-async setter — safe to call from sounddevice callback thread."""
@@ -105,6 +129,28 @@ class StateManager:
         self._state = new_state
         if old != new_state:
             logger.debug(f"State: {old.name} → {new_state.name}")
+        self._notify(old, new_state)
+
+    # ── Observers ────────────────────────────────────────────────────
+
+    def add_observer(self, cb: StateObserver) -> None:
+        """
+        Register cb(old, new), fired after every genuine transition (no-op
+        transitions where old == new are not reported). Observers run
+        synchronously and must not block; a raising observer is logged and
+        swallowed rather than propagated, since a side-effect hook must
+        never be able to break the FSM itself.
+        """
+        self._observers.append(cb)
+
+    def _notify(self, old: MayaState, new: MayaState) -> None:
+        if old == new or not self._observers:
+            return
+        for cb in self._observers:
+            try:
+                cb(old, new)
+            except Exception:
+                logger.debug("State observer failed (non-fatal)", exc_info=True)
 
     # ── Interrupt handling (barge-in) ────────────────────────────────
 
@@ -147,10 +193,12 @@ class StateManager:
         """
         Barge-in: called when the listener detects Maya being called by
         name while can_interrupt() is True (SPEAKING, or an in-flight LLM
-        turn in PROCESSING). Hard-stops current audio, cancels the
-        registered speech task, and drops the state to LISTENING so the
-        utterance that triggered the interrupt gets processed normally
-        once the listener finishes capturing it.
+        turn in PROCESSING), or when something else (e.g. a "go to sleep"
+        command landing mid-reply) wants to cleanly stop whatever's
+        currently playing before doing its own thing. Hard-stops current
+        audio, cancels the registered speech task, and drops the state to
+        LISTENING so the utterance that triggered the interrupt gets
+        processed normally once the listener finishes capturing it.
 
         Returns True if there was actually something to interrupt.
         """

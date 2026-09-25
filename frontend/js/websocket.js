@@ -18,6 +18,21 @@
  * avatar.js's "Idle fidget animations" section) knows when it's actually
  * safe to play one — only while the backend reports "idle", never during
  * listening/processing/speaking.
+ *
+ * Backend voice-sleep note (Batch 4 — "Avatar never visually sleeps"):
+ * the backend now sends state "sleeping" once the go-to-sleep goodbye
+ * line finishes playing (see core/speaker.py's Speaker.speak()), on top
+ * of every other state it already sent. handleState() is now the SINGLE
+ * source of truth for the avatar's visual sleep/wake — "sleeping" calls
+ * sleepAvatar(), and every other value (including the very first state
+ * the server replays on connect — see ws_server.py's _handler) calls
+ * wakeAvatar(), which is a no-op if she's already awake. Because of this,
+ * ws.onopen below no longer unconditionally wakes the avatar itself: it
+ * would otherwise show her waking up for an instant even when the
+ * backend is actually still asleep, only for the very next message to
+ * put her back to sleep. ws.onclose still puts her to sleep immediately
+ * on disconnect — that's a separate, connection-level signal the backend
+ * can't send once the socket is already down.
  */
 
 import {
@@ -46,7 +61,10 @@ function connect() {
     ws.onopen = () => {
         console.log("[Maya WS] Connected");
         setStatus("connected");
-        wakeAvatar();
+        // No wakeAvatar() here — the server always replays its actual last
+        // state (including "sleeping") right after this fires, and
+        // handleState() below is the single source of truth for whether
+        // the avatar shows awake or asleep. See module docstring.
     };
 
     ws.onmessage = (event) => {
@@ -112,10 +130,30 @@ function handleState(value) {
     switch (value) {
         case "listening":
             setExpression("surprised", 0.3);
+            // Defensive — see the "sleeping" case and the default branch
+            // below; LISTENING can't actually occur while backend-asleep
+            // (the VAD pipeline is skipped then), but this costs nothing
+            // if it ever does.
+            wakeAvatar();
             break;
-        // "processing" and "idle" no longer force an expression here —
-        // the backend sends an explicit, mood-aware `behavior` message
-        // alongside every state change (see core/behavior_engine.py).
+        case "sleeping":
+            // Backend voice-sleep (main.py's on_speech "go to sleep" path)
+            // — independent of the socket connection, which stays open
+            // the whole time. See module docstring.
+            sleepAvatar();
+            setStatus("sleeping");   // reuses the existing 💤 indicator
+            break;
+        // "processing"/"speaking"/"idle" no longer force an expression
+        // here (see module docstring) but DO mean the backend is awake —
+        // wake the avatar if it wasn't already (wakeAvatar() no-ops if it
+        // was). This also covers the very first state ws_server.py
+        // replays on every new connection, so a fresh/reloaded page ends
+        // up in the right visual state without waiting to guess from
+        // ws.onopen alone.
+        default:
+            wakeAvatar();
+            setStatus("connected");
+            break;
     }
 }
 

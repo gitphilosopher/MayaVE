@@ -34,6 +34,13 @@ Frame-size fix (Windows):
   Silero VAD requires sample_rate / frame_samples > 31.25.
   At 16 000 Hz → minimum 512 samples (32 ms).
   _FRAME_SAMPLES is clamped to 512 regardless of config.audio.chunk_ms.
+
+Startup log fix (Batch 4):
+  Maya starts AWAKE (main.py sets IDLE before the startup greeting), so
+  the mic-open log line now reflects the FSM's actual state instead of
+  unconditionally claiming she's sleeping — this used to be printed
+  regardless of state, a stale leftover from before "start awake" was
+  introduced (see docs/CHANGELOG.md's "Sleep not persisting" fix).
 """
 
 import asyncio
@@ -123,7 +130,10 @@ class Listener:
             callback=self._sd_callback,
         ):
             logger.info("🎙️  Mic open.")
-            logger.info(f"💤 Sleeping — say '{config.wake_word}' to wake Maya.")
+            if state.is_sleeping():
+                logger.info(f"💤 Sleeping — say '{config.wake_word}' to wake Maya.")
+            else:
+                logger.info(f"✅ Awake and listening for commands.")
             await asyncio.Event().wait()
 
     # ── Private ───────────────────────────────────────────────────────────────

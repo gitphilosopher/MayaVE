@@ -13,6 +13,16 @@ Queue item schema:
     "priority":  int,          # 0 = normal, 1 = interrupt (future)
     "job":       callable,     # optional — see put_job()
   }
+
+put() return value (Batch 4 — "Listening state edge cases"):
+  put() now returns True/False depending on whether the command was
+  actually enqueued. main.py's on_speech() already sets the FSM to
+  LISTENING before calling put(); Processor.handle() is what eventually
+  moves it to PROCESSING. If put() silently drops the item (queue full),
+  nothing would ever make that move, and the FSM — and the frontend's
+  idle-fidget gate along with it — would be stuck on LISTENING forever.
+  on_speech() uses the return value to reset immediately instead of
+  relying solely on main.py's LISTENING watchdog as a slower backstop.
 """
 
 import asyncio
@@ -35,8 +45,13 @@ class QueueManager:
 
     # ── Producer side ─────────────────────────────────────────────────
 
-    async def put(self, text: str, priority: int = 0) -> None:
-        """Enqueue a transcribed command. Drops if queue is full."""
+    async def put(self, text: str, priority: int = 0) -> bool:
+        """
+        Enqueue a transcribed command. Returns True if it was queued,
+        False if the queue was full and it was dropped — callers whose
+        own FSM tracking depends on this actually being picked up should
+        check the return value (see main.py's on_speech).
+        """
         item = {
             "text":      text.strip(),
             "timestamp": time.time(),
@@ -45,8 +60,10 @@ class QueueManager:
         try:
             self._queue.put_nowait(item)
             logger.info(f"Queued command: '{text}'  (depth={self._queue.qsize()})")
+            return True
         except asyncio.QueueFull:
             logger.warning(f"Queue full — dropping command: '{text}'")
+            return False
 
     async def put_job(self, job: Job) -> None:
         """

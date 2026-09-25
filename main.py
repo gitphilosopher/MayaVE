@@ -14,6 +14,23 @@ Interrupt (barge-in): say her name while she's speaking — e.g. "hey
   Talking over her about something else does NOT interrupt her; that
   speech is simply queued to run once she's done, same as always.
 Stop:  Ctrl+C
+
+Batch 4 changes:
+  - LISTENING watchdog (_on_state_change/_listening_watchdog): if the FSM
+    stays LISTENING for too long with nothing following it — a command
+    dropped by a full queue, or a client-side "interrupt" with no speech
+    behind it — it's reset to IDLE instead of leaving the FSM (and the
+    frontend's idle-fidget gate) stuck forever. Registered as a
+    core/state.py observer, so state.py itself stays decoupled from any
+    of this.
+  - on_speech()'s sleep-trigger now calls state.interrupt() first (if
+    something is currently speaking/processing) before setting SLEEPING,
+    so the goodbye line doesn't race a still-in-flight reply for the
+    same audio pipeline — see docs/CHANGELOG.md's "Sleep race" issue.
+  - The startup greeting, the wake-up line, and the goodbye line are now
+    all run through state.run_interruptible(), same as timer alerts and
+    LLM turns, so a barge-in during any of them actually cancels the
+    task instead of only halting audio — see "Skill-path barge-in".
 """
 
 # Must run before ANY import that can pull in kokoro / huggingface_hub
@@ -66,6 +83,61 @@ for _noisy in ("httpx", "httpcore", "websockets", "urllib3", "tensorflow"):
 logger = logging.getLogger("main")
 
 _U = config.user_name
+
+# ── Listening watchdog (Batch 4 — "Listening state edge cases") ──────────────
+# Mirrors the frontend's own stuck-state safety nets (e.g. avatar.js's
+# _FIDGET_STUCK_TIMEOUT_MS) on the backend: LISTENING is only ever supposed
+# to be a brief stop on the way to PROCESSING (a real command) or back to
+# IDLE (empty STT — see _end_listening). Two things can leave it stranded
+# with nothing to move it along: queue_manager.put() dropping a command
+# because the queue was full, or a client-side "interrupt" message with no
+# speech behind it (state.interrupt() always ends in LISTENING, expecting
+# a follow-up utterance that in this case never comes). Both are rare, so
+# a slow watchdog is enough — on_speech() itself handles the common,
+# immediately-knowable case (a dropped command) right away.
+_LISTENING_WATCHDOG_S = 15.0
+_listening_watchdog_task: asyncio.Task | None = None
+
+
+def _on_state_change(old: MayaState, new: MayaState) -> None:
+    """
+    core/state.py observer — fired synchronously on every transition, and
+    set_sync() can call it from the sounddevice callback thread, so all
+    real work is handed to the event loop via call_soon_threadsafe rather
+    than touched here directly (safe to call even when already on the
+    loop thread).
+    """
+    loop = asyncio.get_event_loop_policy().get_event_loop()
+    try:
+        loop.call_soon_threadsafe(_handle_state_change, new)
+    except RuntimeError:
+        pass   # loop not running (e.g. during shutdown) — nothing to schedule
+
+
+def _handle_state_change(new: MayaState) -> None:
+    global _listening_watchdog_task
+    if _listening_watchdog_task is not None:
+        _listening_watchdog_task.cancel()
+        _listening_watchdog_task = None
+    if new == MayaState.LISTENING:
+        _listening_watchdog_task = asyncio.create_task(
+            _listening_watchdog(), name="listening-watchdog"
+        )
+
+
+async def _listening_watchdog() -> None:
+    try:
+        await asyncio.sleep(_LISTENING_WATCHDOG_S)
+    except asyncio.CancelledError:
+        return
+    if state.current == MayaState.LISTENING:
+        logger.warning(
+            f"Listening watchdog: stuck in LISTENING for {_LISTENING_WATCHDOG_S:.0f}s "
+            "with no follow-up (a dropped command, or an interrupt with nothing queued "
+            "after it) — resetting to idle."
+        )
+        await _end_listening()
+
 
 # ── Ollama warm-up ────────────────────────────────────────────────────────────
 
@@ -157,6 +229,11 @@ def _on_ws_done(task: asyncio.Task) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
+    # Registered as early as possible — see _on_state_change's docstring;
+    # harmless before the loop is fully "live" since it only schedules work
+    # for states that can't actually occur yet.
+    state.add_observer(_on_state_change)
+
     ws_task = asyncio.create_task(ws_server.serve(), name="ws-server")   # kept so it can't be GC'd
     ws_task.add_done_callback(_on_ws_done)
 
@@ -191,17 +268,23 @@ async def main() -> None:
         await state.set(MayaState.IDLE)
         logger.info("✅ Maya is awake.")
         print(f"\n✅  {config.name} is awake — listening for commands {_U}.")
-        await speaker.speak(f"I'm here {_U}. How can I help?")
+        # run_interruptible so a barge-in mid-greeting actually cancels
+        # this task (not just halts audio) — see "Skill-path barge-in".
+        await state.run_interruptible(speaker.speak(f"I'm here {_U}. How can I help?"))
 
     # ── Interrupt callback (barge-in) ───────────────────────────────────
     async def on_interrupt() -> None:
         """
-        Cancels Maya's current speech task. Called from two places:
+        Cancels Maya's current speech task. Called from three places:
           1. on_speech() below, only when the just-transcribed utterance
              contains a wake phrase ("hey maya", "maya", ...) AND she
              was speaking when it started — i.e. she was deliberately
              called by name mid-sentence.
-          2. ws_server's interrupt handler, for a future browser-side
+          2. on_speech()'s sleep-trigger branch, unconditionally when
+             something is currently speaking/processing — a "go to
+             sleep" always takes precedence, wake word or not (see
+             "Sleep race").
+          3. ws_server's interrupt handler, for a future browser-side
              manual "stop talking" button — that's an explicit user
              action already, so it doesn't need a wake-word check.
         """
@@ -258,16 +341,28 @@ async def main() -> None:
                 )
 
         if is_sleep_command(text_lower):
+            # A "go to sleep" always takes precedence over whatever's
+            # currently running, wake word or not — cleanly stop it via
+            # the same barge-in machinery instead of letting the sleep
+            # goodbye line race a still-in-flight reply for the shared
+            # audio pipeline (see docs/CHANGELOG.md's "Sleep race" issue).
+            if state.can_interrupt():
+                await state.interrupt()
             await state.set(MayaState.SLEEPING)
             logger.info("💤 Maya going to sleep.")
             print(f"💤  {config.name} is sleeping — say '{config.wake_word}' to wake.")
-            await speaker.speak(
+            await state.run_interruptible(speaker.speak(
                 f"Going to sleep {_U}. Say {config.wake_word} when you need me."
-            )
+            ))
             return
 
-        await queue_manager.put(text)
-        # FSM stays LISTENING; Processor.handle() moves it to PROCESSING.
+        queued = await queue_manager.put(text)
+        if not queued:
+            # Nothing will ever move LISTENING -> PROCESSING for this
+            # utterance (queue was full) — reset immediately instead of
+            # relying solely on the slower listening watchdog above.
+            await _end_listening()
+        # FSM stays LISTENING otherwise; Processor.handle() moves it to PROCESSING.
 
     queue_manager.set_handler(processor.handle)
 
@@ -296,10 +391,13 @@ async def main() -> None:
     # Start awake — speak() now restores the prior state, so this must be set first.
     await state.set(MayaState.IDLE)
     await ws_server.broadcast_animation("wave")
-    await speaker.speak(
+    # run_interruptible for consistency with every other direct speak()
+    # call (see "Skill-path barge-in") — a no-op in practice here since
+    # nothing can barge in before the Listener below even starts.
+    await state.run_interruptible(speaker.speak(
         f"GOOD {tod} {_U}! I'm {config.name}. "
         # f"Say {config.wake_word} whenever you need me."
-    )
+    ))
 
     # ── Launch concurrent tasks ────────────────────────────────────────
     listener = Listener(on_speech=on_speech, on_wake=on_wake)

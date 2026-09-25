@@ -13,13 +13,41 @@ double-fire and race with the audio.
 Mood integration (core/mood.py):
   Whenever we go idle, we also broadcast Maya's current mood baseline
   expression so the avatar rests on "angry"/"sad" instead of snapping
-  back to neutral/relaxed while a mood is still active.
+  back to neutral/relaxed while a mood is still active. core/turn_lifecycle.py's
+  rest() does this (and skips it if Maya has since gone to sleep — see
+  its docstring and the "Sleep race" note below).
 
 Context integration (Stage 2 — brain/conversation.py):
   After intent classification, context_manager.observe_user_turn() updates
   topic/state/open-loop tracking for every command (not just LLM-routed
   ones). This is state tracking only — conversation.add_user() above it
   remains the single place user turns are written to history.
+
+Skill-path barge-in (Batch 4):
+  Every Speaker.speak() call for a skill/greet response now runs through
+  state.run_interruptible() — previously only LLM turns and the timer
+  alert registered a cancellable task, so a barge-in during a skill reply
+  stopped the audio (via the stop callback, which only needs FSM==SPEAKING)
+  but left the underlying coroutine to run to completion anyway. This
+  doesn't extend interruptibility to a skill's OWN blocking dispatch work
+  before it starts speaking (e.g. weather's HTTP call) — that remains a
+  narrower, separate limitation; see docs/CHANGELOG.md.
+
+Sleep race (Batch 4):
+  Two related gaps closed:
+  1. handle()'s own opening state.set(PROCESSING) used to run unconditionally,
+     even for a command that was still queued (or just dequeued) when a
+     concurrent "go to sleep" utterance had already set SLEEPING — silently
+     answering a command right after being told to sleep, and stomping the
+     wake-word gate open again. handle() now bails out immediately if
+     already asleep, dropping the command instead.
+  2. The success and exception tails used to broadcast "idle" (+ set the FSM
+     to IDLE on the exception path) unconditionally too — if sleep landed
+     WHILE this command's own speak() was in flight (a genuinely awake
+     command that then got told to sleep mid-reply), that would wake Maya
+     back up right after. Both tails now go through core/turn_lifecycle.py's
+     rest(), which checks the CURRENT state fresh and leaves her asleep
+     (broadcasting "sleeping" instead) if a concurrent sleep already won.
 
 Event-loop rule:
   IntentEngine.classify() runs a PyTorch + TensorFlow ensemble forward
@@ -35,8 +63,7 @@ import time
 
 from core.speaker import Speaker, _strip_tags
 from core.state import state, MayaState
-from core.mood import mood_manager
-from core.behavior_engine import behavior_engine
+from core.turn_lifecycle import rest as turn_rest
 from brain.intent_engine import IntentEngine
 from brain.conversation import ConversationManager, context_manager
 from brain.router import Router
@@ -55,11 +82,22 @@ class Processor:
 
     async def handle(self, item: dict) -> None:
         """Entry point called by QueueManager for each command."""
-        t0 = time.perf_counter()
         text: str = item["text"]
         if not text:
             return
 
+        if state.is_sleeping():
+            # A command can still be sitting in the queue (or just dequeued)
+            # when a concurrent "go to sleep" utterance already won the race
+            # — VAD stops capturing new speech once SLEEPING, but this one
+            # was already in flight before that happened. Drop it rather
+            # than forcing PROCESSING and answering while she's supposed to
+            # be asleep — see docs/CHANGELOG.md's "Sleep race" issue. Only
+            # the wake word brings her back.
+            logger.info(f"Dropping queued command — already asleep: '{text[:40]}'")
+            return
+
+        t0 = time.perf_counter()
         logger.info(f"[TIMING][TTFA] user command start t={t0:.3f} text='{text[:40]}'")
 
         await state.set(MayaState.PROCESSING)
@@ -101,26 +139,27 @@ class Processor:
                 # Set by skills/system/perform_action.py on the intent dict.
                 action = intent.get("action")
 
+                # Wrapped in run_interruptible so a barge-in during a skill
+                # reply actually cancels this task (not just halts audio via
+                # the stop callback) — see module docstring.
                 if intent.get("intent") == "greet":
                     # Fire wave exactly when audio starts playing, not before synthesis
-                    await self._speaker.speak(
+                    await state.run_interruptible(self._speaker.speak(
                         response,
                         on_audio_start=lambda: ws_server.broadcast_animation("wave"),
-                    )
+                    ))
                 elif action:
-                    await self._speaker.speak(
+                    await state.run_interruptible(self._speaker.speak(
                         response,
                         on_audio_start=lambda: ws_server.broadcast_animation(action),
-                    )
+                    ))
                 else:
-                    await self._speaker.speak(response)
+                    await state.run_interruptible(self._speaker.speak(response))
 
-            await ws_server.broadcast_state("idle")
-            await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
+            # Respects a concurrent "go to sleep" — see turn_lifecycle.rest().
+            await turn_rest()
             logger.info(f"[TIMING] handle() total: {time.perf_counter()-t0:.3f}s")
 
         except Exception as e:
             logger.error(f"Processor error: {e}", exc_info=True)
-            await ws_server.broadcast_state("idle")
-            await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
-            await state.set(MayaState.IDLE)
+            await turn_rest(force_idle=True)

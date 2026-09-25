@@ -41,6 +41,7 @@ All project knowledge so far comes from **static inspection; nothing has been ru
 * Interrupted LLM turns record only the phrases that were played; barge-in cancels PROCESSING/filler turns.
 * Reminder text is kept and the timer alert is routed through the injected `Speaker` under `run_interruptible`.
 * `skills/utilities/reminder.py` is dead code (`set_reminder` routes to `timer.py`). Decide delete-vs-keep explicitly; do not "fix" it silently.
+* A skill's `own blocking dispatch` work (before it starts speaking) is still not interruptible — only LLM turns, timer alerts, and any call already inside `Speaker.speak()` are. Extending this further is a deliberate future scope decision, not an oversight.
 
 ## Start Here
 
@@ -48,7 +49,7 @@ All project knowledge so far comes from **static inspection; nothing has been ru
 
 **Inspect first:** `main.py`, `core/processor.py`, `core/speaker.py`, `services/llm/llm_service.py`, `services/llm/ollama_lifecycle.py`, `core/state.py`, `services/ws_server.py`, `brain/router.py`, `skills/system/power.py`, `skills/utilities/timer.py`, `brain/intent_engine.py` (`_predict`), `brain/conversation.py`, `core/behavior_engine.py`, `frontend/js/{websocket,avatar,expression-composer}.js`, `config/settings.py`.
 
-**Fragile areas:** Kokoro concurrency/timeouts/rebuild; the single `_current_task` in `state`; fidget/animation bone ownership; `expressions.json` dual writers; closed vocabularies duplicated across files; one-shot power confirmation vs. mic echo.
+**Fragile areas:** Kokoro concurrency/timeouts/rebuild; the single `_current_task` in `state`; fidget/animation bone ownership; `expressions.json` dual writers; closed vocabularies duplicated across files; one-shot power confirmation vs. mic echo. `core/turn_lifecycle.rest()` must be used at every new turn-completion site instead of a raw `state.set(IDLE)` — see the "Sleep race" fix.
 
 ## Runtime Verification Checklist
 
@@ -70,6 +71,11 @@ Untested behavior worth checking on a real setup before or while changing relate
 * Backend starts with no frontend connected without a 30 s greeting stall; WS server stays up over long sessions.
 * Echo with headphones vs. speakers (self-transcription, self-barge-in, dropped power confirmation).
 * Environment: Python ≥3.11; `git lfs pull` done for assets.
+* Say "go to sleep" while a long reply (weather, or an LLM answer) is still playing: she should stop cleanly and go to sleep, not talk over the goodbye line.
+* Say "go to sleep" immediately after a quick command: the queued command should not be answered once she's already asleep.
+* Leave a command unanswered (drop the mic connection briefly, or flood the queue) and confirm she returns to idle/fidgeting within ~15s instead of staying stuck on the surprised "listening" face.
+* Barge in on a skill reply (e.g. "hey maya" during a weather answer) and confirm the reply stops promptly, not just the audio.
+* Say "go to sleep" and confirm the avatar visibly closes its eyes once the goodbye line finishes, without touching the Electron window.
 
 ## After Changes
 

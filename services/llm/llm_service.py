@@ -92,15 +92,18 @@ Interrupt handling (core/state.py):
     wrapped in state.run_interruptible(), which runs it as its own Task
     and registers that Task with the global StateManager. If the
     listener detects the user talking over Maya (barge-in),
-    state.interrupt() cancels this Task — cancellation cascades down
+    state.interrupt() cancels this Task — the cancellation cascades down
     through the asyncio.gather() here into _stream_and_speak()'s own
     streamer/synther/player tasks, tearing the whole pipeline down in
     one shot instead of needing bespoke cancellation logic at every
     stage.
   - A cancelled turn means _ollama_streamer() may never have reached its
     final out_text.append(...), so _last_response can come back empty.
-    query() treats that as "nothing to add to conversation history",
-    rather than recording a blank assistant turn.
+    query() records a short, clearly-out-of-character marker for the
+    assistant turn in that case (Batch 4 — "Interrupted turn leaves
+    unanswered user turn") instead of leaving the just-recorded user turn
+    dangling with no paired assistant entry at all — see query()'s history
+    handling below.
 
 Model lifecycle (services/llm/ollama_lifecycle.py):
   - The chat request sends keep_alive (chat_keep_alive()) so the model
@@ -130,6 +133,7 @@ from brain.conversation import ConversationManager, context_manager
 from core.mood import mood_manager
 from core.behavior_engine import behavior_engine
 from core.state import state
+from core.turn_lifecycle import rest as turn_rest
 from services.llm.ollama_lifecycle import chat_keep_alive, log_chat_turn
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -856,9 +860,21 @@ async def query(intent: dict, text: str) -> str:
             await context_manager.record_assistant_turn(question, full_response, intent)
         else:
             # Barge-in cut the reply off before _ollama_streamer() ever
-            # reached its final out_text.append() — nothing coherent to
-            # record in conversation history.
-            logger.info("LLM turn interrupted before producing a response.")
+            # reached its final out_text.append() (including a cancellation
+            # before even the first phrase started playing) — nothing
+            # coherent was actually SAID. But the user's turn is already in
+            # history (Processor.add_user, before dispatch), so leaving it
+            # with no paired assistant entry at all lets a later turn see a
+            # dangling unanswered question in its own context and either
+            # try to belatedly answer it out of context or wrongly assume
+            # it was already covered. Record a short, clearly-out-of-
+            # character marker instead of a fabricated reply — this is
+            # deliberately NOT run through record_assistant_turn(): nothing
+            # was actually answered, so resolving an open loop or
+            # persisting a semantic memory for it would be wrong.
+            marker = "(Maya's reply was interrupted before she said anything.)"
+            _conv.add_assistant(marker)
+            logger.info("LLM turn interrupted before producing a response — recorded interruption marker.")
 
         return ALREADY_SPOKEN
 
@@ -1485,9 +1501,13 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
 
         if item is _DONE:
             _reply_finished[0] = True
-            await state.set(MayaState.IDLE)
-            await _ws.broadcast_state("idle")
-            await _ws.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
+            # Respects a concurrent "go to sleep" landed mid-reply — see
+            # core/turn_lifecycle.py's rest() and docs/CHANGELOG.md's
+            # "Sleep race" issue. force_idle=True: this is the one place
+            # that finalizes state for an LLM turn (no Speaker.speak()
+            # call in this path), so it must still move to IDLE itself
+            # in the normal, non-sleeping case.
+            await turn_rest(force_idle=True)
             return
 
         (data, samplerate), expression, actions, attitude, intensity, phrase = item

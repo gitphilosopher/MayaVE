@@ -23,6 +23,26 @@ Behavioral Engine integration (core/behavior_engine.py):
   Same call sites, same timing relative to audio — only what's sent over
   the wire changed.
 
+Sleep-safe completion (Batch 4 — "Sleep race" / "Avatar never visually
+sleeps"):
+  The old finally block remembered was_sleeping ONLY as a snapshot taken
+  at speak()'s own entry, and blindly restored that snapshot at the end.
+  That's necessary for the goodbye line's OWN call (state is SLEEPING at
+  entry, SPEAKING for the whole duration, and must end back at SLEEPING —
+  a plain fresh check at exit would see SPEAKING and get it wrong), but
+  it made a DIFFERENT, unrelated turn that happened to finish after a
+  concurrent "go to sleep" landed mid-playback silently overwrite SLEEPING
+  with IDLE, re-enabling full speech processing right when the wake-word
+  detector should have taken over instead. The fix: a turn ends asleep if
+  EITHER it started that way (the snapshot) OR Maya is asleep *right now*
+  (a fresh check) — sleep always wins over a stale idle restore. On the
+  sleeping branch this also broadcasts the new "sleeping" WS state instead
+  of "idle" (see frontend/js/websocket.js's handleState -> sleepAvatar()),
+  which is what makes the avatar visually close its eyes once the goodbye
+  line finishes, independent of the WebSocket connection itself — no
+  baseline-behavior broadcast in that branch, since sleepAvatar() already
+  resets expressions/closes the eyes and a mood face would just fight it.
+
 Bug fixes:
   - avatar mode now waits for audio_done before returning, preventing overlap
     when processor.py calls speak() for consecutive skill responses
@@ -40,9 +60,6 @@ Bug fixes:
     first real voice command flowed through processor.handle(). Doing it
     once here means every caller gets it for free instead of each call site
     needing to remember.
-  - speak() restores SLEEPING (instead of forcing IDLE) when it was
-    SLEEPING on entry, so the go-to-sleep goodbye line no longer wakes
-    Maya back up.
 """
 
 import asyncio
@@ -177,8 +194,13 @@ class Speaker:
 
         clean = _enhance_prosody(clean, expression)
 
-        # Snapshot before SPEAKING overwrites it — the go-to-sleep line is
-        # spoken while SLEEPING and must not wake Maya back up.
+        # Snapshot before SPEAKING overwrites it — needed for the sleep
+        # goodbye line's OWN call (see module docstring): by the time our
+        # finally runs, state has been SPEAKING for the whole duration, so
+        # a fresh check there alone can't tell "this call started asleep
+        # and should end there" from "this was a normal turn". A DIFFERENT
+        # concurrent call going to sleep mid-playback is handled separately
+        # below, via a fresh check at the end (sleep always wins either way).
         was_sleeping = state.is_sleeping()
 
         await state.set(MayaState.SPEAKING)
@@ -213,17 +235,18 @@ class Speaker:
         except Exception as e:
             logger.error(f"Speaker error: {e}", exc_info=True)
         finally:
-            await state.set(MayaState.SLEEPING if was_sleeping else MayaState.IDLE)
-            # Tell the browser too — not just the internal FSM. Every
-            # caller of speak() (main.py's greeting/wake/sleep lines,
-            # timer.py's alert, processor.py's skill responses) gets this
-            # for free now, so the frontend's idle-fidget gate
-            # (avatar.js's _currentBackendState) always eventually sees
-            # "idle" instead of getting stuck on "speaking" — or on
-            # whatever it initialised to, if speak() hadn't broadcast
-            # anything yet at all.
-            await ws_server.broadcast_state("idle")
-            await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
+            # Sleep wins over a stale "was awake at entry" snapshot: either
+            # THIS call was the sleep command's own goodbye line
+            # (was_sleeping), or some OTHER concurrent utterance already put
+            # Maya to sleep while this one was still playing (fresh check).
+            # Either way she must not be woken back up here.
+            sleeping_now = was_sleeping or state.is_sleeping()
+            await state.set(MayaState.SLEEPING if sleeping_now else MayaState.IDLE)
+            if sleeping_now:
+                await ws_server.broadcast_state("sleeping")
+            else:
+                await ws_server.broadcast_state("idle")
+                await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
 
     # ── Private ───────────────────────────────────────────────────────
 

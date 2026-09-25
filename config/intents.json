@@ -1,0 +1,602 @@
+{
+  "$schema_version": 1,
+  "meta": {
+    "description": "Single source of truth for Maya's intent definitions. brain/intent_engine.py loads this file for classification metadata; it must not hardcode intent names, descriptions, or keyword triggers. Keyword triggers are matched with \\b...\\b plus an inflection suffix (s|es|d|ed|ing) by the engine, in list order within a rule and rule order as declared in 'keyword_rules_order' below.",
+    "valid_categories": [
+      "datetime",
+      "reminder",
+      "web",
+      "system",
+      "media",
+      "utility",
+      "weather",
+      "clipboard",
+      "notepad",
+      "action",
+      "conversation",
+      "fallback"
+    ]
+  },
+  "keyword_rules_order": [
+    "search_web",
+    "open_website",
+    "set_reminder",
+    "system_info",
+    "lock_screen",
+    "pause_music",
+    "next_track",
+    "prev_track",
+    "volume_up",
+    "volume_down",
+    "shutdown",
+    "open_app",
+    "screenshot",
+    "restart",
+    "play_music",
+    "mute",
+    "get_time",
+    "get_date",
+    "general_query",
+    "greet",
+    "farewell",
+    "dismissal",
+    "thanks"
+  ],
+  "intents": [
+    {
+      "id": "get_time",
+      "category": "datetime",
+      "description": "User asks for the current time.",
+      "min_examples": 60,
+      "keywords": [
+        "what time",
+        "current time",
+        "time please",
+        "clock"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "get_date",
+      "category": "datetime",
+      "description": "User asks for today's date, day, month, or year.",
+      "min_examples": 60,
+      "keywords": [
+        "what day",
+        "today's date",
+        "current date",
+        "what month",
+        "what year"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "set_reminder",
+      "category": "reminder",
+      "description": "User wants a timed reminder that carries a message, distinct from a bare countdown timer ('remind me to X in Y').",
+      "min_examples": 80,
+      "keywords": [
+        "set a timer",
+        "set a reminder",
+        "remind me to",
+        "remind me in",
+        "alarm for",
+        "timer for",
+        "reminder for"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "search_web",
+      "category": "web",
+      "description": "User wants a web/Google search for a query.",
+      "min_examples": 100,
+      "keywords": [
+        "search for",
+        "look up",
+        "find information",
+        "find news",
+        "google search"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "open_website",
+      "category": "web",
+      "description": "User wants a specific website opened in the browser.",
+      "min_examples": 100,
+      "keywords": [
+        "go to",
+        "navigate to",
+        "open youtube",
+        "open github",
+        "open reddit",
+        "open netflix",
+        "open spotify",
+        "open gmail",
+        "open twitter",
+        "open amazon",
+        "open linkedin"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "open_app",
+      "category": "system",
+      "description": "User wants a desktop application launched.",
+      "min_examples": 100,
+      "keywords": [
+        "open chrome",
+        "open word",
+        "open excel",
+        "launch notepad",
+        "start discord",
+        "open terminal",
+        "open task manager"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "play_music",
+      "category": "media",
+      "description": "User wants music/audio playback started.",
+      "min_examples": 60,
+      "keywords": [
+        "play music",
+        "play song",
+        "play a song"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "pause_music",
+      "category": "media",
+      "description": "User wants playback paused or stopped.",
+      "min_examples": 60,
+      "keywords": [
+        "stop music",
+        "pause the",
+        "stop the song"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "next_track",
+      "category": "media",
+      "description": "User wants to skip to the next track.",
+      "min_examples": 50,
+      "keywords": [
+        "next song",
+        "next track",
+        "skip this"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "prev_track",
+      "category": "media",
+      "description": "User wants to go back to the previous track.",
+      "min_examples": 50,
+      "keywords": [
+        "previous song",
+        "previous track",
+        "go back to"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "volume_up",
+      "category": "media",
+      "description": "User wants the volume increased.",
+      "min_examples": 50,
+      "keywords": [
+        "volume up",
+        "turn it up",
+        "louder please"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "volume_down",
+      "category": "media",
+      "description": "User wants the volume decreased.",
+      "min_examples": 50,
+      "keywords": [
+        "volume down",
+        "turn it down",
+        "quieter please"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "mute",
+      "category": "media",
+      "description": "User wants audio muted/silenced.",
+      "min_examples": 50,
+      "keywords": [
+        "mute",
+        "silence"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "system_info",
+      "category": "system",
+      "description": "User asks about battery, CPU, RAM, or disk status.",
+      "min_examples": 100,
+      "keywords": [
+        "battery level",
+        "cpu usage",
+        "ram usage",
+        "disk space",
+        "battery status",
+        "memory usage",
+        "battery",
+        "cpu",
+        "ram",
+        "memory",
+        "disk"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "screenshot",
+      "category": "system",
+      "description": "User wants a screenshot captured.",
+      "min_examples": 50,
+      "keywords": [
+        "screenshot",
+        "capture screen"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "shutdown",
+      "category": "system",
+      "description": "User wants the computer shut down (requires spoken confirmation).",
+      "min_examples": 50,
+      "keywords": [
+        "shut down",
+        "turn off my",
+        "power off"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "restart",
+      "category": "system",
+      "description": "User wants the computer restarted (requires spoken confirmation).",
+      "min_examples": 50,
+      "keywords": [
+        "restart",
+        "reboot"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "lock_screen",
+      "category": "system",
+      "description": "User wants the workstation locked immediately, no confirmation.",
+      "min_examples": 50,
+      "keywords": [
+        "lock screen",
+        "lock my computer",
+        "lock the screen"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "get_weather",
+      "category": "weather",
+      "description": "User asks about current or forecast weather, optionally for a named location.",
+      "min_examples": 100,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "clipboard_read",
+      "category": "clipboard",
+      "description": "User asks what is currently on the clipboard.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "clipboard_write",
+      "category": "clipboard",
+      "description": "User wants text copied to the clipboard.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "clipboard_clear",
+      "category": "clipboard",
+      "description": "User wants the clipboard cleared.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "set_timer",
+      "category": "utility",
+      "description": "User wants a bare countdown timer with no attached reminder message.",
+      "min_examples": 90,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "cancel_timer",
+      "category": "utility",
+      "description": "User wants an active timer cancelled.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "timer_status",
+      "category": "utility",
+      "description": "User asks how much time is left, or which timers are active.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_create",
+      "category": "notepad",
+      "description": "User wants a new note saved.",
+      "min_examples": 70,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_append",
+      "category": "notepad",
+      "description": "User wants content added to an existing note.",
+      "min_examples": 60,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_read",
+      "category": "notepad",
+      "description": "User wants a saved note read back.",
+      "min_examples": 60,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_list",
+      "category": "notepad",
+      "description": "User wants a listing of saved notes.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_delete",
+      "category": "notepad",
+      "description": "User wants a note deleted (requires spoken confirmation).",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "note_open",
+      "category": "notepad",
+      "description": "User wants a note opened in an external editor.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "skill"
+    },
+    {
+      "id": "perform_action",
+      "category": "action",
+      "description": "User directly requests one of Maya's physical avatar animations (nod/giggle/sigh/shrug/wink). Routed by a dedicated guard, not ML confidence.",
+      "min_examples": 60,
+      "keywords": [],
+      "action_words": {
+        "nod": "nod",
+        "giggl": "giggle",
+        "sigh": "sigh",
+        "shrug": "shrug",
+        "wink": "wink",
+        "wynk": "wink"
+      },
+      "_action_words_note": "Must stay in sync with skills/system/perform_action.py's _ACTION_WORDS and services/llm/llm_service.py's _ACTION_VOCABULARY — pre-existing duplication documented in docs/architecture.md §9.1, not introduced by this migration.",
+      "response_mode": "skill"
+    },
+    {
+      "id": "greet",
+      "category": "conversation",
+      "description": "A greeting opening the conversation.",
+      "min_examples": 60,
+      "keywords": [
+        "hey maya",
+        "hi maya",
+        "hey there",
+        "hello maya",
+        "good morning",
+        "good evening",
+        "good afternoon",
+        "howdy"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "farewell",
+      "category": "conversation",
+      "description": "User is ending the conversation or telling Maya to sleep.",
+      "min_examples": 60,
+      "keywords": [
+        "goodbye",
+        "goodnight",
+        "see you",
+        "take care",
+        "bye",
+        "exit",
+        "quit",
+        "sleep",
+        "later"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "thanks",
+      "category": "conversation",
+      "description": "User is expressing thanks.",
+      "min_examples": 50,
+      "keywords": [
+        "thank you",
+        "thanks",
+        "appreciate",
+        "much appreciated"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "smalltalk",
+      "category": "conversation",
+      "description": "Casual check-ins, presence/mood questions, and light back-and-forth reactions that should reach the LLM for a natural, context-aware reply.",
+      "min_examples": 150,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "identity",
+      "category": "conversation",
+      "description": "User asks who/what Maya is, her capabilities, or origin.",
+      "min_examples": 60,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "joke",
+      "category": "conversation",
+      "description": "User wants a joke, pun, or riddle.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "motivate",
+      "category": "conversation",
+      "description": "User wants encouragement, motivation, or a mood lift.",
+      "min_examples": 50,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "opinion",
+      "category": "conversation",
+      "description": "User asks Maya's preference, opinion, or about her inner experience.",
+      "min_examples": 60,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "followup",
+      "category": "conversation",
+      "description": "User wants elaboration, repetition, or continuation of the prior reply.",
+      "min_examples": 60,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "dismissal",
+      "category": "conversation",
+      "description": "User is explicitly declining, cancelling, or shutting down the current topic — not a reaction to information just received.",
+      "min_examples": 60,
+      "keywords": [
+        "not right now",
+        "no thanks",
+        "never mind",
+        "nevermind",
+        "forget it",
+        "not now",
+        "maybe later",
+        "skip it",
+        "don't worry about it",
+        "not interested",
+        "leave it",
+        "scratch that",
+        "don't bother",
+        "drop it",
+        "ignore that",
+        "disregard that"
+      ],
+      "exact_phrases": [
+        "not right now",
+        "no thanks",
+        "never mind",
+        "nevermind",
+        "forget it",
+        "nah",
+        "nope",
+        "not now",
+        "maybe later",
+        "skip it",
+        "don't worry about it",
+        "not interested",
+        "leave it",
+        "cancel",
+        "stop",
+        "no",
+        "scratch that",
+        "don't bother",
+        "drop it",
+        "ignore that",
+        "disregard that"
+      ],
+      "_exact_phrases_note": "Consumed by the negation/dismissal guard (_is_dismissal) as an EXACT whole-utterance match after filler/address trimming — not substring matching.",
+      "response_mode": "llm"
+    },
+    {
+      "id": "confirm",
+      "category": "conversation",
+      "description": "User is asking Maya to confirm or double-check something she just said (not a yes/no answer to a pending skill confirmation, which is intercepted before intent routing).",
+      "min_examples": 40,
+      "keywords": [],
+      "response_mode": "llm"
+    },
+    {
+      "id": "general_query",
+      "category": "conversation",
+      "description": "Factual questions, explanations, and comparison/opinion-style knowledge queries routed to the LLM. Absorbs what were previously the separate 'help' and 'unknown' intents (see docs/CHANGELOG.md); low-confidence ensemble output also falls back here when no keyword rule matches.",
+      "min_examples": 200,
+      "keywords": [
+        "what is",
+        "who is",
+        "how does",
+        "how do",
+        "explain",
+        "tell me about",
+        "tell me",
+        "what are",
+        "why is",
+        "where is",
+        "when did",
+        "define",
+        "describe",
+        "which one is",
+        "which is better",
+        "which is the best",
+        "which should i",
+        "compare ",
+        "difference between",
+        "pros and cons",
+        "is it better",
+        "is ssd",
+        "is hdd",
+        "vs ",
+        " or ",
+        "which one",
+        "help me",
+        "i need help",
+        "how do i use",
+        "assist me"
+      ],
+      "response_mode": "llm"
+    }
+  ]
+}

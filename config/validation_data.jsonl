@@ -1,0 +1,72 @@
+{"text": "what time is it", "intent": "get_time", "id": "bd87171557", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what day is today", "intent": "get_date", "id": "003e0d661c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "timer for 2 hours", "intent": "set_reminder", "id": "266696aa45", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remind me to pick up the kids in 40 minutes", "intent": "set_reminder", "id": "dd5b8124c2", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "find information about black holes", "intent": "search_web", "id": "5290960026", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "go to github", "intent": "open_website", "id": "ec0bbf0810", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "launch notepad", "intent": "open_app", "id": "6e7c42b57f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "play music", "intent": "play_music", "id": "d105ad878d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "stop the song", "intent": "pause_music", "id": "f498376e08", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "next track", "intent": "next_track", "id": "1135c1e9ed", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "last track", "intent": "prev_track", "id": "0a4ef58cf9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "increase the volume", "intent": "volume_up", "id": "8b02385dc5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "volume down", "intent": "volume_down", "id": "27ee950d42", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "mute", "intent": "mute", "id": "89c507072e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "how much ram am i using", "intent": "system_info", "id": "df37a79775", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "capture my screen", "intent": "screenshot", "id": "f277383c5f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "power off", "intent": "shutdown", "id": "800d4c379b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "current weather", "intent": "get_weather", "id": "14d4a0aac2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what's the humidity like right now", "intent": "get_weather", "id": "f96f7a1597", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "show clipboard", "intent": "clipboard_read", "id": "8427d07890", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "write this to clipboard", "intent": "clipboard_write", "id": "58df6e5861", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "clear my clipboard", "intent": "clipboard_clear", "id": "6ed7edf465", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set a 10 minute timer", "intent": "set_timer", "id": "19be7d10b1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "countdown 3 minutes", "intent": "set_timer", "id": "fb0a9e6633", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "cancel all timers", "intent": "cancel_timer", "id": "fe3dfe24ce", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "how much time is left on the timer", "intent": "timer_status", "id": "ce7aaea137", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "note this down", "intent": "note_create", "id": "3260336064", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "also note that", "intent": "note_append", "id": "4519113711", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "show me my notes", "intent": "note_read", "id": "173b6a81ad", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "list my notes", "intent": "note_list", "id": "e2f4febec9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "howdy", "intent": "greet", "id": "a365732f6a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "go to sleep", "intent": "farewell", "id": "d838ecf6d4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "appreciate it", "intent": "thanks", "id": "35298ebb78", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "tell me about microsoft", "intent": "general_query", "id": "3f9872d0c0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "explain quantum computing", "intent": "general_query", "id": "8691f17005", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what is evolution", "intent": "general_query", "id": "231ad998a7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what is artificial intelligence", "intent": "general_query", "id": "cf03191553", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what is apple company", "intent": "general_query", "id": "696444c077", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what is python programming", "intent": "general_query", "id": "d882cbc005", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "explain neural networks", "intent": "general_query", "id": "7249036a70", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what is better mac or pc", "intent": "general_query", "id": "617d4a9f9b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "you seem excited", "intent": "smalltalk", "id": "179ae3b8bb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "i'm back", "intent": "smalltalk", "id": "fa7209d88a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "that's awesome", "intent": "smalltalk", "id": "3f9d2c49fb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "makes sense", "intent": "smalltalk", "id": "4924d15c38", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "i'm online now", "intent": "smalltalk", "id": "0ac26485c3", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "hey i'm here", "intent": "smalltalk", "id": "b5cfc5f9ae", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "i just got here", "intent": "smalltalk", "id": "33bbe481a1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "r u sad", "intent": "smalltalk", "id": "21e2cd95ab", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "are you excited today", "intent": "smalltalk", "id": "f2a740b68b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "how is your day going", "intent": "smalltalk", "id": "9a4dbd26da", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "kinda tired ngl", "intent": "smalltalk", "id": "677923a73b", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "just got home", "intent": "smalltalk", "id": "04c8ebbd8c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "all good", "intent": "smalltalk", "id": "0a65695a7c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what model are you running on", "intent": "identity", "id": "da4af58db2", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "who are you", "intent": "identity", "id": "92cde088db", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "say something funny", "intent": "joke", "id": "fd3a63749d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "give me a quote", "intent": "motivate", "id": "4b215bcad8", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what makes you happy", "intent": "opinion", "id": "a9c823383f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "do you get excited", "intent": "opinion", "id": "d02399c5b5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "say that again", "intent": "followup", "id": "885a4236a4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "and then what", "intent": "followup", "id": "d41c768e81", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "stop", "intent": "dismissal", "id": "fd1485d00c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "cancel", "intent": "dismissal", "id": "2041f0dd7d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "double check that", "intent": "confirm", "id": "fed92d1b09", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "can you wink", "intent": "perform_action", "id": "5ff39aacfd", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "help", "intent": "general_query", "id": "19fca42a21", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "I think it might snow later", "intent": "general_query", "id": "3b389360c3", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "my neighbor is renovating again", "intent": "general_query", "id": "b61ed31534", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "I just remembered I have a dentist appointment", "intent": "general_query", "id": "43259f5cda", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "there's a weird smell in the kitchen", "intent": "general_query", "id": "1e9532be05", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "the bus was ten minutes late", "intent": "general_query", "id": "48ab68e1eb", "source": "manual_expansion", "verified": true, "variant": "natural"}
