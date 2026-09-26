@@ -796,10 +796,18 @@ class IntentEngine:
     def _extract_target(self, text: str, intent: str) -> str:
         """Strip the intent trigger to leave the target entity."""
         trigger_map = {
-            "open_app":     ["open", "launch", "start"],
-            "search_web":   ["search for", "google", "look up", "search"],
-            "open_website": ["open website", "go to", "navigate to", "open"],
-            "set_reminder": ["remind me to", "remind me", "set a timer for",
+            # Merged from the former separate open_website/open_app
+            # triggers (see config/intents.json's "open_target") — most
+            # specific phrases first so e.g. "go to netflix" and "launch
+            # notepad" strip correctly before the generic "open" fallback.
+            "open_target": ["go to", "navigate to", "open website",
+                             "launch", "start", "open"],
+            "search_web":  ["search for", "google", "look up", "search"],
+            # Merged from the former separate set_timer/set_reminder
+            # triggers (see config/intents.json's "set_timer") — a bare
+            # timer request has none of these phrases and falls through
+            # with the whole utterance as target, same as before.
+            "set_timer":   ["remind me to", "remind me", "set a timer for",
                              "set a reminder for", "timer for", "alarm for"],
         }
         trigger_hit = False

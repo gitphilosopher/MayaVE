@@ -18,6 +18,9 @@ logs/
 # Local/model files
 models/
 frontend/assets/mmodel.vroid
+config/candidates.jsonl
+config/test_data.jsonl
+config/validation_data.jsonl
 
 # Environment & secrets
 .env

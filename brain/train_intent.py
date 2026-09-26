@@ -22,6 +22,16 @@ Reports, in order:
     recall) — the class most likely to silently rot if new intents crowd
     it out. general_query absorbed the former 'help' and 'unknown'
     intents (see docs/CHANGELOG.md); those ids no longer exist.
+
+Note: 'note_create'/'note_append' -> 'note_write', 'note_read'/
+'note_list'/'note_open' -> 'note_view', 'open_app'/'open_website' ->
+'open_target', and 'set_reminder' -> 'set_timer' have likewise been
+merged (see brain/intent_engine.py's config/intents.json and
+brain/dataset_tools.py's _LEGACY_INTENT_MAP) — those ids no longer
+exist either. Run `python -m brain.dataset_tools migrate-legacy-intents`
+once against existing train/validation/test/candidates data before
+retraining so old rows land under the new ids instead of failing
+load_dataset()'s "intent not declared" check.
 """
 
 import argparse
@@ -169,6 +179,13 @@ def main() -> None:
         "hello", "hey maya", "hi",
         "which one is better SSD or HDD", "are you excited today",
         "my dog just knocked over a plant", "the sky looks orange today",
+        # Merged-intent spot checks — all four below should land on the
+        # new consolidated ids (open_target / set_timer / note_write /
+        # note_view), never on a retired id.
+        "open chrome", "go to reddit", "launch notepad",
+        "remind me to call mom in ten minutes", "set a timer for 20 minutes",
+        "take a note buy milk", "add to my note",
+        "read my notes", "list my notes", "open my note in notepad",
     ]
     for t in smoke_tests:
         r = engine.classify(t)

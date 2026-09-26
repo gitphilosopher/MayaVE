@@ -4,7 +4,6 @@
     "description": "Single source of truth for Maya's intent definitions. brain/intent_engine.py loads this file for classification metadata; it must not hardcode intent names, descriptions, or keyword triggers. Keyword triggers are matched with \\b...\\b plus an inflection suffix (s|es|d|ed|ing) by the engine, in list order within a rule and rule order as declared in 'keyword_rules_order' below.",
     "valid_categories": [
       "datetime",
-      "reminder",
       "web",
       "system",
       "media",
@@ -19,8 +18,8 @@
   },
   "keyword_rules_order": [
     "search_web",
-    "open_website",
-    "set_reminder",
+    "open_target",
+    "set_timer",
     "system_info",
     "lock_screen",
     "pause_music",
@@ -29,7 +28,6 @@
     "volume_up",
     "volume_down",
     "shutdown",
-    "open_app",
     "screenshot",
     "restart",
     "play_music",
@@ -71,10 +69,10 @@
       "response_mode": "skill"
     },
     {
-      "id": "set_reminder",
-      "category": "reminder",
-      "description": "User wants a timed reminder that carries a message, distinct from a bare countdown timer ('remind me to X in Y').",
-      "min_examples": 80,
+      "id": "set_timer",
+      "category": "utility",
+      "description": "User wants a countdown timer — a bare timer ('set a timer for 5 minutes') or one carrying a reminder message to speak back when it expires ('remind me to drink water in 15 minutes'). Merged from the former separate 'set_timer'/'set_reminder' intents — the skill decides whether a message is attached from the wording, not from the intent id.",
+      "min_examples": 170,
       "keywords": [
         "set a timer",
         "set a reminder",
@@ -101,13 +99,14 @@
       "response_mode": "skill"
     },
     {
-      "id": "open_website",
-      "category": "web",
-      "description": "User wants a specific website opened in the browser.",
-      "min_examples": 100,
+      "id": "open_target",
+      "category": "system",
+      "description": "User wants something opened — a website or a desktop application, the skill resolves which (known site table, then known app table, then generic URL/launch heuristics) rather than the intent id telling it apart.",
+      "min_examples": 200,
       "keywords": [
         "go to",
         "navigate to",
+        "open website",
         "open youtube",
         "open github",
         "open reddit",
@@ -116,16 +115,7 @@
         "open gmail",
         "open twitter",
         "open amazon",
-        "open linkedin"
-      ],
-      "response_mode": "skill"
-    },
-    {
-      "id": "open_app",
-      "category": "system",
-      "description": "User wants a desktop application launched.",
-      "min_examples": 100,
-      "keywords": [
+        "open linkedin",
         "open chrome",
         "open word",
         "open excel",
@@ -318,14 +308,6 @@
       "response_mode": "skill"
     },
     {
-      "id": "set_timer",
-      "category": "utility",
-      "description": "User wants a bare countdown timer with no attached reminder message.",
-      "min_examples": 90,
-      "keywords": [],
-      "response_mode": "skill"
-    },
-    {
       "id": "cancel_timer",
       "category": "utility",
       "description": "User wants an active timer cancelled.",
@@ -342,34 +324,18 @@
       "response_mode": "skill"
     },
     {
-      "id": "note_create",
+      "id": "note_write",
       "category": "notepad",
-      "description": "User wants a new note saved.",
-      "min_examples": 70,
+      "description": "User wants a note created or added to,the skill decides whether to start a new note or append to the latest existing one from the wording and whether any notes already exist.",
+      "min_examples": 130,
       "keywords": [],
       "response_mode": "skill"
     },
     {
-      "id": "note_append",
+      "id": "note_view",
       "category": "notepad",
-      "description": "User wants content added to an existing note.",
-      "min_examples": 60,
-      "keywords": [],
-      "response_mode": "skill"
-    },
-    {
-      "id": "note_read",
-      "category": "notepad",
-      "description": "User wants a saved note read back.",
-      "min_examples": 60,
-      "keywords": [],
-      "response_mode": "skill"
-    },
-    {
-      "id": "note_list",
-      "category": "notepad",
-      "description": "User wants a listing of saved notes.",
-      "min_examples": 50,
+      "description": "User wants to see their notes — read one back, list all of them, or open one in an external editor, the skill decides which from the wording (e.g. 'list'/'all notes' vs. 'open in notepad' vs. a bare 'read my note').",
+      "min_examples": 160,
       "keywords": [],
       "response_mode": "skill"
     },
@@ -377,14 +343,6 @@
       "id": "note_delete",
       "category": "notepad",
       "description": "User wants a note deleted (requires spoken confirmation).",
-      "min_examples": 50,
-      "keywords": [],
-      "response_mode": "skill"
-    },
-    {
-      "id": "note_open",
-      "category": "notepad",
-      "description": "User wants a note opened in an external editor.",
       "min_examples": 50,
       "keywords": [],
       "response_mode": "skill"

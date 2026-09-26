@@ -25,10 +25,13 @@ Three data flows this module owns:
      auto-trained on.
 
   4. Legacy-intent migration — relabels rows whose intent id has been
-     retired from config/intents.json (e.g. 'help'/'unknown'
-     consolidated into 'general_query') onto their replacement, across
-     every split plus candidates.jsonl, then deduplicates. Pure relabel
-     + dedup on EXISTING rows — never generates a new example.
+     retired from config/intents.json (e.g. 'help'/'unknown' consolidated
+     into 'general_query'; 'note_create'/'note_append' into 'note_write';
+     'note_read'/'note_list'/'note_open' into 'note_view'; 'open_app'/
+     'open_website' into 'open_target'; 'set_reminder' into 'set_timer' —
+     see _LEGACY_INTENT_MAP) onto their replacement, across every split
+     plus candidates.jsonl, then deduplicates. Pure relabel + dedup on
+     EXISTING rows — never generates a new example.
 
 CLI:
     python -m brain.dataset_tools generate --intent search_web --count 40
@@ -346,12 +349,32 @@ def cmd_failures_promote(args: argparse.Namespace) -> None:
 # Historical intent ids that have been consolidated into another intent and
 # removed from config/intents.json. Extend this map (never delete an old
 # entry) whenever an intent is retired — see docs/CHANGELOG.md. Currently:
-# 'help' and 'unknown' merged into 'general_query' (help lost its canned
-# reply and now goes to the LLM like general_query always did; unknown was
-# already routed to the LLM under a different name).
+#   - 'help' and 'unknown' merged into 'general_query' (help lost its canned
+#     reply and now goes to the LLM like general_query always did; unknown
+#     was already routed to the LLM under a different name).
+#   - 'note_create' and 'note_append' merged into 'note_write' (the skill
+#     now decides create-vs-append from the wording and whether a note
+#     already exists, instead of the intent id telling them apart).
+#   - 'note_read', 'note_list' and 'note_open' merged into 'note_view'
+#     ('note_delete' is untouched — it still requires confirmation and
+#     stays its own intent).
+#   - 'open_app' and 'open_website' merged into 'open_target' (the skill
+#     resolves app vs. website itself — known site table, then known app
+#     table, then generic URL/launch heuristics).
+#   - 'set_reminder' merged into 'set_timer' (a bare countdown and a timer
+#     carrying a reminder message are now one intent; the skill already
+#     told them apart by whether a message was present).
 _LEGACY_INTENT_MAP: dict[str, str] = {
-    "help":    "general_query",
-    "unknown": "general_query",
+    "help":         "general_query",
+    "unknown":      "general_query",
+    "note_create":  "note_write",
+    "note_append":  "note_write",
+    "note_read":    "note_view",
+    "note_list":    "note_view",
+    "note_open":    "note_view",
+    "open_app":     "open_target",
+    "open_website": "open_target",
+    "set_reminder": "set_timer",
 }
 
 
@@ -475,7 +498,9 @@ def main() -> None:
     mig = sub.add_parser(
         "migrate-legacy-intents",
         help="Relabel rows under a retired intent id onto its replacement, then dedupe. "
-             "Default mapping: help/unknown -> general_query.",
+             "Default mapping (see _LEGACY_INTENT_MAP): help/unknown -> general_query; "
+             "note_create/note_append -> note_write; note_read/note_list/note_open -> "
+             "note_view; open_app/open_website -> open_target; set_reminder -> set_timer.",
     )
     mig.add_argument(
         "--map", action="append", metavar="OLD_ID=NEW_ID",

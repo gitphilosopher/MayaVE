@@ -1,10 +1,10 @@
 {"text": "what time is it", "intent": "get_time", "id": "bd87171557", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what day is today", "intent": "get_date", "id": "003e0d661c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "timer for 2 hours", "intent": "set_reminder", "id": "266696aa45", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "remind me to pick up the kids in 40 minutes", "intent": "set_reminder", "id": "dd5b8124c2", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "timer for 2 hours", "intent": "set_timer", "id": "266696aa45", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remind me to pick up the kids in 40 minutes", "intent": "set_timer", "id": "dd5b8124c2", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "find information about black holes", "intent": "search_web", "id": "5290960026", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "go to github", "intent": "open_website", "id": "ec0bbf0810", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "launch notepad", "intent": "open_app", "id": "6e7c42b57f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "go to github", "intent": "open_target", "id": "ec0bbf0810", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "launch notepad", "intent": "open_target", "id": "6e7c42b57f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "play music", "intent": "play_music", "id": "d105ad878d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "stop the song", "intent": "pause_music", "id": "f498376e08", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "next track", "intent": "next_track", "id": "1135c1e9ed", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -24,10 +24,10 @@
 {"text": "countdown 3 minutes", "intent": "set_timer", "id": "fb0a9e6633", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "cancel all timers", "intent": "cancel_timer", "id": "fe3dfe24ce", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "how much time is left on the timer", "intent": "timer_status", "id": "ce7aaea137", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "note this down", "intent": "note_create", "id": "3260336064", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "also note that", "intent": "note_append", "id": "4519113711", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "show me my notes", "intent": "note_read", "id": "173b6a81ad", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "list my notes", "intent": "note_list", "id": "e2f4febec9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "note this down", "intent": "note_write", "id": "3260336064", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "also note that", "intent": "note_write", "id": "4519113711", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "show me my notes", "intent": "note_view", "id": "173b6a81ad", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "list my notes", "intent": "note_view", "id": "e2f4febec9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "howdy", "intent": "greet", "id": "a365732f6a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "go to sleep", "intent": "farewell", "id": "d838ecf6d4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "appreciate it", "intent": "thanks", "id": "35298ebb78", "source": "legacy_training_data", "verified": true, "variant": "natural"}

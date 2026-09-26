@@ -14,6 +14,13 @@ the resolved note path; resolve_pending() — called first by Router.dispatch,
 same pattern as skills/system/power.py — confirms, declines or drops it on
 the next utterance. One-shot with a 30 s TTL, so a stale request can never
 delete a note on a late "yes". Yes/no phrases come from core/confirmation.py.
+
+Intent merge: config/intents.json now declares 'note_write' (merged from
+the former separate 'note_create'/'note_append') and 'note_view' (merged
+from 'note_read'/'note_list'/'note_open'); 'note_delete' is untouched.
+Since the classifier can no longer tell create-vs-append or read-vs-list-
+vs-open apart by intent id, _write()/_view() below do it from the wording
+instead — this is the one place that distinction now lives.
 """
 
 import asyncio
@@ -43,6 +50,41 @@ _STAMP_SUFFIX_RE = re.compile(r"_\d{4}_\d{4}$")
 
 # (note path, expiry on time.monotonic()) while awaiting delete confirmation.
 _pending_delete: tuple[Path, float] | None = None
+
+# ── Sub-action cues for the merged intents (see module docstring) ─────────
+# 'note_write': append vs. create. _append() itself falls back to _create()
+# when no notes exist yet, so a stray append cue on the very first note
+# still works — this only needs to catch the append phrasing itself.
+# The windowed "add ... note(s)" form catches "add this to my note" (a
+# real training phrasing) without a bare "add" elsewhere in a longer
+# sentence ("add butter to my grocery list") false-matching — "note"/
+# "notes" has to actually show up within a few words of "add".
+_APPEND_CUE_RE = re.compile(
+    r"\bappend\b"
+    r"|\badd\b(?:\s+\S+){0,4}\s+notes?\b"
+    r"|\balso\s+(?:note|add)\b",
+    re.IGNORECASE,
+)
+
+# 'note_view': list vs. open-in-editor vs. read-aloud (default). Checked in
+# this order — list/open cues are specific multi-word phrasings; anything
+# else (including a bare "read my notes", which contains "my notes" but
+# isn't a list request) falls through to reading the latest note aloud.
+# Both are windowed the same way as _APPEND_CUE_RE above so an unrelated
+# "list" or "open" elsewhere in the sentence ("read my shopping list",
+# "open the door and note that down") doesn't false-match — the cue word
+# has to actually be near "note(s)".
+_LIST_CUE_RE = re.compile(
+    r"\blist\b(?:\s+\S+){0,2}\s+notes?\b"
+    r"|\ball (?:my )?notes\b"
+    r"|\bwhat notes\b",
+    re.IGNORECASE,
+)
+_OPEN_CUE_RE = re.compile(
+    r"\b(?:open|launch)\b(?:\s+\S+){0,2}\s+notes?\b"
+    r"|\bin (?:notepad|the editor|an editor)\b",
+    re.IGNORECASE,
+)
 
 
 def _spoken_name(note: Path) -> str:
@@ -91,28 +133,49 @@ def _handle(intent: dict, text: str) -> str:
     # A specific note_* intent wins over word matching, so a note whose
     # content contains "read"/"show"/etc. is saved instead of misrouted.
     handlers = {
-        "note_create": _create,
-        "note_append": _append,
-        "note_read":   _read,
-        "note_list":   lambda _text: _list(),
+        "note_write":  _write,
+        "note_view":   _view,
         "note_delete": _delete,
-        "note_open":   _open_in_editor,
     }
     if name in handlers:
         return handlers[name](text)
 
-    if name == "note_read"   or any(w in t for w in ("read", "show", "what's in", "whats in", "open note")):
-        return _read(text)
-    if name == "note_list"   or any(w in t for w in ("list notes", "my notes", "all notes", "what notes")):
-        return _list()
-    if name == "note_append" or any(w in t for w in ("add to", "append", "add note")):
-        return _append(text)
-    if name == "note_delete" or any(w in t for w in ("delete note", "remove note")):
+    # Fallback word matching — same cues the merged intents themselves
+    # rely on, used only if this was ever reached without one of the
+    # three note_* ids above (e.g. manual testing).
+    if any(w in t for w in ("delete note", "remove note")):
         return _delete(text)
-    if name == "note_open"   or any(w in t for w in ("open note", "launch note")):
+    if _APPEND_CUE_RE.search(t):
+        return _append(text)
+    if _LIST_CUE_RE.search(t):
+        return _list()
+    if _OPEN_CUE_RE.search(t):
         return _open_in_editor(text)
+    if any(w in t for w in ("read", "show", "what's in", "whats in")):
+        return _read(text)
 
     return _create(text)
+
+
+def _write(text: str) -> str:
+    """note_write: decides create vs. append from the wording (merged from
+    the former separate note_create/note_append intents)."""
+    if _APPEND_CUE_RE.search(text.lower()):
+        return _append(text)
+    return _create(text)
+
+
+def _view(text: str) -> str:
+    """note_view: decides list vs. open-in-editor vs. read-aloud from the
+    wording (merged from the former separate note_read/note_list/note_open
+    intents) — read-aloud is the default when neither cue matches, so a
+    plain "read my notes" still reads the latest note instead of listing."""
+    t = text.lower()
+    if _LIST_CUE_RE.search(t):
+        return _list()
+    if _OPEN_CUE_RE.search(t):
+        return _open_in_editor(text)
+    return _read(text)
 
 
 def _create(text: str) -> str:

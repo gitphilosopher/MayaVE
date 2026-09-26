@@ -1,10 +1,10 @@
 {"text": "tell me the time", "intent": "get_time", "id": "a5c66b8555", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what year is it", "intent": "get_date", "id": "3fb2977eee", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set a timer for 5 minutes", "intent": "set_reminder", "id": "bf93d622e7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "remind me in 10 minutes", "intent": "set_reminder", "id": "b4e2eb317f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set a timer for 5 minutes", "intent": "set_timer", "id": "bf93d622e7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remind me in 10 minutes", "intent": "set_timer", "id": "b4e2eb317f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "search for best laptops", "intent": "search_web", "id": "cd4bb0c949", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "go to google", "intent": "open_website", "id": "b7904c5e30", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "launch excel", "intent": "open_app", "id": "8265882549", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "go to google", "intent": "open_target", "id": "b7904c5e30", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "launch excel", "intent": "open_target", "id": "8265882549", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "start playing", "intent": "play_music", "id": "1237bc0d75", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "pause the song", "intent": "pause_music", "id": "a9be6f8c84", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "skip this song", "intent": "next_track", "id": "45e7c29081", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -24,10 +24,10 @@
 {"text": "timer for 30 seconds", "intent": "set_timer", "id": "6b15a45c6e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "delete timer", "intent": "cancel_timer", "id": "c96d116e4f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "list my timers", "intent": "timer_status", "id": "68dcbfbe73", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "make a note about the client call", "intent": "note_create", "id": "9f144a3605", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "add this to my notes", "intent": "note_append", "id": "cba08672f2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "read my notes", "intent": "note_read", "id": "6e9995e6cf", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "what notes do I have", "intent": "note_list", "id": "26da0d47cb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "make a note about the client call", "intent": "note_write", "id": "9f144a3605", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "add this to my notes", "intent": "note_write", "id": "cba08672f2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "read my notes", "intent": "note_view", "id": "6e9995e6cf", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what notes do I have", "intent": "note_view", "id": "26da0d47cb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "hey there", "intent": "greet", "id": "1f069cee9e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "goodbye", "intent": "farewell", "id": "67a3c655be", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "cheers", "intent": "thanks", "id": "96c81c8761", "source": "legacy_training_data", "verified": true, "variant": "natural"}

@@ -9,18 +9,18 @@
 {"text": "tell me the date", "intent": "get_date", "id": "ebe604e45a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "today's date", "intent": "get_date", "id": "58367438c2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "current date", "intent": "get_date", "id": "0151db9b00", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set an alarm for 30 seconds", "intent": "set_reminder", "id": "0719a78cf7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set a reminder to take my medicine at noon", "intent": "set_reminder", "id": "d904eded52", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "ping me in an hour to check the oven", "intent": "set_reminder", "id": "0bc5e9e22e", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "alarm in 5 minutes", "intent": "set_reminder", "id": "284870e743", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "remind me to drink water in 15 minutes", "intent": "set_reminder", "id": "82234c1b7c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set timer", "intent": "set_reminder", "id": "eac425a42d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set reminder for 1 hour", "intent": "set_reminder", "id": "74b8e90a14", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "give me a nudge in ten minutes to stretch", "intent": "set_reminder", "id": "24a495880f", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "don't let me forget to email the team in 30 minutes", "intent": "set_reminder", "id": "fbac6a6717", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "remind me to call mom in twenty minutes", "intent": "set_reminder", "id": "d26c6328ca", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "reminder after 20 minutes", "intent": "set_reminder", "id": "38d3f1f09c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "remind me about the dentist in two hours", "intent": "set_reminder", "id": "30f27e0145", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "set an alarm for 30 seconds", "intent": "set_timer", "id": "0719a78cf7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set a reminder to take my medicine at noon", "intent": "set_timer", "id": "d904eded52", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "ping me in an hour to check the oven", "intent": "set_timer", "id": "0bc5e9e22e", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "alarm in 5 minutes", "intent": "set_timer", "id": "284870e743", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remind me to drink water in 15 minutes", "intent": "set_timer", "id": "82234c1b7c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set timer", "intent": "set_timer", "id": "eac425a42d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set reminder for 1 hour", "intent": "set_timer", "id": "74b8e90a14", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "give me a nudge in ten minutes to stretch", "intent": "set_timer", "id": "24a495880f", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "don't let me forget to email the team in 30 minutes", "intent": "set_timer", "id": "fbac6a6717", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "remind me to call mom in twenty minutes", "intent": "set_timer", "id": "d26c6328ca", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "reminder after 20 minutes", "intent": "set_timer", "id": "38d3f1f09c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remind me about the dentist in two hours", "intent": "set_timer", "id": "30f27e0145", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "look up bitcoin price", "intent": "search_web", "id": "93b419b791", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "search the web for recipes", "intent": "search_web", "id": "c2bdc7042b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "find news about apple", "intent": "search_web", "id": "9d55597617", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -32,24 +32,24 @@
 {"text": "search iphone 16", "intent": "search_web", "id": "9fbef3fcc6", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "look up the weather", "intent": "search_web", "id": "b13efb48e7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "search for python tutorials", "intent": "search_web", "id": "da88c57b2a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open linkedin", "intent": "open_website", "id": "13da9a1f67", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "navigate to stackoverflow", "intent": "open_website", "id": "ec99cf913f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open twitter", "intent": "open_website", "id": "1c9ab47a94", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "navigate to netflix", "intent": "open_website", "id": "96190c7b09", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open youtube", "intent": "open_website", "id": "e546fd3e28", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open reddit", "intent": "open_website", "id": "8c0a8c227b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open spotify", "intent": "open_website", "id": "bee508300d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "go to amazon", "intent": "open_website", "id": "bf8923d88d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open gmail", "intent": "open_website", "id": "241e1bfe24", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open terminal", "intent": "open_app", "id": "e7e0f6650c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open chrome", "intent": "open_app", "id": "963a1f6111", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open file explorer", "intent": "open_app", "id": "fc61bfabd0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "start visual studio code", "intent": "open_app", "id": "3a35be679b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open task manager", "intent": "open_app", "id": "a9e38ab42a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open word", "intent": "open_app", "id": "a4345e1bbb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "launch whatsapp", "intent": "open_app", "id": "dc67886b7a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "launch calculator", "intent": "open_app", "id": "61b9be9a6f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "start discord", "intent": "open_app", "id": "d29e70cc73", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open linkedin", "intent": "open_target", "id": "13da9a1f67", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "navigate to stackoverflow", "intent": "open_target", "id": "ec99cf913f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open twitter", "intent": "open_target", "id": "1c9ab47a94", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "navigate to netflix", "intent": "open_target", "id": "96190c7b09", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open youtube", "intent": "open_target", "id": "e546fd3e28", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open reddit", "intent": "open_target", "id": "8c0a8c227b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open spotify", "intent": "open_target", "id": "bee508300d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "go to amazon", "intent": "open_target", "id": "bf8923d88d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open gmail", "intent": "open_target", "id": "241e1bfe24", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open terminal", "intent": "open_target", "id": "e7e0f6650c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open chrome", "intent": "open_target", "id": "963a1f6111", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open file explorer", "intent": "open_target", "id": "fc61bfabd0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "start visual studio code", "intent": "open_target", "id": "3a35be679b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open task manager", "intent": "open_target", "id": "a9e38ab42a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open word", "intent": "open_target", "id": "a4345e1bbb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "launch whatsapp", "intent": "open_target", "id": "dc67886b7a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "launch calculator", "intent": "open_target", "id": "61b9be9a6f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "start discord", "intent": "open_target", "id": "d29e70cc73", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "play a song", "intent": "play_music", "id": "9242c3e859", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "pause music", "intent": "pause_music", "id": "8ce7e3b547", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "next song", "intent": "next_track", "id": "bf611d8984", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -105,25 +105,25 @@
 {"text": "cancel the timer", "intent": "cancel_timer", "id": "b470b0a540", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "stop the timer", "intent": "cancel_timer", "id": "0715595ea0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "timer status", "intent": "timer_status", "id": "90587e646f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "write down call John tomorrow", "intent": "note_create", "id": "e5021a109b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "remember this", "intent": "note_create", "id": "ae31b5961c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "save this thought before I forget it", "intent": "note_create", "id": "d586a1cd40", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "write this down real quick", "intent": "note_create", "id": "4a0beac525", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "save a note", "intent": "note_create", "id": "e0d30d8e71", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "write a note", "intent": "note_create", "id": "fb40d818a5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "take a note", "intent": "note_create", "id": "d267ae1789", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "note buy milk", "intent": "note_create", "id": "19d04a7dfe", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "create a note", "intent": "note_create", "id": "7310ef58e1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "jot this down, pick up dry cleaning friday", "intent": "note_create", "id": "4babef1969", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "append to note", "intent": "note_append", "id": "fba11dc8dd", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "add to my note", "intent": "note_append", "id": "b2fb1a4961", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "read the latest note", "intent": "note_read", "id": "a2dd95e16c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "what are my notes", "intent": "note_read", "id": "cdf231d0d2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "show all notes", "intent": "note_list", "id": "d13ba1b722", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "write down call John tomorrow", "intent": "note_write", "id": "e5021a109b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "remember this", "intent": "note_write", "id": "ae31b5961c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "save this thought before I forget it", "intent": "note_write", "id": "d586a1cd40", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "write this down real quick", "intent": "note_write", "id": "4a0beac525", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "save a note", "intent": "note_write", "id": "e0d30d8e71", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "write a note", "intent": "note_write", "id": "fb40d818a5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "take a note", "intent": "note_write", "id": "d267ae1789", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "note buy milk", "intent": "note_write", "id": "19d04a7dfe", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "create a note", "intent": "note_write", "id": "7310ef58e1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "jot this down, pick up dry cleaning friday", "intent": "note_write", "id": "4babef1969", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "append to note", "intent": "note_write", "id": "fba11dc8dd", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "add to my note", "intent": "note_write", "id": "b2fb1a4961", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "read the latest note", "intent": "note_view", "id": "a2dd95e16c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what are my notes", "intent": "note_view", "id": "cdf231d0d2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "show all notes", "intent": "note_view", "id": "d13ba1b722", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "remove that note", "intent": "note_delete", "id": "1ead83e148", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "delete my note", "intent": "note_delete", "id": "00c8b2dff2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open my note in notepad", "intent": "note_open", "id": "1c6cfd181e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open the note", "intent": "note_open", "id": "9efd0c8c8a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open my note in notepad", "intent": "note_view", "id": "1c6cfd181e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "open the note", "intent": "note_view", "id": "9efd0c8c8a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "hey", "intent": "greet", "id": "a56ada29a4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "good evening", "intent": "greet", "id": "10816a59d9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "hi maya", "intent": "greet", "id": "0c22608564", "source": "legacy_training_data", "verified": true, "variant": "natural"}

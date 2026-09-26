@@ -20,13 +20,10 @@
 {"text": "what's my current time", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146482.589667}
 {"text": "what time is it here", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146482.589667}
 {"text": "time now", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146482.589667}
-{"text": "how much time", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146482.589667}
 {"text": "current clock time", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146482.589667}
-{"text": "whats the current hour", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "what's the time mate", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "can you tell me the hour", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "time is it now", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
-{"text": "what time are we", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "what's the clock say", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "give me the time", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
 {"text": "can you give me the current hour", "intent": "get_time", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146492.0789554}
@@ -47,7 +44,6 @@
 {"text": "tell me the current date", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "current month", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "what is the date now", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
-{"text": "today's date and time", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "year of now", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "day of the month", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "tell me the year", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
@@ -59,86 +55,80 @@
 {"text": "date is what", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "what's the day today", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "year is it", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
-{"text": "current date and time", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "today's date and month", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "day this month", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "current year is", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "today's date is what", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "date now", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
 {"text": "tell me the current year", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146514.8165827}
-{"text": "What's the date today?", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0988412}
-{"text": "Day of the week?", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0988412}
 {"text": "Today's day", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0988412}
-{"text": "How many days in the current month?", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
 {"text": "What's the current month", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
-{"text": "When is today", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
 {"text": "Date please", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
 {"text": "What month is it now", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
-{"text": "Date and time", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
 {"text": "Current day", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
 {"text": "Tell me today's year", "intent": "get_date", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146524.0993605}
-{"text": "set a reminder to feed the cat at 3 pm", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "give me a reminder to pick up milk", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a reminder to feed the cat at 3 pm", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "give me a reminder to pick up milk", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
 {"text": "set timer to go off in an hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to call mom tonight", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set alarm for 10 minutes from now", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "don't let me forget about my appointment", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set reminder to water the plants", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to take a break in 20 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set timer for 5am wake up call", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "nudge me in 30 seconds to grab the phone", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set an alert for 1 hour from now", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "give me a reminder to charge my phone", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to call mom tonight", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set alarm for 10 minutes from now", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "don't let me forget about my appointment", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set reminder to water the plants", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to take a break in 20 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set timer for 5am wake up call", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "nudge me in 30 seconds to grab the phone", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set an alert for 1 hour from now", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "give me a reminder to charge my phone", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
 {"text": "set a countdown timer for 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to meet up with friends", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a 10 minute warning to finish the task", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a notification to remind me of my birthday", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to water the garden in 15 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to meet up with friends", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a 10 minute warning to finish the task", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a notification to remind me of my birthday", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to water the garden in 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
 {"text": "timer for 2 hours and 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a reminder to lock the door", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "don't let me forget to call the doctor", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set an alarm to go off in 25 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to pick up dry cleaning", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a nudge to remind me of my deadline", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set timer to go off in 45 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to take out the trash tonight", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a reminder to call my sister", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set an alert for 30 minutes from now", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a timer for a 5 minute break", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to meet the client in 20 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a notification to remind me to feed the dog", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a reminder to turn off the stove", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a reminder to lock the door", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "don't let me forget to call the doctor", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set an alarm to go off in 25 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to pick up dry cleaning", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a nudge to remind me of my deadline", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set timer to go off in 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to take out the trash tonight", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a reminder to call my sister", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set an alert for 30 minutes from now", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a timer for a 5 minute break", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to meet the client in 20 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a notification to remind me to feed the dog", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "set a reminder to turn off the stove", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
 {"text": "set a countdown timer for 1 hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "remind me to call the bank", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
+{"text": "remind me to call the bank", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
 {"text": "set a timer to go off in 10 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146562.4784186}
-{"text": "set a reminder for my birthday", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to water the plants in an hour", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder for my birthday", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to water the plants in an hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "timer for 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "dont let me forget to feed my dog", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder to take my pill", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "give me a heads up in 20 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set alarm for 1 minute", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to call mom", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "dont let me forget to feed my dog", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder to take my pill", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "give me a heads up in 20 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set alarm for 1 minute", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to call mom", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "timer going off in 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder to meet john", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "what's the reminder for 3pm", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "don't forget to remind me of the meeting", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to take a break in 10", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder to meet john", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "what's the reminder for 3pm", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "don't forget to remind me of the meeting", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to take a break in 10", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "set a timer for 4 pm", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "don't let me miss my workout", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder to call the vet", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to grab milk", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "give me a nudge in 30 minutes", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "don't let me miss my workout", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder to call the vet", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to grab milk", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "give me a nudge in 30 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "timer for 1 hour 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to pack my bag", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder for my appointment", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to pack my bag", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder for my appointment", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "timer going off in 5 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to send a text", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "what's my reminder for today", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "don't let me forget to water the plants", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder to meet at 2pm", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "remind me to feed the cat", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
-{"text": "set a reminder for my flight", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to send a text", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "what's my reminder for today", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "don't let me forget to water the plants", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder to meet at 2pm", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "remind me to feed the cat", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
+{"text": "set a reminder for my flight", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146597.4144945}
 {"text": "search google for the latest deals on apple watches", "intent": "search_web", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146629.70051}
 {"text": "find info on the best android smartphones", "intent": "search_web", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146629.70051}
 {"text": "search web for latest news on amazon", "intent": "search_web", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146629.70051}
@@ -202,154 +192,154 @@
 {"text": "web search for best restaurants", "intent": "search_web", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146683.3673656}
 {"text": "find out the weather forecast", "intent": "get_weather", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146683.3673656}
 {"text": "google the price of oil today", "intent": "search_web", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146683.3673656}
-{"text": "go to wikipedia", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access google drive", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open ebay", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "navigate to wordpress", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "get to instagram", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "visit tumblr", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access my gmail", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open outlook", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to walmart", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open tumblr", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access linkedin profile", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open snapchat", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open apple website", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "visit linkedin company page", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "get on amazon", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to apple support", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "visit pinterest", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open instagram account", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open my facebook", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to home depot", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open youtube channel", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open skype", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access dropbox", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to dell website", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "visit youtube video", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open reddit post", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open my outlook", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "get to twitter account", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access google calendar", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open imdb", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "visit amazon music", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "access my twitter", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to best buy", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "open stack overflow", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
-{"text": "go to wiki", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open wikipedia", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "take me to instagram", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open dropbox", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "go to bing", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "launch pinterest", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open vimeo", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "go to tumblr", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open deviantart", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open apple music", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open etsy", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open roblox", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open discord", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "take me to steam", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open tinder", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open xbox", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open twitch", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "go to soundcloud", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open flickr", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open hulu", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open khan academy", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open crunchbase", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open medium", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "go to flipkart", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "launch angellist", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open mapquest", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open zillow", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "go to roblox", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "open pandora", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
-{"text": "take me to imdb", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "hit me with the bbc website", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "can you open soundcloud", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "access the wiki", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "open up nasa", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "lets check out the nytimes", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "open up the itunes store", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "browse to etsy", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "open pinterest", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "get me to the ebay website", "intent": "open_website", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
-{"text": "start app launcher", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open my browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets launch the mail", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up google drive", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "start up itunes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open my music app", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets get slack going", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open file manager", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "start the game", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "launch my phone app", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open safari", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "go to wikipedia", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access google drive", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open ebay", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "navigate to wordpress", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "get to instagram", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "visit tumblr", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access my gmail", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open outlook", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to walmart", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open tumblr", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access linkedin profile", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open snapchat", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open apple website", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "visit linkedin company page", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "get on amazon", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to apple support", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "visit pinterest", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open instagram account", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open my facebook", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to home depot", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open youtube channel", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open skype", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access dropbox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to dell website", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "visit youtube video", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open reddit post", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open my outlook", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "get to twitter account", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access google calendar", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open imdb", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "visit amazon music", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "access my twitter", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to best buy", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "open stack overflow", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146700.965282}
+{"text": "go to wiki", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open wikipedia", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "take me to instagram", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open dropbox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "go to bing", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "launch pinterest", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open vimeo", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "go to tumblr", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open deviantart", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open apple music", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open etsy", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open roblox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open discord", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "take me to steam", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open tinder", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open xbox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open twitch", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "go to soundcloud", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open flickr", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open hulu", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open khan academy", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open crunchbase", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open medium", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "go to flipkart", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "launch angellist", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open mapquest", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open zillow", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "go to roblox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "open pandora", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146718.9178388}
+{"text": "take me to imdb", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "hit me with the bbc website", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "can you open soundcloud", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "access the wiki", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "open up nasa", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "lets check out the nytimes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "open up the itunes store", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "browse to etsy", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "open pinterest", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "get me to the ebay website", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146727.3041432}
+{"text": "start app launcher", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open my browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets launch the mail", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up google drive", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "start up itunes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open my music app", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets get slack going", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open file manager", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "start the game", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "launch my phone app", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open safari", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
 {"text": "lets play music", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up terminal", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open my email", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up calculator", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "launch the camera", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up slack", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets open discord", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "launch the browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "start my task list", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets get whatsapp", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open my maps app", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "launch my notes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up word", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets get visual studio", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open my app drawer", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "start up chrome", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets open itunes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up email", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "launch the app store", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open my email", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "launch the camera", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up slack", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets open discord", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "launch the browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "start my task list", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets get whatsapp", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open my maps app", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "launch my notes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up word", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets get visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open my app drawer", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "start up chrome", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets open itunes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up email", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "launch the app store", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
 {"text": "lets start the music", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up notes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "lets get started with vscode", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "open up calculator app", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
-{"text": "start my browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
-{"text": "open firefox", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
-{"text": "run java", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
-{"text": "open visual studio", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
-{"text": "launch outlook", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
-{"text": "start email", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "run my game", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open itunes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open messenger", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "start notepad", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "run calculator", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open music", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "launch browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open chrome browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "start terminal", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open my word processor", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "run excel file", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open windows", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "launch game", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open desktop", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "start my apps", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open browser window", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "run java program", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open word document", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "launch my email", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "start visual studio", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open windows explorer", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "launch browser window", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "run my software", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open my desktop", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "start calculator", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "launch terminal", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
-{"text": "open outlook please", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "just wanna open the browser", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "run teamviewer", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "get itunes up", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "bring up the email client", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "open my calendar", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "open my notes", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "just open slack", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
-{"text": "open the remote desktop", "intent": "open_app", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "open up notes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "lets get started with vscode", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "open up calculator app", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146746.8074915}
+{"text": "start my browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
+{"text": "open firefox", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
+{"text": "run java", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
+{"text": "open visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
+{"text": "launch outlook", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.4561174}
+{"text": "start email", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "run my game", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open itunes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open messenger", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "start notepad", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "run calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open music", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "launch browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open chrome browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "start terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open my word processor", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "run excel file", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open windows", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "launch game", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open desktop", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "start my apps", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open browser window", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "run java program", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open word document", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "launch my email", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "start visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open windows explorer", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "launch browser window", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "run my software", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open my desktop", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "start calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "launch terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146763.456646}
+{"text": "open outlook please", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "just wanna open the browser", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "run teamviewer", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "get itunes up", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "bring up the email client", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "open my calendar", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "open my notes", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "just open slack", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
+{"text": "open the remote desktop", "intent": "open_target", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146770.455908}
 {"text": "play some tunes", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "start the music", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "let's jam", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
@@ -367,7 +357,6 @@
 {"text": "audio on", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "play some beats", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "start the mix", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
-{"text": "turn it on", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "play my faves", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "play the album now", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
 {"text": "start it", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146784.828387}
@@ -378,7 +367,7 @@
 {"text": "play music now", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
 {"text": "turn on the tunes", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
 {"text": "start playing some music", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
-{"text": "turn it up", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
+{"text": "turn it up", "intent": "volume_up", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
 {"text": "play music for me", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
 {"text": "play the radio", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
 {"text": "play some music", "intent": "play_music", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146794.8967633}
@@ -427,7 +416,6 @@
 {"text": "let's move on to the next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "next track coming up", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "skip the current", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
-{"text": "what's next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "play the next one up", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "next one", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "move to the next one", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
@@ -435,7 +423,6 @@
 {"text": "next one coming", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "let's skip this", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "skip it already", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
-{"text": "what's the next one", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "next track here", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "next song now", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
 {"text": "next song's up", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146850.714954}
@@ -452,7 +439,6 @@
 {"text": "Move on to the next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
 {"text": "Can we skip this", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
 {"text": "Song next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
-{"text": "What's next on", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
 {"text": "Can I skip to next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
 {"text": "Move next", "intent": "next_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146857.1368418}
 {"text": "Previous track", "intent": "prev_track", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146877.4987988}
@@ -535,12 +521,10 @@
 {"text": "turn it down a click", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "quieter than that", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "can you lower it", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
-{"text": "make the volume down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "down a bit please", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "reduce the noise", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "make it quieter for me", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "volume down now", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
-{"text": "can you make it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "quieter please love", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "down a notch would be great", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "lower it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
@@ -551,11 +535,10 @@
 {"text": "can you turn it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "lower the decibels", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "not so loud", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
-{"text": "make it down now", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "down a bit more", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "quieter than that please", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "can you make it quieter", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
-{"text": "volume down to 0", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
+{"text": "volume down to 0", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "quieter please sweetheart", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "turn it down already", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146932.1290677}
 {"text": "turn it down low", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146940.269721}
@@ -563,7 +546,7 @@
 {"text": "lower the decibel", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146940.269721}
 {"text": "turn it down a bit", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146940.269721}
 {"text": "too loud can you turn it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146940.269721}
-{"text": "turn down the volume", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.4237697}
+{"text": "turn down the volume", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.4237697}
 {"text": "stop the noise", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.424295}
 {"text": "turn the sound off", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.424295}
 {"text": "no sound please", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.424295}
@@ -594,7 +577,7 @@
 {"text": "quiet now", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.424295}
 {"text": "no more noise", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146960.424295}
 {"text": "stop the audio", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.6896071}
-{"text": "turn it down", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.6896071}
+{"text": "turn it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.6896071}
 {"text": "shut up the music", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.690134}
 {"text": "mute this", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.690134}
 {"text": "be quiet for a sec", "intent": "mute", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790146966.690134}
@@ -680,7 +663,6 @@
 {"text": "grab a shot", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "capture a pic", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "take a photo of the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
-{"text": "make a picture", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "get a shot", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "capture the image", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "screen shot", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
@@ -689,12 +671,10 @@
 {"text": "capture it", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "make a screenshot", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "take a snap of the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
-{"text": "get a picture", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "capture the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "screenshot this", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "grab the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "capture a screenshot", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
-{"text": "take a picture", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "snap the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "save the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147037.7491581}
 {"text": "capture my screen now", "intent": "screenshot", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147044.6864812}
@@ -919,7 +899,6 @@
 {"text": "what's on the clipboard thing", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147238.757717}
 {"text": "write it to the clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "copy this", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
-{"text": "save this to notes and the clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "get it copied to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "copy and paste to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "can you write to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
@@ -932,7 +911,6 @@
 {"text": "copy this and save to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "paste to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "get it copied", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
-{"text": "save to notes but clipboard too", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "save the words to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "copy the text and save to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "write to clipboard for later", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
@@ -940,7 +918,6 @@
 {"text": "save it for later clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "save this in clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "get it on clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
-{"text": "write to notes and clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "save the info to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "copy this text now to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147263.9833572}
 {"text": "copy text to the clipboard please", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
@@ -949,9 +926,7 @@
 {"text": "save this to clipboard later", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
 {"text": "clip the word hello", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
 {"text": "get this on clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
-{"text": "i want to paste this from clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
 {"text": "copy that to clipboard now", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
-{"text": "paste this from clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147274.2162604}
 {"text": "clear the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147294.5423124}
 {"text": "empty clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147294.5423124}
 {"text": "erase clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147294.5423124}
@@ -1115,174 +1090,173 @@
 {"text": "what's the status on my timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147406.7420914}
 {"text": "what's the current time left", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147406.7420914}
 {"text": "what timer is running", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147406.7420914}
-{"text": "i think i left a timer on", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147406.7420914}
 {"text": "what timers are still on", "intent": "timer_status", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147406.7420914}
-{"text": "save this for later", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write a note for me", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "make a note of this", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "create a note for me", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "make a note of it", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write this down for me", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "create a note quickly", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "note it down", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write it down now", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "add to notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "create a note real fast", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "record a note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write that down", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "make a note now", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "note what to do", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save it to notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write a note quick", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save this in notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "note what's on my mind", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "put that in notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "create note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "add to my notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save this thought", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "note this", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "write it down", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "add note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "get it noted", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save note for later", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "put it in notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
-{"text": "save my thoughts for later", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "make a note on my to do list", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "quick note, please", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "write it down for me", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "jot this down", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "note for later", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "don't forget to save this", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "make a note about the party tonight", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "remind me to write down the groceries", "intent": "set_reminder", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "save my note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "note to self", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "write down that phone number", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "save the details", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "put that in my notes", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "save the note for me", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
-{"text": "add some text to that note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "note that too", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "append this to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "also add that", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "note that too please", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "append something", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "add some stuff to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "make a note of that", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "append that", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "note also", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
-{"text": "make a note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append it to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append to my note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "also make a note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append the text", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append some notes", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "add a note", "intent": "note_create", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append some content", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "also add that note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "append the thing", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
-{"text": "add that to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "note it down too", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "add this to my note list", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "also jot that down", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "update my note with this", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "append the following", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "just add this to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "add it to the existing note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "note that also", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "just append this", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "stick it in the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "add this to the note", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "also note the following", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "add to the note now", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "note the rest of this", "intent": "note_append", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
-{"text": "can you read me my saved notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read me the last note i saved", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "whats the note i wrote yesterday", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read me my notes from today", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "what did i note down yesterday", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read out my saved note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read me the latest one", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "i need you to read my note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "what was the last thing i noted", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read that last note again", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "can you read my notes to me", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "i wrote a note recently can you read it", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read me the notes i took", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "what are the notes i saved", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read out my saved notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "i need to read my note again", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read the note i wrote", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read my notes from last week", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "whats the latest note i saved", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read that note out loud", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "i want to hear my notes read", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read me the note i just wrote", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "what did i write in my notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read my saved notes to me", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "can you read my last note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read out the note i saved", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "i wrote a note can you read it", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read my notes from this week", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read the note again", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "what note did i write last night", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
-{"text": "read out my note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.3329132}
-{"text": "what's my last note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "show me that note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "read it to me", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "what notes do I have", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "read me my latest note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "can you read my notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "what was the last thing I wrote", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "read back my note", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "what's in my notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "read it to me again", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "can you show me my notes", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "what's the latest note I wrote", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "can you just read it", "intent": "note_read", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
-{"text": "what's the note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "i wanna see my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "can u show me my saved notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's the list of notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show me the notes i took", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what notes am i saved", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "list notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's on my note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "can you give me a list of my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "i want to see the notes i saved", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's all my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "i need to see my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show me the saved notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "list the notes i have", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's in my note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "can i get a list of my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "how do i view my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's the saved note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show all my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "list out my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's on the note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "can you list my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what notes are saved", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "i want a list of notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "list the saved notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's the list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show me the notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "list my saved notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what notes am i looking at", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "i need a list of notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show the notes i have", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "can you show me the notes list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "show me the list of notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
-{"text": "what's my note list", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "show me all my notes", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "i wanna see what i've written down", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "note list please", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "i need a note rundown", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "what notes have i got", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "show me my saved stuff", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
-{"text": "what notes have i written", "intent": "note_list", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "save this for later", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write a note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "make a note of this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "create a note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "make a note of it", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write this down for me", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "create a note quickly", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "note it down", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write it down now", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "add to notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "create a note real fast", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "record a note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write that down", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "make a note now", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "note what to do", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save it to notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write a note quick", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save this in notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "note what's on my mind", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "put that in notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "create note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "add to my notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save this thought", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "note this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "write it down", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "add note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "get it noted", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save note for later", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "put it in notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147425.6676667}
+{"text": "save my thoughts for later", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "make a note on my to do list", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "quick note, please", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "write it down for me", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "jot this down", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "note for later", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "don't forget to save this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "make a note about the party tonight", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "remind me to write down the groceries", "intent": "set_timer", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "save my note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "note to self", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "write down that phone number", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "save the details", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "put that in my notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "save the note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147438.2107553}
+{"text": "add some text to that note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "note that too", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "append this to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "also add that", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "note that too please", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "append something", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "add some stuff to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "make a note of that", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "append that", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "note also", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0727196}
+{"text": "make a note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append it to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append to my note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "also make a note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append the text", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append some notes", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "add a note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append some content", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "also add that note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "append the thing", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147461.0732458}
+{"text": "add that to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "note it down too", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "add this to my note list", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "also jot that down", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "update my note with this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "append the following", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "just add this to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "add it to the existing note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "note that also", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "just append this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "stick it in the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "add this to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "also note the following", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "add to the note now", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "note the rest of this", "intent": "note_write", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147475.6165783}
+{"text": "can you read me my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read me the last note i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "whats the note i wrote yesterday", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read me my notes from today", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "what did i note down yesterday", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read out my saved note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read me the latest one", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "i need you to read my note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "what was the last thing i noted", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read that last note again", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "can you read my notes to me", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "i wrote a note recently can you read it", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read me the notes i took", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "what are the notes i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read out my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "i need to read my note again", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read the note i wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read my notes from last week", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "whats the latest note i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read that note out loud", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "i want to hear my notes read", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read me the note i just wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "what did i write in my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read my saved notes to me", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "can you read my last note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read out the note i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "i wrote a note can you read it", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read my notes from this week", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read the note again", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "what note did i write last night", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147503.7841768}
+{"text": "read out my note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.3329132}
+{"text": "what's my last note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "show me that note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "read it to me", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "what notes do I have", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "read me my latest note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "can you read my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "what was the last thing I wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "read back my note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "what's in my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "read it to me again", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "can you show me my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "what's the latest note I wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "can you just read it", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147517.333462}
+{"text": "what's the note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "i wanna see my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "can u show me my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's the list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show me the notes i took", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what notes am i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "list notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's on my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "can you give me a list of my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "i want to see the notes i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "i need to see my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show me the saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "list the notes i have", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's in my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "can i get a list of my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "how do i view my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's the saved note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "list out my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's on the note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "can you list my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what notes are saved", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "i want a list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "list the saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's the list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show me the notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "list my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what notes am i looking at", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "i need a list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show the notes i have", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "can you show me the notes list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "show me the list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147546.4420009}
+{"text": "what's my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "show me all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "i wanna see what i've written down", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "note list please", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "i need a note rundown", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "what notes have i got", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "show me my saved stuff", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
+{"text": "what notes have i written", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147553.5510387}
 {"text": "delete this note", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147572.6036537}
 {"text": "get rid of that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147572.6036537}
 {"text": "rip it out", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147572.6036537}
@@ -1313,38 +1287,31 @@
 {"text": "can I trash that one", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147578.413429}
 {"text": "remove the last one", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147578.413429}
 {"text": "throw out that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147578.413429}
-{"text": "open my note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "edit that note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open it in note pad", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "can you open the note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open that one", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open my note please", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "edit the note for me", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "can you edit the note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in word", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note now", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open my note app", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "edit note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open note in notepad", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note for me", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note editor", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "edit the note right now", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note please", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in a new tab", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in wordpad", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open my note in word", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in excel", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open that note", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in a new window", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open my note right now", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in a separate window", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open the note in text editor", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
-{"text": "open my note in text edit", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
-{"text": "can you open the note for me", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
-{"text": "edit the note that's on the screen", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
-{"text": "open that note on the computer", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
-{"text": "can you edit the note now", "intent": "note_open", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
+{"text": "open my note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open it in note pad", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "can you open the note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open that one", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open my note please", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in word", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note now", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open my note app", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open note in notepad", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note for me", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note editor", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note please", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in a new tab", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in wordpad", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open my note in word", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in excel", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open that note", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in a new window", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open my note right now", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in a separate window", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open the note in text editor", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147600.776732}
+{"text": "open my note in text edit", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
+{"text": "can you open the note for me", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
+{"text": "open that note on the computer", "intent": "note_view", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147608.682375}
 {"text": "wink at me", "intent": "perform_action", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147632.106301}
 {"text": "can you do the shrug", "intent": "perform_action", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147632.106301}
 {"text": "i want a nod", "intent": "perform_action", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147632.106301}
@@ -1500,7 +1467,6 @@
 {"text": "how's your day goin", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
 {"text": "hey you good", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
 {"text": "i'm still here btw", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
-{"text": "whats poppin", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
 {"text": "are you around now", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
 {"text": "just woke up", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147770.968764}
 {"text": "What's your story", "intent": "identity", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790147799.2722135}
@@ -1722,7 +1688,7 @@
 {"text": "Can you say that again", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Confirm what you just said", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Let me get this straight", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
-{"text": "Double back on that", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
+{"text": "Double back on that", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "I want to make sure I got it right", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "You sure you're right", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Confirm the details", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
@@ -1731,12 +1697,12 @@
 {"text": "Confirm that for me", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Are you sure you're sure", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Do you want me to confirm", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
-{"text": "I think I missed something", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
+{"text": "I think I missed something", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Can you confirm that for me", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "I don't want to get it wrong", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "What did you say exactly", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Is that right in your books", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
-{"text": "I'm not sure I caught that", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
+{"text": "I'm not sure I caught that", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Can you repeat it for me", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Let me make sure I understand", "intent": "confirm", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
 {"text": "Can you walk me through it again", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148008.7482471}
@@ -1888,14 +1854,12 @@
 {"text": "did you know that elephants have really good memories", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "oh man i just spilled coffee all over my shirt", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i don't know what the weather's like today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
-{"text": "how do you pronounce that word with the silent h", "intent": "general_query", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "umm so i was thinking about getting a dog", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i think i left my keys in the car", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i just realized i haven't called my mom in weeks", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm having a hard time finding a parking spot", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "so yeah i went to the beach yesterday", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "can you repeat what you said about the news", "intent": "followup", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
-{"text": "wait is it friday already", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm trying to remember where i put my glasses", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i don't think i'm a morning person", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "it's really humid outside today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
@@ -1903,7 +1867,6 @@
 {"text": "i just got a new phone case", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm thinking about taking a road trip soon", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "oh wow that's a lot of snow in the forecast", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
-{"text": "so do you have any recommendations for a new book", "intent": "general_query", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm not really feeling well today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i just learned how to ride a bike at 30", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm having trouble with my cable connection", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
@@ -1912,7 +1875,6 @@
 {"text": "it's really quiet in here today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i don't think i'm going to be able to make it to work", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i just saw an old friend from high school", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
-{"text": "umm how do you put a picture on here", "intent": "general_query", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm thinking about getting a new laptop", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "it's really sunny outside today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
 {"text": "i'm not really sure what's going on with my car", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148250.908548}
@@ -1924,7 +1886,6 @@
 {"text": "my cat's name is whispy", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "um what was the question again", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "i'm trying to decide what to eat", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
-{"text": "my phone's battery's almost dead", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "i just got a haircut yesterday", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "i'm so sorry i'm late again", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "my sister's coming over later", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
@@ -1941,3 +1902,7 @@
 {"text": "i'm so glad it's friday now", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "i'm not sure what's for lunch", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
 {"text": "i just got a new pair of shoes", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
+{"text": "i'm trying to decide what to wear today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
+{"text": "i just got a new job offer", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
+{"text": "i'm not really sure what to do next", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
+{"text": "i just saw a really good movie last night", "intent": "smalltalk", "source": "generated:llama3.1", "verified": false, "variant": "synthetic", "generated_at": 1790148275.3516507}
