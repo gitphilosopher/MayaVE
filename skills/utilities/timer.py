@@ -10,7 +10,7 @@ so it never overlaps a turn and commands spoken during it wait behind it.
 "remind me to X" with no duration asks for one and keeps X pending; Router
 calls resolve_pending() first so the next utterance supplies the duration.
 
-Intent merge: config/intents.json now declares a single 'set_timer' intent
+Intent merge: datasets/intents.json now declares a single 'set_timer' intent
 covering both a bare countdown and a timer carrying a reminder message
 (the former separate 'set_reminder' no longer exists). execute() used to
 tell them apart by intent id to decide whether to skip the cancel/status
@@ -101,7 +101,7 @@ async def execute(intent: dict, text: str) -> str:
     # the cancel/status word checks — e.g. "remind me to cancel the
     # subscription in 2 days" is a new reminder, not a cancel request.
     # Previously gated on the intent id (set_reminder vs. set_timer); both
-    # now share the single 'set_timer' intent (see config/intents.json),
+    # now share the single 'set_timer' intent (see datasets/intents.json),
     # so this checks the reminder wording itself instead.
     if not _REMINDER_RE.search(t):
         if _CANCEL_RE.search(t):

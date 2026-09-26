@@ -8,7 +8,7 @@ Usage:
     python -m brain.train_intent --eval-only     # skip retrain, just evaluate saved models
     python brain/train_intent.py
 
-Reads config/intents.json + config/{train,validation,test}_data.jsonl
+Reads datasets/intents.json + config/{train,validation,test}_data.jsonl
 (see brain/intent_engine.py's module docstring for the full data-source
 contract). Deletes existing saved models and retrains from scratch by
 default — use --eval-only to just score the currently-saved models.
@@ -26,7 +26,7 @@ Reports, in order:
 Note: 'note_create'/'note_append' -> 'note_write', 'note_read'/
 'note_list'/'note_open' -> 'note_view', 'open_app'/'open_website' ->
 'open_target', and 'set_reminder' -> 'set_timer' have likewise been
-merged (see brain/intent_engine.py's config/intents.json and
+merged (see brain/intent_engine.py's datasets/intents.json and
 brain/dataset_tools.py's _LEGACY_INTENT_MAP) — those ids no longer
 exist either. Run `python -m brain.dataset_tools migrate-legacy-intents`
 once against existing train/validation/test/candidates data before
@@ -147,7 +147,7 @@ def main() -> None:
         if got < want:
             under_target.append((iid, got, want))
     if under_target:
-        print(f"\n⚠ {len(under_target)} intent(s) below their config/intents.json min_examples target "
+        print(f"\n⚠ {len(under_target)} intent(s) below their datasets/intents.json min_examples target "
               f"(run brain/dataset_tools.py generate to close the gap):")
         for iid, got, want in sorted(under_target, key=lambda x: x[1] - x[2]):
             print(f"    {iid:<20} {got:>4} / {want:<4}")

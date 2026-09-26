@@ -15,7 +15,7 @@ same pattern as skills/system/power.py — confirms, declines or drops it on
 the next utterance. One-shot with a 30 s TTL, so a stale request can never
 delete a note on a late "yes". Yes/no phrases come from core/confirmation.py.
 
-Intent merge: config/intents.json now declares 'note_write' (merged from
+Intent merge: datasets/intents.json now declares 'note_write' (merged from
 the former separate 'note_create'/'note_append') and 'note_view' (merged
 from 'note_read'/'note_list'/'note_open'); 'note_delete' is untouched.
 Since the classifier can no longer tell create-vs-append or read-vs-list-

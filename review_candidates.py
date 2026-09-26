@@ -2,7 +2,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-CANDIDATES = Path("config/candidates.jsonl")
+CANDIDATES = Path("datasets/training/candidates.jsonl")
 REPORT = Path("logs/candidate_review_report.txt")
 
 

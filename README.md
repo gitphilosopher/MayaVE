@@ -179,7 +179,9 @@ MayaVE/
 │   ├── index.html
 │   └── expression-lab.html
 │
-├── models/
+├── datasets/
+│   ├── training/
+│   ├── intents.json
 │
 ├── main.py
 │

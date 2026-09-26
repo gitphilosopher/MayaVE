@@ -17,7 +17,7 @@ Maya is a local-first, single-user, Windows-first desktop voice assistant with a
 
 They communicate over one WebSocket (`ws://localhost:8765`, `config.ws_host`/`config.ws_port`). There is no REST API.
 
-**Models/services:** Ollama chat (`config.llm.model`) + Ollama embeddings (`nomic-embed-text`); Kokoro TTS (local, 24 kHz, CPU by default); Silero VAD (`torch.hub`); Google STT via `SpeechRecognition` (**online**, used for utterances *and* the wake word); intent classifier = PyTorch BiLSTM + TensorFlow CNN ensemble; SQLite semantic memory.
+**datasets/services:** Ollama chat (`config.llm.model`) + Ollama embeddings (`nomic-embed-text`); Kokoro TTS (local, 24 kHz, CPU by default); Silero VAD (`torch.hub`); Google STT via `SpeechRecognition` (**online**, used for utterances *and* the wake word); intent classifier = PyTorch BiLSTM + TensorFlow CNN ensemble; SQLite semantic memory.
 
 ```mermaid
 flowchart LR
@@ -139,7 +139,7 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 ## 3. Intent Classification (`brain/intent_engine.py`)
 
 - **Dual-model ensemble**: PyTorch BiLSTM+Attention (`_build_pytorch_model`) and TensorFlow 1-D CNN (`_build_tf_model`), trained on the same `TRAINING_DATA` (hand-labelled utterance→intent pairs, **45 intent labels**). Final class = argmax of the **averaged softmax**. Tokenizer: whitespace/regex `_tokenize` with `<PAD>`/`<UNK>`, sequences padded/truncated to `_MAX_LEN=30`.
-- **Auto-retrain**: SHA-256 of `TRAINING_DATA` is stored in `models/training_hash.txt`; a mismatch/missing file triggers a full retrain on startup. `python -m brain.train_intent` = wipe + retrain + test print. Guards and keyword rules are not part of `TRAINING_DATA`, so editing them does not retrain.
+- **Auto-retrain**: SHA-256 of `TRAINING_DATA` is stored in `datasets/training_hash.txt`; a mismatch/missing file triggers a full retrain on startup. `python -m brain.train_intent` = wipe + retrain + test print. Guards and keyword rules are not part of `TRAINING_DATA`, so editing them does not retrain.
 - **`_predict` order:**
   1. **Dismissal guard** — `_is_dismissal`: the utterance is lowercased and punctuation-stripped, then leading fillers (`ok/okay/um/uh/hmm/well/actually`) and trailing `please`/`config.name`/`config.user_name` are trimmed (`_DISMISSAL_TRIM_RE`); the remaining core must **exactly** equal one of `_DISMISSAL_PHRASES` (`stop`, `nah`, `never mind`, …) → `dismissal`. No prefix/token-count matching, so "stop the timer" is not a dismissal.
   2. **Presence guard** — `_PRESENCE_RE` (e.g. "I'm here now", "just got back") → `smalltalk`; exists because the ML models associate "now"/"here" with `get_time`/`get_date`.
@@ -389,7 +389,7 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 - **Ports/services:** WS 8765; Ollama 11434 with `llama3.2` and `nomic-embed-text` pulled; Vite dev server default 5173 (not set in config). External: Google STT, Open-Meteo (+ geocoding), `ip-api.com` (HTTP), `torch.hub` `snakers4/silero-vad`, HF cache for Kokoro voices.
 - **Runtime:** Python ≥3.11 (`asyncio.TaskGroup`); Node per Vite 8; Windows 11 (`os.startfile`, `keyboard`, `ctypes.windll`, `shutdown.exe`, `OneDrive`). GPU optional: used by Ollama; Kokoro runs on CPU unless `config.tts.device` changes.
 - **Dependencies (`config/requirements.txt`):** `torch`/`torchaudio` (BiLSTM + Silero VAD) and `tensorflow` (CNN) are both hard dependencies — the intent engine needs both frameworks simultaneously; `SpeechRecognition`, `kokoro`, `psutil`/`keyboard`/`pyautogui`/`pyperclip`, `httpx`, `websockets>=12.0` (unpinned; the `websockets.server.WebSocketServerProtocol` import is a legacy path on newer releases). Still lists `wikipedia` (unused).
-- **Paths:** `models/` (auto-created, gitignored), `logs/maya.log` (`logs/` auto-created, rotating, 5 MB × 3 backups), `~/Maya/Notes`, `~/Maya/Memory/semantic_memory.sqlite3`, `~/Pictures/Screenshots` or `%OneDrive%/Pictures/Screenshots`, `frontend/assets/{mayaaa.vrm,expressions.json,vrmas/*.vrma}` (LFS via `.gitattributes`; `mmodel.vroid` unused by code). `.gitignore` starts with a BOM and ends with stray `0.9.0`/`12.0` lines (pip `>=` redirect artifacts, likely actually named `=0.9.0`/`=12.0`, so they may not match).
+- **Paths:** `datasets/` (auto-created, gitignored), `logs/maya.log` (`logs/` auto-created, rotating, 5 MB × 3 backups), `~/Maya/Notes`, `~/Maya/Memory/semantic_memory.sqlite3`, `~/Pictures/Screenshots` or `%OneDrive%/Pictures/Screenshots`, `frontend/assets/{mayaaa.vrm,expressions.json,vrmas/*.vrma}` (LFS via `.gitattributes`; `mmodel.vroid` unused by code). `.gitignore` starts with a BOM and ends with stray `0.9.0`/`12.0` lines (pip `>=` redirect artifacts, likely actually named `=0.9.0`/`=12.0`, so they may not match).
 
 ---
 
@@ -423,7 +423,7 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 **Memory / mood**
 - `Processor` is the only place that adds the user turn; `observe_user_turn` must run before `build_context_package`.
 - `observe_user_text` before routing/LLM; `observe_turn` once per turn; `baseline_expression()` (not "neutral") for every rest reset; `report_event` events are consumed by the next `observe_turn`.
-- Editing `TRAINING_DATA` triggers a full retrain on next start — don't hand-edit `models/`. Editing guards or keyword rules does not.
+- Editing `TRAINING_DATA` triggers a full retrain on next start — don't hand-edit `datasets/`. Editing guards or keyword rules does not.
 - `OllamaEmbedder` keep-alive/warmup and the pooled client are latency workarounds — keep.
 
 **Expressions / frontend**

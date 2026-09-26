@@ -13,25 +13,25 @@ Two independent models vote on every utterance:
 Final prediction = argmax of averaged softmax probabilities from both.
 
 On first run, both models are TRAINED on TRAINING_DATA (loaded from
-config/train_data.jsonl — see "Data sources" below) and saved to
-models/pytorch_intent.pt and models/tf_intent.keras. Subsequent runs
+datasets/training/train_data.jsonl — see "Data sources" below) and saved to
+datasets/pytorch_intent.pt and datasets/tf_intent.keras. Subsequent runs
 load the saved weights — inference is instant.
 
-Data sources (Maya VE11 — externalized, see config/intents.json)
+Data sources (Maya VE11 — externalized, see datasets/intents.json)
 ------------------------------------------------------------------
 This module used to hardcode intent names, descriptions, and keyword
 trigger lists in Python. As of VE11:
 
-  config/intents.json          — every intent's id/category/description/
+  datasets/intents.json          — every intent's id/category/description/
                                   min_examples/keywords, the dismissal
                                   guard's exact-phrase list, and the
                                   perform_action guard's action-word map.
                                   brain/dataset_tools.py validates this
                                   file (duplicate ids, missing fields,
                                   invalid categories/references).
-  config/train_data.jsonl      — TRAINING_DATA (model training only)
-  config/validation_data.jsonl — VALIDATION_DATA (dev-time tuning)
-  config/test_data.jsonl       — TEST_DATA (final unbiased evaluation)
+  datasets/training/train_data.jsonl      — TRAINING_DATA (model training only)
+  datasets/training/validation_data.jsonl — VALIDATION_DATA (dev-time tuning)
+  datasets/training/test_data.jsonl       — TEST_DATA (final unbiased evaluation)
 
 Python remains responsible only for classification *logic* (tokenizing,
 model architecture, guards, ensemble/threshold behaviour, keyword
@@ -41,7 +41,7 @@ at import time, via load_intent_config() / load_dataset().
 Automatic retrain detection
 ----------------------------
 A sha256 fingerprint of (intents.json + train_data.jsonl) is saved
-alongside the models in models/training_hash.txt. On every startup,
+alongside the models in datasets/training_hash.txt. On every startup,
 _load_or_train() compares the current fingerprint against the saved
 one:
 
@@ -59,8 +59,8 @@ front and prints train/validation/test metrics at the end.
 
 Adding new intents
 ------------------
-1. Add the intent's definition to config/intents.json ("intents" list).
-2. Add labelled examples to config/train_data.jsonl (and, ideally, a
+1. Add the intent's definition to datasets/intents.json ("intents" list).
+2. Add labelled examples to datasets/training/train_data.jsonl (and, ideally, a
    few held-out ones to validation/test).
 3. Restart Maya — the fingerprint no longer matches the saved hash, so
    models retrain automatically on that startup.
@@ -113,7 +113,7 @@ _LR           = 1e-3
 _CONF_THRESH  = 0.65      # below this → fall back to keyword rules
 
 # ══════════════════════════════════════════════════════════════════════════════
-# config/intents.json — schema, loading, validation
+# datasets/intents.json — schema, loading, validation
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -133,7 +133,7 @@ _VALID_RESPONSE_MODES = {"skill", "llm"}
 
 def load_intent_config(path: Path = _INTENTS_FILE) -> dict:
     """
-    Load and strictly validate config/intents.json. Raises IntentConfigError
+    Load and strictly validate datasets/intents.json. Raises IntentConfigError
     (never silently degrades) on:
       - missing/unreadable file, malformed JSON
       - a top-level "intents" list missing or not a list
@@ -306,7 +306,7 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
     Append one failure record to logs/intent_failures.jsonl. Best-effort —
     a logging failure must never break classification. Failures are NEVER
     auto-trained on; brain/dataset_tools.py's review/promote workflow is
-    the only path from here into config/train_data.jsonl.
+    the only path from here into datasets/training/train_data.jsonl.
     """
     record = {
         "utterance": utterance,
@@ -504,7 +504,7 @@ class IntentEngine:
         self._pt_device = None
         self._ready     = False
 
-        # Load + validate config/intents.json before anything else — a
+        # Load + validate datasets/intents.json before anything else — a
         # malformed config must fail loudly at startup, not degrade
         # classification silently.
         self._intents_cfg = load_intent_config()
@@ -797,14 +797,14 @@ class IntentEngine:
         """Strip the intent trigger to leave the target entity."""
         trigger_map = {
             # Merged from the former separate open_website/open_app
-            # triggers (see config/intents.json's "open_target") — most
+            # triggers (see datasets/intents.json's "open_target") — most
             # specific phrases first so e.g. "go to netflix" and "launch
             # notepad" strip correctly before the generic "open" fallback.
             "open_target": ["go to", "navigate to", "open website",
                              "launch", "start", "open"],
             "search_web":  ["search for", "google", "look up", "search"],
             # Merged from the former separate set_timer/set_reminder
-            # triggers (see config/intents.json's "set_timer") — a bare
+            # triggers (see datasets/intents.json's "set_timer") — a bare
             # timer request has none of these phrases and falls through
             # with the whole utterance as target, same as before.
             "set_timer":   ["remind me to", "remind me", "set a timer for",

@@ -2,20 +2,20 @@
 brain/dataset_tools.py
 =======================
 Generation, review, and promotion tooling for Maya's intent datasets.
-Nothing in this file trains a model or touches config/train_data.jsonl
+Nothing in this file trains a model or touches datasets/training/train_data.jsonl
 directly except through the explicit `promote` commands below — every
 other path is inspect-only.
 
 Three data flows this module owns:
 
   1. LLM-assisted candidate generation (Llama 3.1 via a local Ollama
-     server) → config/candidates.jsonl. Candidates are deduplicated
+     server) → datasets/training/candidates.jsonl. Candidates are deduplicated
      against existing data and each other, lightly quality-filtered,
      and always start unverified. Nothing here promotes them
      automatically.
 
   2. Manual review of candidates → promote reviewed+verified ones into
-     config/train_data.jsonl (or validation/test, if asked).
+     datasets/training/train_data.jsonl (or validation/test, if asked).
 
   3. Development-time classification-failure review. Failures are
      appended by brain/intent_engine.py to logs/intent_failures.jsonl
@@ -25,7 +25,7 @@ Three data flows this module owns:
      auto-trained on.
 
   4. Legacy-intent migration — relabels rows whose intent id has been
-     retired from config/intents.json (e.g. 'help'/'unknown' consolidated
+     retired from datasets/intents.json (e.g. 'help'/'unknown' consolidated
      into 'general_query'; 'note_create'/'note_append' into 'note_write';
      'note_read'/'note_list'/'note_open' into 'note_view'; 'open_app'/
      'open_website' into 'open_target'; 'set_reminder' into 'set_timer' —
@@ -347,7 +347,7 @@ def cmd_failures_promote(args: argparse.Namespace) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Historical intent ids that have been consolidated into another intent and
-# removed from config/intents.json. Extend this map (never delete an old
+# removed from datasets/intents.json. Extend this map (never delete an old
 # entry) whenever an intent is retired — see docs/CHANGELOG.md. Currently:
 #   - 'help' and 'unknown' merged into 'general_query' (help lost its canned
 #     reply and now goes to the LLM like general_query always did; unknown
@@ -413,7 +413,7 @@ def _migrate_split(path: Path, valid_ids: set[str], legacy_map: dict[str, str]) 
     if leftover:
         raise IntentConfigError(
             f"{path}: after migration these intent id(s) are still not declared in "
-            f"config/intents.json: {sorted(leftover)}. Add a mapping for them "
+            f"datasets/intents.json: {sorted(leftover)}. Add a mapping for them "
             f"(--map OLD=NEW) or declare the intent before re-running."
         )
 
@@ -436,14 +436,14 @@ def cmd_migrate_legacy(args: argparse.Namespace) -> None:
     stale_targets = set(legacy_map.values()) - valid_ids
     if stale_targets:
         raise IntentConfigError(
-            f"Migration target intent(s) are not declared in config/intents.json: "
+            f"Migration target intent(s) are not declared in datasets/intents.json: "
             f"{sorted(stale_targets)}"
         )
     live_sources = set(legacy_map.keys()) & valid_ids
     if live_sources:
         raise IntentConfigError(
             f"Refusing to migrate {sorted(live_sources)} — still declared as a live "
-            f"intent in config/intents.json. Remove it from intents.json first."
+            f"intent in datasets/intents.json. Remove it from intents.json first."
         )
 
     targets = list(_SPLIT_FILES.items()) + [("candidates", _CANDIDATES_FILE)]

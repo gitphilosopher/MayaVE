@@ -3,7 +3,7 @@ skills/system/open_target.py
 
 Merged from the former separate skills/web/open_website.py and
 skills/system/open_app.py, behind the single 'open_target' intent (see
-config/intents.json) — the classifier no longer tells a website request
+datasets/intents.json) — the classifier no longer tells a website request
 apart from an app-launch request, so this skill resolves it itself.
 
 Resolution order (most to least confident):
