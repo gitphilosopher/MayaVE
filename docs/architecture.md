@@ -460,3 +460,15 @@ Single `websockets` server, `origins=None` (any origin accepted — dev convenie
 | `queue_manager` | `core/queue_manager.py` | single-worker command queue |
 | `ws_server` | `services/ws_server.py` | WebSocket hub |
 | `expressionController` / `animationController` / `gazeController` / `lifeMotionController` | `frontend/js/*` | frontend arbitration singletons, one per avatar |
+
+## 16. MayaNode Integration (Step 1 — infrastructure only)
+
+`services/node/` is the client-side half of talking to MayaNode (`node/`, `api/`, `database/`, `services/{event,memory,sync,heartbeat,health}_service.py` — the same repo, a separate FastAPI process). Step 1 is deliberately inert: no MayaVE event/memory/mood/intent data is pushed or pulled into application state.
+
+- `NodeDiscovery` (`discovery.py`) — probes `config.node.base_url` (if set) then `config.node.discovery_candidates` in order via `GET /status` (cheap, no DB write, always 200 when the process is up).
+- `NodeClient` (`client.py`) — guarded `POST /heartbeat` and `POST /sync`; every method returns a failure value (`False`/`None`) rather than raising. Attaches `Authorization: Bearer <token>` when `config.node.auth_token` is set (MayaNode doesn't validate it yet — see its `api/sync.py` docstring).
+- `resolve_device_id` (`identity.py`) — persists a stable `device_id` at `~/Maya/Node/device_id.txt`; falls back to an ephemeral id if that can't be written.
+- `SyncStateStore` (`sync_state.py`) — persists the `/sync` cursor at `~/Maya/Node/sync_state.json` (atomic `.tmp` + replace, same pattern as `core/expression_library.py`); cursor never moves backwards.
+- `NodeSyncManager` / `node_sync_manager` (`sync_manager.py`) — background loop: discover → heartbeat ("connect") → `sync(events=[], memory=[])` → sleep `sync_interval_s`; on any failure, backs off exponentially (capped at `max_backoff_s`) and forces rediscovery on the next pass. Started as a `main.py` background task (`node-sync`), same pattern as `ws-server`; `config.node.enabled` defaults to `False`.
+
+**Invariant:** `run()` must never raise — every failure path inside it is caught and logged; a MayaNode outage must never affect the voice pipeline. Real event/memory/intent payloads are an explicit future step, not implied by this scaffolding.

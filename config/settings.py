@@ -60,6 +60,42 @@ class ContextConfig:
 
 
 @dataclass
+class NodeConfig:
+    """
+    MayaVE -> MayaNode integration (infrastructure only; see
+    docs/CONTRIBUTING.md and services/node/sync_manager.py's module
+    docstring). No application data (events/memory/intents) is wired
+    through this yet — this config only supports discovery, connection,
+    and an empty-payload sync loop that persists/advances a cursor.
+
+    Disabled by default: this is new, opt-in background network activity
+    that nothing else in MayaVE depends on yet. Flip `enabled` to True
+    once a MayaNode instance is actually running to talk to.
+    """
+    enabled: bool = False
+    # Tried first, ahead of discovery_candidates, if set (e.g. a fixed
+    # LAN address for a MayaNode instance that isn't on localhost).
+    base_url: str | None = None
+    # Tried in order — the first to answer GET /status wins.
+    discovery_candidates: list[str] = field(default_factory=lambda: [
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ])
+    discovery_timeout: float = 2.0     # seconds, per candidate probe
+    request_timeout: float   = 8.0     # seconds, per heartbeat/sync call
+    sync_interval_s: float   = 60.0    # gap between successful sync passes
+    initial_backoff_s: float = 2.0     # first retry delay after a failure
+    max_backoff_s: float     = 300.0   # retry delay ceiling (5 minutes)
+    # Auth-ready: sent as `Authorization: Bearer <token>` when set.
+    # MayaNode does not validate this yet (see its api/sync.py docstring)
+    # — the slot exists so enabling real auth later is a config change on
+    # both sides, not a protocol change.
+    auth_token: str | None = None
+    # None -> ~/Maya/Node (device_id + sync cursor persisted here)
+    state_dir: str | None = None
+
+
+@dataclass
 class MayaConfig:
     name: str          = "Maya"
     user_name: str     = "senpai"                   # for more natural conversations
@@ -71,6 +107,7 @@ class MayaConfig:
     tts: TTSConfig     = field(default_factory=TTSConfig)
     llm: LLMConfig     = field(default_factory=LLMConfig)
     context: ContextConfig = field(default_factory=ContextConfig)
+    node: NodeConfig   = field(default_factory=NodeConfig)
     # WebSocket server for browser avatar
     ws_host: str       = "localhost"
     ws_port: int       = 8765

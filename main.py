@@ -31,6 +31,14 @@ Batch 4 changes:
     all run through state.run_interruptible(), same as timer alerts and
     LLM turns, so a barge-in during any of them actually cancels the
     task instead of only halting audio — see "Skill-path barge-in".
+
+MayaNode integration (Step 1 — infrastructure only; see
+services/node/sync_manager.py's module docstring and
+docs/CONTRIBUTING.md): a background node-sync task is started alongside
+the WebSocket server. It is fully self-contained (discovery, connection,
+an empty-payload sync loop, backoff) and never raises — a MayaNode outage
+or config.node.enabled=False never affects the voice pipeline. No
+MayaVE application data is wired through it yet.
 """
 
 # Must run before ANY import that can pull in kokoro / huggingface_hub
@@ -62,6 +70,7 @@ from core.mood import mood_manager
 from services.ws_server import ws_server
 from services.llm.llm_service import warmup as llm_warmup
 from services.llm.ollama_lifecycle import chat_keep_alive
+from services.node.sync_manager import node_sync_manager
 from brain.embeddings import _resolve_embedding_device, _embedding_gpu_options, describe_ollama_models
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -226,6 +235,18 @@ def _on_ws_done(task: asyncio.Task) -> None:
         logger.error(f"WebSocket server stopped: {task.exception()!r}")
 
 
+def _on_node_task_done(task: asyncio.Task) -> None:
+    """
+    Surface an unexpected MayaNode sync-manager crash. run() is designed
+    to never raise — every failure (Node not found, connection refused,
+    a malformed response) is caught, logged, and backed off from inside
+    the manager itself — so reaching here means a genuine bug in that
+    module, not a normal "Node is offline" condition.
+    """
+    if not task.cancelled() and task.exception() is not None:
+        logger.error(f"MayaNode sync manager stopped unexpectedly: {task.exception()!r}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
@@ -236,6 +257,12 @@ async def main() -> None:
 
     ws_task = asyncio.create_task(ws_server.serve(), name="ws-server")   # kept so it can't be GC'd
     ws_task.add_done_callback(_on_ws_done)
+
+    # Background MayaNode discover/connect/sync loop — see module docstring
+    # and services/node/sync_manager.py. No-op (returns immediately) when
+    # config.node.enabled is False, so this is safe to always start.
+    node_task = asyncio.create_task(node_sync_manager.run(), name="node-sync")   # kept so it can't be GC'd
+    node_task.add_done_callback(_on_node_task_done)
 
     logger.info(f"Starting {config.name}…")
 
