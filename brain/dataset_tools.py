@@ -66,6 +66,7 @@ import argparse
 import difflib
 import json
 import logging
+import math
 import re
 import sys
 import time
@@ -98,6 +99,11 @@ _GEN_TIMEOUT = 60.0
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
 _MIN_WORDS = 2
 _MAX_WORDS = 25
+
+
+def _candidate_count_for_training_examples(training_examples: int) -> int:
+    """Return the candidate batch size needed for an 80% training slice."""
+    return math.ceil(training_examples / 0.8)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -829,16 +835,26 @@ def cmd_generate(args: argparse.Namespace) -> None:
     train_counts = Counter(r["intent"] for r in train_rows)
 
     if args.all:
-        targets = [
-            (e["id"], max(0, e["min_examples"] - train_counts.get(e["id"], 0)))
-            for e in cfg["intents"]
-        ]
-        targets = [(iid, gap) for iid, gap in targets if gap > 0]
+        targets = []
+        for entry in cfg["intents"]:
+            gap = entry["min_examples"] - train_counts.get(entry["id"], 0)
+            if gap > 0:
+                targets.append((entry["id"], _candidate_count_for_training_examples(gap)))
     else:
         if not args.intent:
             print("Specify --intent <id> or --all.")
             return
-        targets = [(args.intent, args.count)]
+        by_id = {e["id"]: e for e in cfg["intents"]}
+        entry = by_id.get(args.intent)
+        if entry is None:
+            raise IntentConfigError(f"'{args.intent}' is not a declared intent.")
+        gap = max(0, entry["min_examples"] - train_counts.get(args.intent, 0))
+        if args.count is not None:
+            targets = [(args.intent, args.count)]
+        elif gap:
+            targets = [(args.intent, _candidate_count_for_training_examples(gap))]
+        else:
+            targets = []
 
     all_candidates: list[dict] = []
     for intent_id, needed in targets:
@@ -970,22 +986,14 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
 
         count = len(eligible)
 
-        # Approximately 80/10/10 while ensuring every candidate is
+        # Allocate approximately 80/10/10 while ensuring every candidate is
         # assigned to exactly one split.
         if count < 3:
             train_count = count
             validation_count = 0
         else:
-            validation_count = max(1, round(count * 0.10))
-            test_count = max(1, round(count * 0.10))
-            train_count = count - validation_count - test_count
-
-            # Keep at least one training example.
-            if train_count < 1:
-                train_count = 1
-                remaining = count - train_count
-                validation_count = remaining // 2
-                test_count = remaining - validation_count
+            train_count = max(1, round(count * 0.80))
+            validation_count = round(count * 0.10)
 
         test_count = count - train_count - validation_count
 
@@ -1241,7 +1249,10 @@ def main() -> None:
 
     gen = sub.add_parser("generate", help="Generate candidate examples via local Llama 3.1.")
     gen.add_argument("--intent", type=str, help="Intent id to generate for.")
-    gen.add_argument("--count", type=int, default=40, help="How many to generate (single intent).")
+    gen.add_argument(
+        "--count", type=int, default=None,
+        help="How many candidates to generate (defaults to the amount needed to reach min_examples in training).",
+    )
     gen.add_argument("--all", action="store_true", help="Generate for every intent below its min_examples target.")
     gen.add_argument("--no-audit", action="store_true",
                       help="Skip the automatic post-generation candidate audit.")

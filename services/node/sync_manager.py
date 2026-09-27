@@ -163,9 +163,9 @@ class NodeSyncManager:
         cursor request, advances the cursor per the Step 2 contract (the
         highest seq the server delivered, never moved backwards — see
         SyncStateStore.advance()), and reconciles the outbox against the
-        response. A connection/version failure (result is None) touches
-        neither the cursor nor the outbox — everything queued stays
-        queued for the next attempt.
+        response. A connection/version/shape failure (result is None)
+        touches neither the cursor nor the outbox — everything queued
+        stays queued for the next attempt.
         """
         max_events = getattr(self._cfg, "max_events_per_sync", _DEFAULT_MAX_EVENTS)
         max_memory = getattr(self._cfg, "max_memory_per_sync", _DEFAULT_MAX_MEMORY)
@@ -186,25 +186,21 @@ class NodeSyncManager:
         )
         if result is None:
             return False
-        try:
-            new_cursor = int(result["cursor"])
-        except (KeyError, TypeError, ValueError):
-            logger.warning(f"Node sync response missing/invalid cursor — ignoring: {result!r}")
-            return False
 
-        await self._state.advance(new_cursor)
+        await self._state.advance(result.cursor)
         self._reconcile_outbox(sent_events, sent_memory, result)
 
         logger.debug(
-            f"Node sync ok — cursor now {new_cursor} (has_more={result.get('has_more')}) "
+            f"Node sync ok — cursor now {result.cursor} (has_more={result.has_more}) "
             f"pushed events={len(sent_events)} memory={len(sent_memory)}"
         )
         return True
 
-    def _reconcile_outbox(self, sent_events: list[dict], sent_memory: list[dict], result: dict) -> None:
+    def _reconcile_outbox(self, sent_events: list[dict], sent_memory: list[dict], result) -> None:
         """
         Removes from the outbox exactly the items this round's response
-        settled — never the whole outbox. An event's status
+        settled — never the whole outbox. `result` is a
+        services.node.client.SyncResult. An event's status
         (accepted/duplicate/rejected) is always terminal per
         docs/PROTOCOL_CONTRACT.md, so any event_uid present in
         accepted_events is done with, successfully or not (a rejected
@@ -218,17 +214,15 @@ class NodeSyncManager:
         event_uids, last-write-wins memory keys).
         """
         try:
-            accepted = result.get("accepted_events") or []
             acked_uids = {
-                item.get("event_uid") for item in accepted
+                item.get("event_uid") for item in result.accepted_events
                 if isinstance(item, dict) and item.get("event_uid")
             }
             if acked_uids:
                 self._outbox.remove_events(acked_uids)
 
-            memory_results = result.get("memory_results") or []
             settled_keys = {
-                item.get("key") for item in memory_results
+                item.get("key") for item in result.memory_results
                 if isinstance(item, dict) and item.get("key")
             }
             if settled_keys:
@@ -239,7 +233,6 @@ class NodeSyncManager:
                 self._outbox.remove_memory(pairs)
         except Exception as e:
             logger.warning(f"Node sync outbox reconciliation failed (non-fatal): {e}")
-
 
 # Singleton — matches the existing project pattern (mood_manager,
 # queue_manager, ws_server, context_manager).
