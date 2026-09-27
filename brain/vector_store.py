@@ -1,14 +1,20 @@
 """
 brain/vector_store.py
-Local persistent vector store for Maya's long-term semantic memory.
+Persist and retrieve Maya's long-term semantic memories.
 
-Backend: SQLite (stdlib) + brute-force cosine similarity via numpy.
-No new dependency — both are already required by Maya. Adequate at
-desktop scale (comfortably thousands of memory records).
+``SQLiteVectorStore`` stores embedding records in a local SQLite database and
+uses NumPy for brute-force cosine-similarity search. This is appropriate for
+the desktop-scale record count expected by Maya and introduces no new
+runtime service. ``VectorStore`` defines the backend contract so an ANN
+implementation can replace SQLite without changing ``ContextManager`` or
+other callers.
 
-Isolated behind the VectorStore interface so a real ANN backend
-(Chroma, FAISS, sqlite-vec, ...) can replace SQLiteVectorStore later
-without any change to ContextManager or callers.
+Construct ``SQLiteVectorStore`` with an optional database ``Path``, then use
+``add`` or ``update`` for persistence and ``search`` or ``find_similar`` for
+retrieval. Each operation opens its own SQLite connection, making the store
+safe to call from executor threads. Storage failures are logged and return
+empty or null results where the API permits, allowing semantic memory to
+degrade without interrupting conversation.
 """
 
 import json
@@ -35,6 +41,8 @@ VALID_MEM_TYPES = {
 
 @dataclass
 class MemoryRecord:
+    """Serializable semantic-memory content and its optional embedding."""
+
     content:    str
     mem_type:   str
     topic:      str = ""
@@ -47,12 +55,14 @@ class MemoryRecord:
 
 
 class VectorStore:
-    """Abstract interface — implement this to swap the storage backend."""
+    """Backend interface for semantic-memory persistence and retrieval."""
 
     def add(self, record: MemoryRecord) -> int | None:
+        """Persist a record and return its identifier when available."""
         raise NotImplementedError
 
     def update(self, record_id: int, content: str, embedding: list[float], timestamp: float) -> None:
+        """Replace the mutable content, embedding, and timestamp of a record."""
         raise NotImplementedError
 
     def has_records(self) -> bool:
@@ -61,15 +71,20 @@ class VectorStore:
 
     def search(self, embedding: list[float], top_k: int = 3,
                mem_type: str | None = None, min_similarity: float = 0.0) -> list[tuple[MemoryRecord, float]]:
+        """Return the highest-scoring records above the similarity threshold."""
         raise NotImplementedError
 
     def find_similar(self, embedding: list[float], mem_type: str, topic: str,
                       threshold: float) -> MemoryRecord | None:
+        """Return one sufficiently similar record matching the requested type and topic."""
         raise NotImplementedError
 
 
 class SQLiteVectorStore(VectorStore):
+    """SQLite-backed vector store with NumPy similarity search."""
+
     def __init__(self, db_path: Path = _DB_PATH):
+        """Create the database directory and initialize the memories table."""
         self._db_path = db_path
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
@@ -133,7 +148,7 @@ class SQLiteVectorStore(VectorStore):
             logger.error(f"Vector store update failed: {e}", exc_info=True)
 
     def has_records(self) -> bool:
-        # Fail open: on any error report True so callers do the full search.
+        """Return whether the database contains a searchable record; fail open on errors."""
         try:
             with self._connect() as conn:
                 return conn.execute("SELECT 1 FROM memories LIMIT 1").fetchone() is not None

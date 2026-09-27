@@ -1,60 +1,29 @@
 """
 core/processor.py
-Orchestrates a single command: text → intent → skill → speak.
+Single-turn command pipeline for Maya.
 
-WebSocket broadcasts:
-  - state changes (listening / processing / idle) → avatar expression
-  - transcripts (user + maya turns) → transcript overlay
+This module is the main orchestration layer for one queued user utterance. It
+accepts a command item from the queue, exits early if Maya is already asleep,
+marks the agent as PROCESSING, classifies intent, updates contextual tracking,
+routes the command to the right skill or LLM response, speaks the reply, and then
+hands the turn back to the shared lifecycle cleanup path.
 
-Note: broadcast_state("speaking") and broadcast_expression() are handled
-inside speaker.speak() — processor must NOT call them separately or they
-double-fire and race with the audio.
+The processor is responsible for coordinating the actual turn flow rather than
+owning speech synthesis or core state transitions directly. It sends frontend
+transcripts and state updates, records user/assistant turns in the conversation
+history, and invokes the shared rest-of-turn cleanup so idle/sleep state and
+mood behavior remain consistent even when a sleep command lands mid-response.
 
-Mood integration (core/mood.py):
-  Whenever we go idle, we also broadcast Maya's current mood baseline
-  expression so the avatar rests on "angry"/"sad" instead of snapping
-  back to neutral/relaxed while a mood is still active. core/turn_lifecycle.py's
-  rest() does this (and skips it if Maya has since gone to sleep — see
-  its docstring and the "Sleep race" note below).
-
-Context integration (Stage 2 — brain/conversation.py):
-  After intent classification, context_manager.observe_user_turn() updates
-  topic/state/open-loop tracking for every command (not just LLM-routed
-  ones). This is state tracking only — conversation.add_user() above it
-  remains the single place user turns are written to history.
-
-Skill-path barge-in (Batch 4):
-  Every Speaker.speak() call for a skill/greet response now runs through
-  state.run_interruptible() — previously only LLM turns and the timer
-  alert registered a cancellable task, so a barge-in during a skill reply
-  stopped the audio (via the stop callback, which only needs FSM==SPEAKING)
-  but left the underlying coroutine to run to completion anyway. This
-  doesn't extend interruptibility to a skill's OWN blocking dispatch work
-  before it starts speaking (e.g. weather's HTTP call) — that remains a
-  narrower, separate limitation; see docs/CHANGELOG.md.
-
-Sleep race (Batch 4):
-  Two related gaps closed:
-  1. handle()'s own opening state.set(PROCESSING) used to run unconditionally,
-     even for a command that was still queued (or just dequeued) when a
-     concurrent "go to sleep" utterance had already set SLEEPING — silently
-     answering a command right after being told to sleep, and stomping the
-     wake-word gate open again. handle() now bails out immediately if
-     already asleep, dropping the command instead.
-  2. The success and exception tails used to broadcast "idle" (+ set the FSM
-     to IDLE on the exception path) unconditionally too — if sleep landed
-     WHILE this command's own speak() was in flight (a genuinely awake
-     command that then got told to sleep mid-reply), that would wake Maya
-     back up right after. Both tails now go through core/turn_lifecycle.py's
-     rest(), which checks the CURRENT state fresh and leaves her asleep
-     (broadcasting "sleeping" instead) if a concurrent sleep already won.
-
-Event-loop rule:
-  IntentEngine.classify() runs a PyTorch + TensorFlow ensemble forward
-  pass — tens of milliseconds of CPU that would otherwise stall the loop
-  (WS pings, audio_done handling, timers). It runs in the default
-  executor. Commands are serialized by queue_manager, so classify() is
-  never called concurrently.
+Important behavior:
+- `speaker.speak()` owns the speaking broadcasts; the processor must not emit
+  duplicate speaking/behavior messages while the audio is already in flight.
+- intent classification runs in the default executor because it is CPU-heavy and
+  should not stall the event loop while WS traffic and queued work continue.
+- all commands are serialized by the queue, so intent classification is never
+  concurrent within a process.
+- the success and error tails both go through `turn_lifecycle.rest()`, which re-
+  checks the current state and avoids waking Maya back up if a concurrent sleep
+  request has already won.
 """
 
 import asyncio
@@ -74,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 
 class Processor:
+    """Handle one queued command from transcription through response and cleanup."""
+
     def __init__(self, speaker: Speaker):
         self._speaker       = speaker
         self._intent_engine = IntentEngine()
@@ -81,19 +52,15 @@ class Processor:
         self._router        = Router(speaker)
 
     async def handle(self, item: dict) -> None:
-        """Entry point called by QueueManager for each command."""
+        """Process a queued command item and speak a reply when one is produced."""
         text: str = item["text"]
         if not text:
             return
 
         if state.is_sleeping():
-            # A command can still be sitting in the queue (or just dequeued)
-            # when a concurrent "go to sleep" utterance already won the race
-            # — VAD stops capturing new speech once SLEEPING, but this one
-            # was already in flight before that happened. Drop it rather
-            # than forcing PROCESSING and answering while she's supposed to
-            # be asleep — see docs/CHANGELOG.md's "Sleep race" issue. Only
-            # the wake word brings her back.
+            # A queued command may still be in flight after a concurrent sleep
+            # command has already won the race. Drop it instead of answering while
+            # Maya is meant to remain asleep.
             logger.info(f"Dropping queued command — already asleep: '{text[:40]}'")
             return
 
@@ -116,8 +83,8 @@ class Processor:
                 f"Intent: {intent['intent']} "
                 f"({intent['confidence']:.2f} via {intent['model']})"
             )
-            # _extract_target falls back to the whole utterance when no trigger
-            # strips — that's not a topic/entity, so hide it from context state.
+            # A whole-utterance fallback is not a topic/entity, so hide it from
+            # context tracking to avoid polluting the topic state.
             ctx_intent = intent
             if intent.get("target") == text.strip().lower():
                 ctx_intent = {**intent, "target": ""}
@@ -128,22 +95,20 @@ class Processor:
             logger.info(f"[TIMING] router.dispatch total: {time.perf_counter()-t_dispatch:.3f}s")
 
             if response and response != ALREADY_SPOKEN:
-                # History/transcript get tag-free text; replies flagged
-                # _no_history (llm_service error strings) stay out of history.
+                # Strip expression tags for transcript/history while preserving the
+                # raw response for speech and behavior output.
                 clean, _ = _strip_tags(response)
                 if clean:
                     if not intent.get("_no_history"):
                         self._conversation.add_assistant(clean)
                     await ws_server.broadcast_transcript(clean, "maya")
 
-                # Set by skills/system/perform_action.py on the intent dict.
                 action = intent.get("action")
 
-                # Wrapped in run_interruptible so a barge-in during a skill
-                # reply actually cancels this task (not just halts audio via
-                # the stop callback) — see module docstring.
+                # The speech task is wrapped so a barge-in can cancel the reply
+                # itself, not only the underlying audio playback.
                 if intent.get("intent") == "greet":
-                    # Fire wave exactly when audio starts playing, not before synthesis
+                    # Trigger the wave animation at the start of the audio, not before.
                     await state.run_interruptible(self._speaker.speak(
                         response,
                         on_audio_start=lambda: ws_server.broadcast_animation("wave"),
@@ -156,7 +121,8 @@ class Processor:
                 else:
                     await state.run_interruptible(self._speaker.speak(response))
 
-            # Respects a concurrent "go to sleep" — see turn_lifecycle.rest().
+            # Re-check the live state so a concurrent sleep command wins over a
+            # normal idle return.
             await turn_rest()
             logger.info(f"[TIMING] handle() total: {time.perf_counter()-t0:.3f}s")
 

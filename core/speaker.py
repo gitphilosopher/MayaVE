@@ -1,65 +1,31 @@
 """
 core/speaker.py
-Text → Speech using Kokoro TTS (fully offline, Apache 2.0).
+Text-to-speech facade for Maya.
 
-Dual-output mode:
-  - LOCAL  (config.tts.output = "local")  → sounddevice plays on the machine
-  - AVATAR (config.tts.output = "avatar") → WAV bytes broadcast over WebSocket
-                                             to the browser avatar
-  - BOTH   (config.tts.output = "both")   → local + avatar simultaneously
+This module owns the offline Kokoro TTS pipeline and the output routing used by
+Maya's responses. It accepts text, strips expression markers such as [happy],
+converts the active expression into the avatar behavior packet, and routes the
+result to the configured output mode:
+  - local: sounddevice playback on this machine
+  - avatar: WebSocket audio plus avatar state/behavior updates
+  - both: local playback and avatar output together
 
-Expression tags:
-  Responses can contain [expression] tags e.g. "[happy] Done senpai!"
-  speaker.py strips tags from TTS text, broadcasts the expression to the
-  avatar before playing, then resets to Maya's current mood baseline
-  (core/mood.py) after playback — not a hardcoded "neutral" — so an
-  active mood (e.g. still angry from earlier) persists between skill
-  responses instead of visibly resetting every line.
+The speaker is integrated with the shared state machine and mood system:
+- `state.set(MayaState.SPEAKING)` and the final state transition keep the rest of
+  the agent informed about whether Maya is currently speaking or has returned to
+  idle/sleep.
+- expression tags are fed into the persistent mood layer and turned into a
+  behavior packet via `behavior_engine.compose()` before the speech output is
+  sent.
+- the end of a turn broadcasts the matching idle/sleeping frontend state so the
+  avatar can resume its normal idle motion without getting stuck in a speaking
+  state.
 
-Behavioral Engine integration (core/behavior_engine.py):
-  The raw tag is no longer broadcast directly — it's composed via
-  behavior_engine.compose() into a communicative-intent packet (blended
-  primary/secondary emotion + gaze) and sent via broadcast_behavior().
-  Same call sites, same timing relative to audio — only what's sent over
-  the wire changed.
-
-Sleep-safe completion (Batch 4 — "Sleep race" / "Avatar never visually
-sleeps"):
-  The old finally block remembered was_sleeping ONLY as a snapshot taken
-  at speak()'s own entry, and blindly restored that snapshot at the end.
-  That's necessary for the goodbye line's OWN call (state is SLEEPING at
-  entry, SPEAKING for the whole duration, and must end back at SLEEPING —
-  a plain fresh check at exit would see SPEAKING and get it wrong), but
-  it made a DIFFERENT, unrelated turn that happened to finish after a
-  concurrent "go to sleep" landed mid-playback silently overwrite SLEEPING
-  with IDLE, re-enabling full speech processing right when the wake-word
-  detector should have taken over instead. The fix: a turn ends asleep if
-  EITHER it started that way (the snapshot) OR Maya is asleep *right now*
-  (a fresh check) — sleep always wins over a stale idle restore. On the
-  sleeping branch this also broadcasts the new "sleeping" WS state instead
-  of "idle" (see frontend/js/websocket.js's handleState -> sleepAvatar()),
-  which is what makes the avatar visually close its eyes once the goodbye
-  line finishes, independent of the WebSocket connection itself — no
-  baseline-behavior broadcast in that branch, since sleepAvatar() already
-  resets expressions/closes the eyes and a mood face would just fight it.
-
-Bug fixes:
-  - avatar mode now waits for audio_done before returning, preventing overlap
-    when processor.py calls speak() for consecutive skill responses
-  - broadcast_state("speaking") moved here so processor.py doesn't double-fire it
-  - speak() now ALSO broadcasts "idle" (+ baseline expression) back over the
-    WebSocket once it's done, instead of only flipping the internal
-    core/state.py FSM to IDLE. Every OTHER caller of speak() — processor.py
-    already re-broadcast idle itself after a skill/LLM turn, but main.py's
-    startup greeting, its wake-up ("I'm here, how can I help?") and
-    go-to-sleep lines, and timer.py's alert all call speak() directly and
-    had no such follow-up. Without this, the frontend's `_currentBackendState`
-    (see frontend/js/avatar.js's idle-fidget gate) would get stuck on
-    whatever it last saw — "speaking", or even null if speak() hadn't
-    broadcast anything yet — and idle fidgets could never fire until the
-    first real voice command flowed through processor.handle(). Doing it
-    once here means every caller gets it for free instead of each call site
-    needing to remember.
+The synthesis path is guarded against stuck native Kokoro/espeak calls by
+running the blocking work in a timeout-aware helper and rebuilding the local
+pipeline only after a real timeout. The public API is intentionally small:
+`Speaker.warmup()` for startup preparation and `Speaker.speak()` for playback and
+state sync.
 """
 
 import asyncio
@@ -145,6 +111,8 @@ def _numpy_to_wav(audio: np.ndarray, sample_rate: int = _SAMPLE_RATE) -> bytes:
 
 
 class Speaker:
+    """Coordinate Kokoro synthesis, output routing, and state updates for speech."""
+
     def __init__(self):
         lang = getattr(config.tts, "lang_code", "a")
         self._output = getattr(config.tts, "output", "both")
@@ -159,11 +127,7 @@ class Speaker:
         logger.info("Kokoro TTS ready — fully offline.")
 
     def warmup(self) -> None:
-        """
-        Blocking dummy synthesis — call once via an executor at startup
-        (see main.py) so first-inference cost (CUDA kernel warm-up, etc.)
-        isn't paid on the first real line spoken (e.g. the greeting).
-        """
+        """Prime the Kokoro pipeline once during startup to avoid a cold first reply."""
         try:
             self._synthesise("Hello.")
             logger.info("Speaker Kokoro pipeline warmed up.")
@@ -171,15 +135,8 @@ class Speaker:
         except Exception as e:
             logger.warning(f"Speaker warmup failed (non-fatal): {e}")
 
-    # ── Public API ────────────────────────────────────────────────────
-
     async def speak(self, text: str, on_audio_start=None) -> None:
-        """
-        Synthesise and play text.
-        on_audio_start: optional async callable fired right before audio is
-                        broadcast — use this to trigger animations that should
-                        be simultaneous with speech, not before synthesis.
-        """
+        """Synthesize a response, emit the matching avatar state, and return to idle/sleep when done."""
         if not text or not text.strip():
             return
 
@@ -187,20 +144,15 @@ class Speaker:
         if not clean:
             return
 
-        # Feed this response's expression into the persistent mood layer
-        # as a single-tag turn (a skill response only ever resolves to
-        # one expression — see _strip_tags above).
+        # The active expression becomes a single-turn mood observation for the
+        # persistent emotional baseline; a response can only carry one tag here.
         mood_manager.observe_turn([expression])
 
         clean = _enhance_prosody(clean, expression)
 
-        # Snapshot before SPEAKING overwrites it — needed for the sleep
-        # goodbye line's OWN call (see module docstring): by the time our
-        # finally runs, state has been SPEAKING for the whole duration, so
-        # a fresh check there alone can't tell "this call started asleep
-        # and should end there" from "this was a normal turn". A DIFFERENT
-        # concurrent call going to sleep mid-playback is handled separately
-        # below, via a fresh check at the end (sleep always wins either way).
+        # Keep the sleep-start snapshot before the state flips to SPEAKING; the
+        # sleep goodbye path must end back in SLEEPING even though the state is
+        # already speaking for the full duration of the turn.
         was_sleeping = state.is_sleeping()
 
         await state.set(MayaState.SPEAKING)
@@ -235,11 +187,10 @@ class Speaker:
         except Exception as e:
             logger.error(f"Speaker error: {e}", exc_info=True)
         finally:
-            # Sleep wins over a stale "was awake at entry" snapshot: either
-            # THIS call was the sleep command's own goodbye line
-            # (was_sleeping), or some OTHER concurrent utterance already put
-            # Maya to sleep while this one was still playing (fresh check).
-            # Either way she must not be woken back up here.
+            # Sleep wins over a stale wake snapshot: either this turn started as a
+            # goodbye line, or some other concurrent turn put Maya to sleep while
+            # playback was still active. In both cases, the final state must remain
+            # asleep rather than returning to idle.
             sleeping_now = was_sleeping or state.is_sleeping()
             await state.set(MayaState.SLEEPING if sleeping_now else MayaState.IDLE)
             if sleeping_now:
@@ -247,8 +198,6 @@ class Speaker:
             else:
                 await ws_server.broadcast_state("idle")
                 await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
-
-    # ── Private ───────────────────────────────────────────────────────
 
     async def _synthesise_guarded(self, text: str) -> np.ndarray | None:
         """

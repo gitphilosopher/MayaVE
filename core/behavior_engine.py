@@ -1,37 +1,35 @@
 """
 core/behavior_engine.py
-Behavioral Engine — decides HOW Maya expresses a reaction, given WHAT she
-wants to say. It does NOT pick the primary emotion or generate dialogue —
-that's still Ollama's [expression] tags, skill-response tags, and
-mood_manager (core/mood.py), unchanged. This module composes that single
-tag plus current mood into a richer communicative-intent packet (primary/
-secondary emotion, intensity, attitude, gaze, personality bias) so the
-frontend Expression Composer (frontend/js/expression-composer.js) can
-render blended VRM weights instead of the old flat tag -> single
-blendshape map.
+Semantic expression composer for Maya's avatar behavior.
 
-Semantic layer: Ollama may optionally supply [attitude:word] and
-[intensity:word] tags alongside its existing emotion tag (parsed in
-services/llm/llm_service.py's _parse_expression). When present, compose()
-uses them directly; when absent (every pre-existing call site: skills,
-timer alerts, filler, idle resets), attitude/intensity fall back to the
-original mood/personality-derived math — fully backward compatible.
+This module is the bridge between the text-level expression choice and the
+frontend's actual VRM morph animation. It does not decide what Maya should say;
+it decides how a response should be expressed by combining a primary emotion,
+optional attitude/intensity hints, and the current mood state into a rich
+`communicative-intent` packet for the UI layer.
 
-compose() also resolves a fine-grained "recipe" — a dict of verified
-VRoid Fcl_BRW_*/Fcl_EYE_*/Fcl_MTH_* morph weights — via
-core/expression_library.py (cached lookup or a generated + persisted
-default). The frontend only applies recipe keys it has verified exist on
-the loaded VRM (see expression-composer.js); everything else keeps
-working exactly as before if the model lacks these customs.
+The engine accepts an expression tag such as `happy` or `angry`, then derives:
+- a primary and secondary emotion
+- a final attitude (`sincere`, `teasing`, `playful`, `mock`)
+- an intensity value and intensity word band
+- a gaze direction
+- an action list and a resolved morph recipe
 
-Every call site that used to do `ws_server.broadcast_expression(tag)`
-now does `ws_server.broadcast_behavior(behavior_engine.compose(tag, ...))`
-at the exact same point in the pipeline — timing relative to audio
-playback (critical for lip-sync/expression sync) is unchanged.
+The recipe is resolved through `core/expression_library.py`, which provides a
+cached lookup or a generated deterministic default. The frontend may then apply
+only the morph keys it knows exist on the current VRM model; the rest of the
+system continues to function normally even when a custom recipe includes keys the
+loaded avatar does not support.
 
-Deliberately thin: no cooldowns, no invented emotions/animations, no
-duplicate mood/animation systems. Recipe lookups are cached in-process
-(see expression_library.py) so this stays cheap on the per-sentence path.
+Important behavior:
+- explicit `[attitude:word]` and `[intensity:word]` tags override the fallback
+  inference when they are present and valid
+- mood state still influences the final behavior so an active angry or sad mood
+  continues to color otherwise neutral replies
+- teasing and mock-outrage are treated as a short-lived expressive state rather
+  than as a full persistent emotional lock
+- this module is intentionally thin and stateless beyond reading the shared
+  `mood_manager`; it does not mutate conversation or mood state itself
 """
 
 import logging
@@ -45,9 +43,8 @@ logger = logging.getLogger(__name__)
 _VALID_EXPRESSIONS = {"happy", "sad", "angry", "surprised", "relaxed", "neutral", "excited"}
 _VALID_ATTITUDES   = {"sincere", "playful", "teasing", "mock"}
 
-# Personality bias — static tuning knobs for Maya's expressive character.
-# See project Handoff for rationale; adjust here to shift her overall
-# expressive style without touching composition logic.
+# Static tuning knobs for Maya's expressive character. These bias the overall
+# composition without changing the higher-level intent logic.
 PERSONALITY = {
     "dramaticity":    0.65,
     "playfulness":    0.7,
@@ -57,8 +54,6 @@ PERSONALITY = {
     "subtlety":       0.3,
 }
 
-# Natural secondary-emotion bias per primary tag — reflects personality,
-# not a literal "correct" emotion pairing. None means no bias by default.
 _SECONDARY_BIAS = {
     "happy":     "excited",
     "excited":   "happy",
@@ -81,8 +76,7 @@ _GAZE_BIAS = {
 
 
 def _intensity_word(value: float) -> str:
-    """Buckets a numeric 0..1 intensity into the word band expressions.json
-    is indexed by."""
+    """Convert a numeric intensity to the low/medium/high band used by the recipe library."""
     if value < 0.4:
         return "low"
     if value < 0.7:
@@ -91,22 +85,18 @@ def _intensity_word(value: float) -> str:
 
 
 class BehaviorEngine:
-    """Composes a single expression tag (+ optional attitude/intensity) and
-    mood_manager's current state into a communicative-intent packet.
-    Stateless aside from reading mood_manager — never mutates mood/
-    conversation state itself."""
+    """Compose a semantic expression into the structured behavior packet sent to the frontend."""
 
     def compose(self, expression: str, actions: list[str] | None = None,
                 source: str = "dialogue", attitude: str | None = None,
                 intensity: str | None = None) -> dict:
+        """Convert a primary expression into the final behavior packet sent to the avatar layer."""
         primary = expression if expression in _VALID_EXPRESSIONS else "neutral"
         actions = actions or []
 
         mood, mood_intensity = mood_manager.current()
         teasing = mood_manager.is_teasing()
 
-        # Ollama's own [attitude:word] tag wins when present/valid;
-        # otherwise fall back to the existing mood-teasing inference.
         if attitude in _VALID_ATTITUDES:
             attitude_final = attitude
         else:
@@ -121,9 +111,6 @@ class BehaviorEngine:
         jitter = random.uniform(-0.05, 0.05) * PERSONALITY["chaos"]
         base_intensity = 0.45 + mood_intensity * 0.25 + PERSONALITY["dramaticity"] * 0.25 + jitter
 
-        # Ollama's own [intensity:word] dominates when present; mood/
-        # personality still contributes so an active mood keeps colouring
-        # delivery strength even on a semantically-tagged sentence.
         if intensity in ("low", "medium", "high"):
             word_value = {"low": 0.3, "medium": 0.6, "high": 0.9}[intensity]
             intensity_value = word_value * 0.7 + base_intensity * 0.3
@@ -156,9 +143,7 @@ class BehaviorEngine:
         return intent
 
     def _resolve_recipe(self, emotion: str, attitude: str, intensity_word: str) -> tuple[dict, str]:
-        """Reuse a calibrated recipe if one exists; otherwise generate and
-        persist a deterministic default so the semantic key is stable on
-        future lookups. Bounded jitter is applied here, never saved."""
+        """Resolve a recipe from cache or default generation, then apply bounded jitter for this render only."""
         try:
             cached = get_recipe(emotion, attitude, intensity_word)
             if cached is not None:
@@ -180,6 +165,4 @@ class BehaviorEngine:
         return jittered, source
 
 
-# Singleton — shared by every call site that used to call
-# ws_server.broadcast_expression() directly.
 behavior_engine = BehaviorEngine()

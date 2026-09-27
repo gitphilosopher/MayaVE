@@ -1,50 +1,29 @@
 """
 brain/conversation.py
-Thin wrapper around Memory that adds conversation-level logic
-(ConversationManager — Stage 1, unchanged), Stage 2 context intelligence
-(ContextManager), and Stage 3 conversational state.
+Conversation memory, state tracking, and context assembly for the LLM turn.
 
-ContextManager layers on top of the recent-window memory:
-  - recent context        — reuses ConversationManager/Memory as-is
-  - conversation state     — topic, goal, task, constraints, entities,
-                              decisions, last intent, phase (Stage 3)
-  - open loops             — unresolved topics, retrieved by relevance
-  - long-term semantic memory — SQLiteVectorStore + OllamaEmbedder
+This module is the coordination layer between the recent conversation window and
+higher-level context intelligence. It owns:
+- the recent-turn memory interface (`ConversationManager`)
+- current conversational state (`ConversationState`)
+- unresolved follow-up topics and current open loops (`OpenLoop`)
+- semantic-memory retrieval and persistence coordination via
+  `SQLiteVectorStore` and `OllamaEmbedder`
+- a `ContextPackage` assembled for the LLM before each reply
 
-Integration (unchanged from Stage 2):
-  - processor.py calls context_manager.observe_user_turn() AFTER its own
-    conversation.add_user() call — state tracking only, no history write.
-  - llm_service.py calls context_manager.build_context_package() to get a
-    ready-to-use ContextPackage and record_assistant_turn() after a reply
-    is produced. It does not implement retrieval/persistence logic itself.
-  - Memory's on_evict hook feeds turns about to fall out of the recent
-    window into a compacted semantic-memory summary before they're lost.
+The main runtime flow is:
+- `processor.py` writes a user turn into memory and calls
+  `context_manager.observe_user_turn()` to update state without writing history
+  again.
+- `llm_service.py` calls `context_manager.build_context_package()` to gather the
+  recent window, open loops, semantic memories, and reference hints for the next
+  prompt.
+- After the assistant responds, `record_assistant_turn()` closes any resolved
+  loop and persists explicit durable memory candidates when the wording qualifies.
 
-Stage 3 — conversational state:
-  - ConversationState gained current_task, entities, phase, last_intent,
-    and topic_history (bounded stack, enables "return to previous topic").
-  - _reconcile_topic() classifies each new topic against the active one
-    (continuation / subtopic / digression / return / switch) instead of
-    the old binary "topic changed?" check, so temporary digressions and
-    genuine returns no longer look like a fresh topic loss.
-  - Reference resolution (_resolve_reference) is computed fresh per turn
-    in build_context_package() from current entities/decisions/topic —
-    no extra state, no second LLM call, and it only resolves when the
-    utterance is sparse enough to be confident (see _is_referential).
-  - ContextPackage now exposes state fields directly (topic/phase/goal/
-    task/constraints/decisions/entities) instead of one flattened string,
-    so as_system_note() can emit the compact, section-per-line format
-    with empty sections omitted.
-
-Every retrieval/persistence path is wrapped so a missing or broken
-embedding backend / vector store degrades to recent-context-only
-behaviour — Maya must keep working without them.
-
-Event-loop rule:
-  SQLiteVectorStore is synchronous (sqlite3 + brute-force numpy cosine).
-  Every store call made from an async path here (has_records, search,
-  find_similar, update, add) goes through run_in_executor. The store opens
-  a fresh sqlite3 connection per call, so worker-thread use is safe.
+The module is designed to degrade gracefully: missing embeddings, broken vector
+storage, or retrieval failures fall back to recent-context-only behavior and do
+not block normal conversation handling.
 """
 
 import asyncio
@@ -63,17 +42,22 @@ logger = logging.getLogger(__name__)
 
 
 class ConversationManager:
+    """Small wrapper around the shared in-memory conversation buffer."""
+
     def add_user(self, text: str) -> None:
+        """Append a user message to the recent-turn history."""
         memory.add("user", text)
 
     def add_assistant(self, text: str) -> None:
+        """Append an assistant message to the recent-turn history."""
         memory.add("assistant", text)
 
     def get_context(self, last_n: int = 6) -> list[dict]:
-        """Recent turns for LLM context window."""
+        """Return the most recent turns as OpenAI-style message objects."""
         return memory.get_history(last_n)
 
     def reset(self) -> None:
+        """Clear all recent-turn memory for a fresh conversation."""
         memory.clear()
 
 
@@ -90,46 +74,45 @@ _PHASES = frozenset({
 
 @dataclass
 class ConversationState:
-    active_topic:  str | None = None
-    topic_history: list[str] = field(default_factory=list)   # bounded stack — enables "return to X"
-    goal:          str | None = None
-    current_task:  str | None = None
-    constraints:   list[str] = field(default_factory=list)
-    decisions:     list[str] = field(default_factory=list)
-    entities:      list[str] = field(default_factory=list)   # important nouns/names, most-recent last
-    phase:         str = "casual"
-    last_intent:   str | None = None
-    last_updated:  float = field(default_factory=time.time)
+    """Track the active thread, unresolved work, and conversational state for a turn."""
+    active_topic: str | None = None
+    topic_history: list[str] = field(default_factory=list)
+    goal: str | None = None
+    current_task: str | None = None
+    constraints: list[str] = field(default_factory=list)
+    decisions: list[str] = field(default_factory=list)
+    entities: list[str] = field(default_factory=list)
+    phase: str = "casual"
+    last_intent: str | None = None
+    last_updated: float = field(default_factory=time.time)
 
 
 @dataclass
 class OpenLoop:
+    """A pending follow-up item that should remain visible to the next turn while unresolved."""
     description: str
-    topic:       str
-    created_at:  float = field(default_factory=time.time)
-    resolved:    bool = False
+    topic: str
+    created_at: float = field(default_factory=time.time)
+    resolved: bool = False
 
 
 @dataclass
 class ContextPackage:
-    """Everything llm_service needs for one turn — pre-assembled, ranked,
-    and already trimmed to size. llm_service just consumes this."""
-    recent:            list[dict]
-    topic:             str | None
-    phase:             str | None
-    goal:              str | None
-    task:              str | None
-    constraints:       list[str]
-    decisions:         list[str]
-    entities:          list[str]
-    open_loops:        list[str]
+    """Read-only prompt payload assembled for the LLM before each assistant turn."""
+    recent: list[dict]
+    topic: str | None
+    phase: str | None
+    goal: str | None
+    task: str | None
+    constraints: list[str]
+    decisions: list[str]
+    entities: list[str]
+    open_loops: list[str]
     semantic_memories: list[str]
-    reference_hint:    str | None = None
+    reference_hint: str | None = None
 
     def as_system_note(self) -> str:
-        """Compact, section-per-line block appended to the Ollama system
-        prompt. Empty sections are omitted so a quiet conversation doesn't
-        pad every prompt with nothing."""
+        """Render a compact metadata block for the system prompt, omitting empty sections."""
         lines = []
         if self.topic:
             lines.append(f"CURRENT TOPIC: {self.topic}")
@@ -287,11 +270,7 @@ def _is_referential(text: str) -> bool:
 
 
 class ContextManager:
-    """
-    Owns conversation state, open loops, and long-term semantic memory.
-    Wraps a ConversationManager (read-only, for the recent window) rather
-    than duplicating its history-write responsibility.
-    """
+    """Owns conversational state, open-loop tracking, and semantic-memory coordination."""
 
     # How many evicted turns to buffer before compacting them into one
     # conversation_summary memory (see _on_memory_evict).
@@ -326,10 +305,7 @@ class ContextManager:
     # ── Observation (called once per user turn; no history side-effects) ──
 
     def observe_user_turn(self, text: str, intent: dict | None = None) -> None:
-        """Updates topic/state/open-loop tracking. Does NOT write to
-        conversation memory — processor.py already owns that via
-        ConversationManager.add_user(). Best-effort: a failure here must
-        never block skill/LLM dispatch for the turn."""
+        """Update topic/state/open-loop tracking without writing a second history entry."""
         try:
             self._observe_user_turn(text, intent)
         except Exception as e:
@@ -764,9 +740,4 @@ class ContextManager:
             # context, such as in a script) — drop rather than crash.
             logger.debug("No running loop for compaction persist — summary dropped.")
 
-
-# Singleton — shared by processor.py and llm_service.py so conversation
-# state, open loops, and semantic memory stay consistent across both call
-# sites. Matches the existing singleton pattern (memory, mood_manager,
-# queue_manager, ws_server).
 context_manager = ContextManager()

@@ -1,46 +1,39 @@
 """
 core/mood.py
-Persistent emotional mood layer for Maya — event-driven design.
+Persistent mood layer for Maya's emotional state.
 
-Instead of a [tag] independently deciding mood, every mood-relevant
-happening is a MoodEvent from one of four sources, each with its own
-rules/weight:
+This module is responsible for the agent's ongoing emotional baseline and its
+short-lived reaction overlays. Mood is not derived from a single tag in
+isolation; instead, user text, skill/system events, and the current turn's
+explicit expressive tags are converted into `MoodEvent` records and evaluated
+through a shared policy.
 
-  USER            — genuine sadness/frustration/provocation detected in the
-                     user's raw text (observe_user_text, before Ollama runs).
-                     Ragebait (insult wording + a teasing marker like "lol")
-                     produces a short-lived TRANSIENT reaction — playful
-                     irritation that expires on its own — rather than a
-                     full persistent lock. A bare insult with no teasing
-                     marker is genuine provocation and locks mood as before.
-  SKILL / SYSTEM  — skills can report an event directly via report_event()
-                     (e.g. critical battery -> concern/annoyance). These
-                     bypass the user-context requirement entirely, since
-                     they reflect something actually happening to Maya, not
-                     the conversation.
-  MAYA            — Ollama's own [angry]/[sad] tags (observe_turn). A tag
-                     no longer creates or reinforces mood by itself. It can
-                     only CONFIRM an event already raised earlier this same
-                     turn (by USER or SKILL/SYSTEM) for a modest bonus. An
-                     unconfirmed tag is expressive only — Maya can still say
-                     it, she just doesn't become it.
+The system has two interacting state layers:
+- persistent mood: the long-lived `mood` and `intensity` values used to guide
+  reply tone and avatar resting expression
+- transient reaction: a short-lived `temp_mood` that fades on its own and can
+  temporarily override the baseline without becoming a persistent grudge
 
-Mood is only ever evaluated ONCE per turn (observe_turn), never per
-sentence — a factual [neutral] line inside an angry reply isn't Maya
-calming down.
+The public flow is intentionally narrow:
+- `observe_user_text()` classifies incoming user messages before routing
+- `report_event()` lets non-user sources (skills/system checks) inject
+  mood-relevant events directly
+- `observe_turn()` evaluates the current turn's explicit tags once and uses
+  them as confirmation or as a distraction signal, not as a standalone mood
+  trigger
+- `baseline_expression()` and `system_prompt_note()` provide the state needed by
+  the avatar and the LLM prompt layer
 
-Two layers of state:
-  - Persistent mood (mood, intensity) — decays via distraction ticks,
-    per-minute time decay, and a hard 20-minute forget.
-  - Transient reaction (temp_mood, temp_expires_at) — a short playful
-    blip (e.g. ragebait) that colours the avatar's face for a bit and
-    fades on its own, mostly independent of the persistent decay math.
-
-is_teasing() (Behavioral Engine integration — core/behavior_engine.py):
-  Exposes whether a transient teasing reaction is currently active so the
-  engine can distinguish "genuinely angry" from "mock outrage" when
-  composing an [angry]-tagged line into a blended expression. Read-only —
-  no new mood logic, just a public accessor for existing state.
+Important behavior:
+- a direct insult is a genuine angry event; teasing plus insult is treated as a
+  short-lived mocking reaction instead of a full persistent lock
+- a sticky emotion only reinforces the persistent mood when it confirms an event
+  already raised this turn; otherwise it is expressive-only and should not be
+  treated as a new emotional state
+- the mood decays with distraction, time, and a hard forget threshold, while
+  transient teasing can persist independently for a brief window
+- `is_teasing()` exposes the transient teasing state to the behavior engine so it
+  can distinguish mock outrage from a truly sustained angry baseline
 """
 
 import logging
@@ -52,17 +45,16 @@ logger = logging.getLogger(__name__)
 
 _STICKY_MOODS = {"angry", "sad"}   # the only emotions the persistent layer tracks
 
-# ── Tuning ──────────────────────────────────────────────────────────────────
-_TRIGGER_STEP           = 0.35   # persistent intensity added by a genuine event
-_TAG_CONFIRM_BONUS      = 0.15   # extra bump when Maya's tag confirms this turn's event
-_TEASE_INTENSITY        = 0.20   # transient-reaction strength for ragebait/teasing
-_TEASE_DURATION_SEC     = 90     # how long a teasing reaction lasts before fading
-_TEASE_PERSISTENT_BLEED = 0.25   # fraction of a tease that still bleeds into persistent mood
-_EXCITEMENT_RELIEF      = 0.15   # persistent intensity eased off by genuine user excitement
-_DISTRACTION_DECAY      = 0.22   # intensity removed per turn with no valid/confirmed event
-_TIME_DECAY_PER_MIN     = 0.03   # gradual intensity removed per minute idle
-_APOLOGY_FORGIVENESS    = 0.65   # intensity removed on a detected apology
-_FORGET_AFTER_SEC       = 20 * 60  # hard reset if unreinforced this long
+_TRIGGER_STEP = 0.35
+_TAG_CONFIRM_BONUS = 0.15
+_TEASE_INTENSITY = 0.20
+_TEASE_DURATION_SEC = 90
+_TEASE_PERSISTENT_BLEED = 0.25
+_EXCITEMENT_RELIEF = 0.15
+_DISTRACTION_DECAY = 0.22
+_TIME_DECAY_PER_MIN = 0.03
+_APOLOGY_FORGIVENESS = 0.65
+_FORGET_AFTER_SEC = 20 * 60
 
 # Per-source influence weight applied to an event's declared intensity.
 _SOURCE_WEIGHT = {
@@ -130,28 +122,34 @@ _USER_EXCITEMENT_RE = re.compile(
 
 @dataclass
 class MoodEvent:
-    source:    str                 # "user" | "skill" | "system" | "maya"
-    emotion:   str                 # only "angry"/"sad" affect persistent mood
+    """One mood-relevant signal from a given source and turn."""
+
+    source: str
+    emotion: str
     intensity: float = _TRIGGER_STEP
-    duration:  float | None = None  # None = persistent event; seconds = transient reaction
-    reason:    str = ""
+    duration: float | None = None
+    reason: str = ""
     timestamp: float = field(default_factory=time.time)
 
 
 @dataclass
 class _MoodState:
+    """Internal persistent + transient mood snapshot used by the manager."""
+
     mood: str = "neutral"
     intensity: float = 0.0
     last_reinforced: float = field(default_factory=time.time)
     unrelated_turns: int = 0
-    temp_mood: str | None = None     # transient reaction (e.g. playful irritation)
+    temp_mood: str | None = None
     temp_expires_at: float = 0.0
 
 
 class MoodManager:
+    """Manage Maya's persistent mood and transient emotional reactions."""
+
     def __init__(self):
         self._s = _MoodState()
-        self._pending_events: list[MoodEvent] = []   # this turn's events, awaiting tag confirmation
+        self._pending_events: list[MoodEvent] = []
 
     # ── Event pipeline ───────────────────────────────────────────────────
 
@@ -189,13 +187,7 @@ class MoodManager:
 
     def report_event(self, source: str, emotion: str, intensity: float = _TRIGGER_STEP,
                       duration: float | None = None, reason: str = "") -> None:
-        """
-        Public hook for non-conversational sources (skills, system checks)
-        to report a mood-relevant event directly — e.g. a critical-battery
-        skill reporting concern/annoyance. Bypasses the user-context
-        requirement that gates Maya's own [tag] confirmations. Only
-        "angry"/"sad" are tracked; anything else is ignored.
-        """
+        """Record a direct mood event from a skill, system check, or other non-user source."""
         if emotion not in _STICKY_MOODS:
             logger.debug(f"report_event ignored — '{emotion}' isn't a tracked mood.")
             return
@@ -207,13 +199,7 @@ class MoodManager:
     # ── Observation hooks (public API — unchanged signatures) ───────────
 
     def observe_turn(self, expressions: list[str]) -> None:
-        """
-        Call ONCE per conversational turn with every expression tag used
-        in it — not per sentence. A sticky tag only reinforces persistent
-        mood if it CONFIRMS an event already raised this turn (by the user
-        or a skill/system report); otherwise it's expressive only, and is
-        treated like having no sticky tag at all for decay purposes.
-        """
+        """Evaluate the turn's explicit expression tags once, using them as confirmation only."""
         self._apply_time_decay()
 
         sticky_present = [e for e in expressions if e in _STICKY_MOODS]
@@ -234,13 +220,7 @@ class MoodManager:
             self._register_unrelated_turn()
 
     def observe_user_text(self, text: str) -> None:
-        """
-        Check incoming user text BEFORE the turn is routed. Classifies it
-        into (at most) one USER-sourced event — genuine provocation,
-        ragebait/teasing, sadness, or frustration — applies it immediately,
-        and stashes it so this turn's Ollama tag can confirm it. Excitement
-        eases an active mood; an apology forgives it.
-        """
+        """Classify user text into the next mood event and stash it for this-turn confirmation."""
         self._apply_time_decay()
 
         is_provocation = bool(_PROVOCATION_RE.search(text))
@@ -317,8 +297,8 @@ class MoodManager:
             logger.info(f"Mood reset: {self._s.mood} -> neutral")
         temp_mood, temp_expires = self._s.temp_mood, self._s.temp_expires_at
         self._s = _MoodState()
-        # A live transient reaction survives a persistent reset — it's an
-        # independent, self-expiring blip, not part of the forgotten grudge.
+        # A live transient reaction survives a persistent reset because it is an
+        # independent self-expiring blip, not a forgotten grudge.
         if temp_mood and time.time() < temp_expires:
             self._s.temp_mood = temp_mood
             self._s.temp_expires_at = temp_expires
@@ -330,14 +310,11 @@ class MoodManager:
         return self._s.mood, self._s.intensity
 
     def is_teasing(self) -> bool:
-        """True while a transient playful/teasing reaction is active (see
-        observe_user_text's ragebait branch) — used by BehaviorEngine
-        (core/behavior_engine.py) to tell mock outrage apart from a
-        genuine angry tag."""
+        """Return whether a transient teasing reaction is still currently active."""
         return self._s.temp_mood == "angry" and time.time() < self._s.temp_expires_at
 
     def baseline_expression(self) -> str:
-        """What Maya's face should rest at between sentences / at idle."""
+        """Return the expression that should be shown when Maya is idle or between lines."""
         if self._s.temp_mood:
             if time.time() < self._s.temp_expires_at:
                 return self._s.temp_mood
@@ -347,8 +324,7 @@ class MoodManager:
         return mood if intensity > 0.15 else "neutral"
 
     def system_prompt_note(self) -> str:
-        """Injected into the LLM system prompt each turn so Ollama's own
-        generation stays in character with Maya's current mood."""
+        """Build the mood guidance sent to the LLM prompt for the current turn."""
         mood, intensity = self.current()
         note = ""
 
@@ -371,8 +347,8 @@ class MoodManager:
                     "you, or enough time passes."
                 )
 
-        # Only add the teasing note when it isn't already covered by a
-        # genuine persistent mood — this is a light, short-lived reaction.
+        # Only add the teasing note when a real persistent mood is not already
+        # dominating the turn; this is a light, short-lived reaction.
         if (self._s.temp_mood == "angry" and time.time() < self._s.temp_expires_at
                 and mood != "angry"):
             note += (

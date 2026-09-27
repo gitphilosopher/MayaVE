@@ -1,30 +1,28 @@
 """
 core/expression_library.py
-Persistent calibrated expression-recipe library backing the semantic
-Behavioral Engine (core/behavior_engine.py).
+Deterministic expression recipe library for Maya's avatar behavior.
 
-Semantic key: "emotion|attitude|intensity_word" (e.g. "surprised|playful|high").
-A recipe is {morph_name: weight} built only from verified VRoid Fcl_BRW_*/
-Fcl_EYE_*/Fcl_MTH_* primitives. Fcl_MTH_A/I/U/E/O (vowel visemes) are never
-composed here — those belong to lip-sync.
+This module stores the calibrated expression recipes used by the behavioral
+engine when composing avatar poses and facial states. Each recipe is addressed by
+its semantic key, `emotion|attitude|intensity_word`, and maps to a dict of VRoid
+morph weights such as `Fcl_BRW_Joy` or `Fcl_EYE_Surprised`.
 
-Recipes on disk are the deterministic base (no random jitter) so a given
-semantic key is stable across runs; behavior_engine.py applies bounded
-jitter on top of the looked-up/generated base, never persists it.
+The library separates three concerns:
+- recipe lookup: retrieve a previously calibrated recipe for a semantic key
+- default composition: synthesize a plausible base recipe from verified VRoid
+  primitives when no saved recipe exists yet
+- persistence: update the in-memory cache immediately and write the JSON payload
+  asynchronously to `frontend/assets/expressions.json`
 
-File location: frontend/assets/expressions.json (same folder as the VRM
-asset, alongside frontend/js/expression-lab.js's Export output — the
-canonical shared file both the Lab and the backend read/write against).
-
-Event-loop rule:
-  save_recipe() is called from BehaviorEngine.compose(), which runs on the
-  asyncio loop on the per-phrase path. The in-memory cache is updated
-  immediately (so lookups see the new recipe at once) and the JSON is
-  serialised on the caller, but the .tmp write + atomic replace happens on
-  a dedicated single-thread writer. One worker means writes are applied in
-  submission order — the last save always wins — and the non-daemon thread
-  lets queued writes finish at interpreter exit. The first _load() (a small
-  file read) is still synchronous.
+Important behavior:
+- the saved file is the canonical deterministic base; jitter is applied by the
+  behavioral engine at composition time, not persisted here
+- mouth viseme keys such as `Fcl_MTH_A` and `Fcl_MTH_O` are intentionally not
+  composed in this module; they belong to lip-sync and should remain separate
+- the on-disk save path is serialized through a single background thread so writes
+  are applied in submission order without racing each other
+- failed loads are treated as protected: the library will not overwrite a bad or
+  unreadable `expressions.json` during that session
 """
 
 import json
@@ -79,9 +77,8 @@ _INTENSITY_EXPONENT = {
 }
 
 _cache: dict | None = None
-_load_failed = False   # file existed but was unreadable — never overwrite it
+_load_failed = False
 
-# Single worker → writes land in submission order; see module docstring.
 _writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="expr-lib-writer")
 
 
@@ -93,6 +90,7 @@ def _exponent_for(key: str) -> float:
 
 
 def semantic_key(emotion: str, attitude: str, intensity_word: str) -> str:
+    """Build the canonical lookup key for a semantic expression recipe."""
     return f"{emotion}|{attitude}|{intensity_word}"
 
 
@@ -113,8 +111,7 @@ def _load() -> dict:
 
 
 def _write_payload(payload: str) -> None:
-    """Runs on the writer thread: .tmp write + atomic replace (a crash can't
-    leave a half-written file). Never raises."""
+    """Write the JSON payload atomically on the background writer thread."""
     tmp = _LIB_FILE.with_name(_LIB_FILE.name + ".tmp")
     try:
         _LIB_DIR.mkdir(parents=True, exist_ok=True)
@@ -131,8 +128,6 @@ def _save_all(data: dict) -> None:
         logger.warning("expressions.json was unreadable at load — skipping write to protect it.")
         return
     try:
-        # Serialise here (microseconds for a few dozen small recipes) so the
-        # writer thread receives an immutable string, not a live dict.
         payload = json.dumps(data, indent=2, sort_keys=True)
         _writer.submit(_write_payload, payload)
     except Exception as e:
@@ -145,21 +140,14 @@ def get_recipe(emotion: str, attitude: str, intensity_word: str) -> dict | None:
 
 
 def save_recipe(emotion: str, attitude: str, intensity_word: str, recipe: dict) -> None:
-    """Persist (or overwrite) a calibrated recipe for this semantic key.
-    Cache updates immediately; the disk write is asynchronous."""
+    """Persist or overwrite a calibrated recipe for a semantic expression key."""
     data = dict(_load())
     data[semantic_key(emotion, attitude, intensity_word)] = recipe
     _save_all(data)
 
 
 def compose_default(emotion: str, attitude: str, intensity_word: str) -> dict:
-    """
-    Deterministic default composition from verified VRoid primitives — the
-    "reasonable initial composition" generated when no calibrated recipe
-    exists yet. No random jitter (see module docstring), so the same
-    semantic key always yields the same base until the Expression Lab
-    calibrates and saves a replacement.
-    """
+    """Build a deterministic base recipe from verified VRoid primitives when no saved recipe exists."""
     base = _EMOTION_BASE.get(emotion, _EMOTION_BASE["neutral"])
     modifier = _ATTITUDE_MODIFIERS.get(attitude if attitude in _VALID_ATTITUDES else "sincere", {})
     intensity = _INTENSITY_BANDS.get(intensity_word, _INTENSITY_BANDS["medium"])

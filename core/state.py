@@ -1,56 +1,40 @@
 """
 core/state.py
 Global state machine for Maya.
-All modules read/write state through this single object — no hidden flags.
 
-States:
-  SLEEPING    — mic is hot but only wake-word detector is active
-  IDLE        — awake, waiting for a command
-  LISTENING   — VAD triggered, capturing speech
-  PROCESSING  — transcribing + intent + skill execution
-  SPEAKING    — TTS audio playing
-  INTERRUPTED — user spoke while Maya was speaking (barge-in)
+This module is the single source of truth for the agent's lifecycle state. The
+system should read or mutate the shared `state` instance rather than maintaining
+separate boolean flags or hidden FSMs in other modules.
 
-Interrupt handling (barge-in)
-------------------------------
-Whatever produces Maya's speech (Speaker.speak() or
-llm_service._stream_and_speak()) is expected to run wrapped in
-run_interruptible() rather than being awaited directly. That wraps the
-coroutine in its own asyncio.Task and registers it here via
-set_current_task(), so a barge-in detected mid-sentence has something
-concrete to cancel.
+The state values reflect the conversation lifecycle:
+  SLEEPING    — wake-word listener is active and no command flow is running
+  IDLE        — awake and waiting for user input
+  LISTENING   — microphone/VAD capture is active
+  PROCESSING  — transcription, intent routing, or skill execution is running
+  SPEAKING    — Maya is generating or streaming speech output
+  INTERRUPTED — a barge-in was triggered and the system is returning to LISTENING
 
-interrupt() itself doesn't know how to physically stop already-issued
-audio (sounddevice buffers, browser-side WebAudio playback) — that's
-speaker/ws_server concerns. Instead it calls an injectable stop
-callback (register_stop_callback(), wired up once in main.py) *before*
-cancelling the task, so blocking calls like sd.wait() or
-ws_server.wait_for_audio_done() unblock immediately instead of waiting
-on hardware/network round trips.
+`StateManager` centralizes transitions, observer notifications, and interrupt
+control. It intentionally stays decoupled from audio backends: the speaker and
+browser/websocket layers register their stop callback and active speech task
+with this class, while the FSM decides whether an interruption is currently
+allowed and what should be cancelled.
 
-can_interrupt() defines when a barge-in is allowed: SPEAKING, or
-PROCESSING while a registered speech task is live (an LLM turn,
-including its filler and the wait before the first phrase). PROCESSING
-with no registered task (skill turns) is not interruptible — see
-core/processor.py and skills/system/power.py's shutdown/restart line
-for the two current exceptions (their own speak() calls DO register a
-task; a skill's own blocking dispatch work before it starts speaking
-still doesn't).
+Typical usage:
+- read `state.current` or predicates like `is_busy()`/`is_speaking()`
+- move between states with `await state.set(...)`
+- use `state.set_sync(...)` from callback threads
+- subscribe to transitions with `add_observer(...)`
+- register the active speech task with `set_current_task(...)`
+- run speak/LLM output inside `run_interruptible(...)`
+- trigger a barge-in with `await state.interrupt()`
 
-Observers (Batch 4 — "Listening state edge cases")
-----------------------------------------------------
-add_observer() lets other modules react to every genuine transition
-without this module importing anything about WHY they'd want to (no
-sounddevice/ws_server imports here — deliberately kept decoupled from
-the audio backends). main.py uses this to run a watchdog that resets a
-LISTENING state stuck with no follow-up (a dropped queued command, or a
-client-side "interrupt" with no speech behind it) back to IDLE instead
-of leaving the FSM — and the frontend's idle-fidget gate — stuck
-forever. Observers are synchronous and best-effort: a raising observer
-is logged and skipped, never allowed to break a transition. set_sync()
-runs on the sounddevice callback thread, so an observer that needs to
-touch asyncio must hop back onto the loop itself (e.g.
-loop.call_soon_threadsafe) rather than assume it's already there.
+The interrupt path is intentionally conservative: a barge-in is allowed only
+while speaking or while a live registered speech task is active during
+processing. `interrupt()` stops physical playback first, cancels the task, and
+then transitions back to LISTENING so the interrupted utterance can be captured
+normally. Observers are synchronous and best-effort; exceptions are logged and
+ignored so they never break the state machine.
 """
 
 import asyncio
@@ -63,6 +47,8 @@ logger = logging.getLogger(__name__)
 
 
 class MayaState(Enum):
+    """Finite states for Maya's lifecycle and interaction flow."""
+
     SLEEPING    = auto()   # only wake-word detector is active
     IDLE        = auto()   # awake, waiting for speech
     LISTENING   = auto()   # VAD triggered, accumulating utterance
@@ -77,17 +63,14 @@ StateObserver = Callable[[MayaState, MayaState], None]   # (old, new) — sync, 
 
 @dataclass
 class StateManager:
+    """Singleton-style state holder for the agent lifecycle and interrupt logic."""
+
     _state: MayaState = field(default=MayaState.SLEEPING, init=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 
-    # ── Interrupt plumbing ───────────────────────────────────────────
     _current_task: Optional[asyncio.Task] = field(default=None, init=False, repr=False)
     _stop_cb: Optional[StopCallback] = field(default=None, init=False, repr=False)
-
-    # ── Transition observers ─────────────────────────────────────────
     _observers: List[StateObserver] = field(default_factory=list, init=False, repr=False)
-
-    # ── Read ──────────────────────────────────────────────────────────
 
     @property
     def current(self) -> MayaState:
@@ -113,8 +96,6 @@ class StateManager:
             and not task.done()
         )
 
-    # ── Write ─────────────────────────────────────────────────────────
-
     async def set(self, new_state: MayaState) -> None:
         async with self._lock:
             old = self._state
@@ -130,8 +111,6 @@ class StateManager:
         if old != new_state:
             logger.debug(f"State: {old.name} → {new_state.name}")
         self._notify(old, new_state)
-
-    # ── Observers ────────────────────────────────────────────────────
 
     def add_observer(self, cb: StateObserver) -> None:
         """
@@ -151,8 +130,6 @@ class StateManager:
                 cb(old, new)
             except Exception:
                 logger.debug("State observer failed (non-fatal)", exc_info=True)
-
-    # ── Interrupt handling (barge-in) ────────────────────────────────
 
     def register_stop_callback(self, cb: StopCallback) -> None:
         """

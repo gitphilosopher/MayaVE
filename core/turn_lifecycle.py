@@ -1,52 +1,35 @@
 """
 core/turn_lifecycle.py
-Shared "a turn just finished — go back to resting" helper.
+Turn-completion helper that restores Maya to a resting state safely.
 
-Several call sites (services/llm/llm_service.py's _play_worker at _DONE,
-core/processor.py's Processor.handle on both its success and exception
-paths) each need to reset the FSM + tell the frontend once a reply/skill/
-LLM turn completes. Before this existed, each did so unconditionally
-("always go to IDLE, always broadcast idle + baseline behavior") — but if
-a "go to sleep" landed while that turn was still in flight, the state was
-already SLEEPING by the time the turn finished, and blindly forcing IDLE
-here silently woke Maya back up and re-enabled full speech processing
-right when the wake-word detector should have taken over instead (see
-docs/CHANGELOG.md's "Sleep race" issue). rest() checks the CURRENT state
-fresh at the moment the turn ends, not a snapshot taken earlier, so a
-concurrent sleep always wins.
+This module centralizes the end-of-turn cleanup used by the conversation and
+speech pipeline. When a skill reply, LLM reply, or handled exception finishes,
+callers can invoke `rest()` to return the state machine to a neutral resting
+state and broadcast the matching frontend update.
 
-core/speaker.py's Speaker.speak() has a related but distinct need (it
-must remember whether IT ITSELF was the sleep-command's own goodbye line,
-since by the time its own finally runs the FSM has already been SPEAKING
-for a while) and keeps its own inline logic rather than using this helper
-— see its docstring.
+The key safety rule is that the helper checks the current FSM state at the
+moment the turn completes, rather than assuming the earlier state. That matters
+when a "go to sleep" command arrives while a previous turn is still running: the
+sleep transition must win, and the helper must not wake Maya back up by forcing
+IDLE after a concurrent sleep command has already landed.
+
+This function intentionally stays small and focused; the speaker layer has its
+own related sleep-handling logic for its own goodbye line, but the lifecycle
+helper is the shared single point for end-of-turn reset logic.
 """
 
 import logging
 
-from core.state import state, MayaState
-from core.mood import mood_manager
+from core.state import MayaState, state
 from core.behavior_engine import behavior_engine
+from core.mood import mood_manager
 
 logger = logging.getLogger(__name__)
 
 
 async def rest(force_idle: bool = False) -> None:
-    """
-    Call once a turn (skill reply, LLM reply, or a handled exception) has
-    finished. If Maya is currently SLEEPING — meaning a "go to sleep"
-    landed while this turn was still running — leaves her asleep and
-    tells the frontend to sleep visually instead of stomping it back to
-    IDLE. Otherwise broadcasts IDLE + the current mood baseline face.
-
-    force_idle: the caller has already decided the FSM itself should move
-    to IDLE (e.g. after an unhandled exception, or at the natural end of
-    an LLM turn) — still respects a concurrent sleep (skips the state.set
-    AND the WS broadcast in that case), but callers that don't need an
-    explicit transition (state is already correct via Speaker.speak()'s
-    own finally) can leave this False and only get the WS-broadcast half.
-    """
-    from services.ws_server import ws_server   # local import — see Speaker.speak()'s own precedent
+    """Return Maya to a resting state and broadcast the matching frontend update."""
+    from services.ws_server import ws_server
 
     if state.is_sleeping():
         await ws_server.broadcast_state("sleeping")

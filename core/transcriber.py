@@ -1,19 +1,18 @@
 """
 core/transcriber.py
-Phase 3: Speech → Text using Google Speech Recognition (online, free).
+Speech-to-text adapter for Maya's audio pipeline.
 
-Pipeline:
-  numpy float32 audio (16 kHz mono)  ← from Silero VAD in listener.py
-      ↓
-  convert to 16-bit PCM bytes
-      ↓
-  wrap in speech_recognition.AudioData
-      ↓
-  recognize_google()  (sends to Google STT API, no key required)
-      ↓
-  cleaned text string
+This module converts a captured microphone frame into a transcription string for
+further intent parsing. The transcriber sits downstream of the listener/VAD
+pipeline: it receives a float32 numpy array at the configured sample rate,
+converts it to the 16-bit PCM format expected by `speech_recognition`, and
+passes it to Google Speech Recognition via `recognize_google()`.
 
-Note: requires an active internet connection.
+The implementation intentionally runs the blocking network request in an executor
+so the async turn loop remains responsive while a microphone capture is being
+processed. This is a thin compatibility layer around the online Google STT API:
+network availability is required, but the rest of Maya does not need to know the
+low-level audio conversion details.
 """
 
 import asyncio
@@ -28,17 +27,15 @@ logger = logging.getLogger(__name__)
 
 
 class Transcriber:
+    """Convert raw microphone frames into text using the online Google STT backend."""
+
     def __init__(self):
+        """Create the recognizer and log the configured backend for operator visibility."""
         self._recogniser = sr.Recognizer()
         logger.info("Transcriber ready — Google Speech Recognition (online, free).")
 
     async def transcribe(self, audio: np.ndarray) -> str | None:
-        """
-        Transcribe a float32 numpy array captured at 16 kHz mono.
-        Runs the blocking Google API call in an executor thread so the
-        asyncio event loop is never blocked.
-        Returns stripped lowercase text, or None on failure.
-        """
+        """Transcribe a float32 mono frame while keeping the async event loop responsive."""
         if audio is None or len(audio) == 0:
             return None
 
@@ -47,15 +44,13 @@ class Transcriber:
         return text
 
     def _recognise(self, audio: np.ndarray) -> str | None:
-        """Blocking recognition — called inside an executor thread."""
-
-        # Convert float32 [-1, 1] → int16 PCM bytes (what SpeechRecognition expects)
+        """Perform the blocking Google recognition work in a worker thread."""
         pcm = (audio * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
 
         audio_data = sr.AudioData(
             pcm,
             sample_rate=config.audio.sample_rate,
-            sample_width=2,   # 16-bit = 2 bytes
+            sample_width=2,
         )
 
         try:

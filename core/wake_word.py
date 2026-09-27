@@ -1,30 +1,22 @@
 """
 core/wake_word.py
-Wake-word detector — runs on every audio frame while Maya is SLEEPING.
+Wake-word detection for Maya's sleeping state.
 
-Strategy: lightweight keyword spotting using Google Speech Recognition
-on short audio windows (no extra ML model required).
+This module watches short audio windows while Maya is asleep and uses Google
+Speech Recognition to detect whether a spoken phrase includes the configured wake
+word. When a match is found, it triggers the callback supplied by the caller,
+which is normally the code that transitions Maya back to an active listening
+state.
 
-How it works:
-  1. While state == SLEEPING, accumulate audio frames into a rolling
-     2-second window.
-  2. Every time the window fills, transcribe it with Google STT.
-  3. If the transcription contains the wake word → wake Maya up.
-  4. While state != SLEEPING, the detector is a no-op (zero overhead).
+The logic is intentionally lightweight and low-overhead:
+- it does nothing while Maya is already awake
+- it accumulates a short rolling buffer while sleeping
+- it transcribes the full window only when the buffer fills
+- it matches a shared set of wake phrases derived from `config.wake_word`
 
-Wake word is set in config/settings.py:
-  config.wake_word = "hey maya"   ← default
-
-To go back to sleep, say "go to sleep" / "sleep" / "goodbye".
-
-Shared wake-phrase matching:
-  compute_wake_triggers() / contains_wake_word() below are also used by
-  main.py to gate barge-in (see core/state.py's interrupt()) — talking
-  over Maya only cuts her off if you actually call her by name ("hey
-  maya", "hello maya", "maya", ...), not just any speech captured while
-  she's mid-sentence. Keeping one shared trigger set means changing
-  config.wake_word moves both behaviours together instead of drifting
-  out of sync.
+The trigger helpers here are shared with the barge-in logic so the same naming
+convention is used consistently for both wake-up detection and interruption
+policy.
 """
 
 import asyncio
@@ -42,33 +34,18 @@ from core.state import state, MayaState
 
 logger = logging.getLogger(__name__)
 
-# How many frames to accumulate before attempting a wake-word transcription.
-# At 512 samples / 16 000 Hz = 32 ms per frame → 63 frames ≈ 2 seconds.
-_SAMPLE_RATE    = config.audio.sample_rate
-_FRAME_SAMPLES  = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
+_SAMPLE_RATE = config.audio.sample_rate
+_FRAME_SAMPLES = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
 _WINDOW_SECONDS = 2
-_WINDOW_FRAMES  = int(_WINDOW_SECONDS * _SAMPLE_RATE / _FRAME_SAMPLES)
+_WINDOW_FRAMES = int(_WINDOW_SECONDS * _SAMPLE_RATE / _FRAME_SAMPLES)
 
 WakeCallback = Callable[[], Awaitable[None]]
 
-# Common greeting prefixes people naturally say before a wake word —
-# "hey maya", "hello maya", "hi maya" all mean the same thing. Matched
-# generically rather than assuming the exact phrase in config.wake_word
-# is the only way someone will address her.
 _GREETING_PREFIXES = ("hey", "hello", "hi", "yo")
 
 
 def compute_wake_triggers(wake_word: Optional[str] = None) -> set[str]:
-    """
-    Build the full set of phrases that count as "calling Maya by name",
-    derived from config.wake_word (or an explicit override).
-
-    For a configured wake_word of "hey maya" this produces roughly:
-      {"hey maya", "hello maya", "hi maya", "yo maya", "maya"}
-
-    For a bare single-word wake_word like "maya" it produces:
-      {"maya", "hey maya", "hello maya", "hi maya", "yo maya"}
-    """
+    """Return all accepted wake-word phrases derived from the configured wake phrase."""
     wake = (wake_word or config.wake_word).lower().strip()
     name = wake.split()[-1] if " " in wake else wake
 
@@ -79,7 +56,7 @@ def compute_wake_triggers(wake_word: Optional[str] = None) -> set[str]:
 
 @lru_cache(maxsize=8)
 def _trigger_pattern(wake: str) -> re.Pattern:
-    # Longest first; \b so "maya" doesn't fire inside "Mayans"/"Amaya".
+    """Compile a single regex matching the configured wake phrase and common name variants."""
     ordered = sorted(compute_wake_triggers(wake), key=len, reverse=True)
     return re.compile(r"\b(?:" + "|".join(re.escape(t) for t in ordered) + r")\b")
 
@@ -89,10 +66,6 @@ def contains_wake_word(text: str, wake_word: Optional[str] = None) -> bool:
     wake = (wake_word or config.wake_word).lower().strip()
     return _trigger_pattern(wake).search(text.lower()) is not None
 
-# ── Sleep commands ────────────────────────────────────────────────────────
-# Unambiguous phrases count anywhere in the utterance; the bare words "sleep"/
-# "bye" only count as the whole utterance (optionally with please/name), so
-# "I didn't sleep well" / "she's asleep" no longer put Maya to sleep.
 _NAME = re.escape(config.name.lower())
 _ADDRESS_TAIL = rf"(?:\s+(?:please|{_NAME}|{re.escape(config.user_name.lower())}))*"
 _SLEEP_ANYWHERE_RE = re.compile(r"\b(?:go to sleep|good ?bye|stop listening)\b")
@@ -106,18 +79,15 @@ def is_sleep_command(text: str) -> bool:
 
 
 class WakeWordDetector:
-    """
-    Plug into the Listener's frame pipeline.
-    Call feed_frame(frame) on every VAD frame.
-    Fires on_wake() coroutine when the wake word is detected.
-    """
+    """Listen for the configured wake phrase while Maya is asleep and fire the wake callback."""
 
     def __init__(self, on_wake: WakeCallback, loop: asyncio.AbstractEventLoop):
-        self._on_wake   = on_wake
-        self._loop      = loop
+        """Initialize the rolling audio buffer and the recognizer used during sleep detection."""
+        self._on_wake = on_wake
+        self._loop = loop
         self._recogniser = sr.Recognizer()
         self._window: deque[np.ndarray] = deque(maxlen=_WINDOW_FRAMES)
-        self._pending   = False   # True while a transcription is in-flight
+        self._pending = False
 
         self._triggers = compute_wake_triggers()
         self._trigger_re = _trigger_pattern(config.wake_word.lower().strip())
@@ -127,21 +97,15 @@ class WakeWordDetector:
             f"window: {_WINDOW_SECONDS}s ({_WINDOW_FRAMES} frames)"
         )
 
-    # ── Called from the sounddevice callback thread ───────────────────
-
     def feed_frame(self, frame: np.ndarray) -> None:
-        """
-        Receive one audio frame. Only does real work while SLEEPING.
-        Zero-overhead no-op at all other times.
-        """
+        """Process a new sleeping-state audio frame, doing no work while awake."""
         if not state.is_sleeping():
-            self._window.clear()   # reset buffer when we wake up
+            self._window.clear()
             self._pending = False
             return
 
         self._window.append(frame)
 
-        # Check once per full window, skip if a check is already running
         if len(self._window) == _WINDOW_FRAMES and not self._pending:
             audio = np.concatenate(list(self._window))
             self._window.clear()
@@ -150,10 +114,8 @@ class WakeWordDetector:
                 self._check(audio), self._loop
             )
 
-    # ── Async transcription & detection ──────────────────────────────
-
     async def _check(self, audio: np.ndarray) -> None:
-        """Transcribe the window and fire on_wake if trigger found."""
+        """Transcribe the buffered audio and trigger wake-up when the wake phrase is heard."""
         try:
             text = await asyncio.get_running_loop().run_in_executor(
                 None, self._transcribe, audio
@@ -167,7 +129,7 @@ class WakeWordDetector:
             self._pending = False
 
     def _transcribe(self, audio: np.ndarray) -> str | None:
-        """Blocking Google STT call — runs in executor."""
+        """Run the blocking Google STT call in the executor worker thread."""
         pcm = (audio * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
         audio_data = sr.AudioData(pcm, _SAMPLE_RATE, 2)
         try:

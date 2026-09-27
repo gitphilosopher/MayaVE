@@ -1,46 +1,29 @@
 """
 core/listener.py
-Phase 1 + 2: Continuous microphone capture with Silero VAD + wake-word gate.
+Microphone capture and VAD pipeline for Maya.
 
-Pipeline:
-  sounddevice stream (raw PCM, 16 kHz mono)
-      ↓
-  every frame → WakeWordDetector.feed_frame()   [always, even while sleeping]
-      ↓
-  if SLEEPING → detector only; VAD speech pipeline is skipped
-      ↓
-  if AWAKE → Silero VAD speech detection
-      ↓
-  on utterance end → on_speech(audio) callback
+This module owns the raw audio ingest path. It opens the configured input stream,
+feeds each audio frame into the wake-word detector regardless of state, and only
+runs the Silero VAD speech detection path while Maya is awake. When a completed
+utterance ends, it delivers the captured waveform to the registered `on_speech`
+callback for transcription and command handling.
 
-Barge-in lives in main.py, not here:
-  The VAD pipeline below runs continuously whenever Maya isn't
-  SLEEPING — including while she's SPEAKING — exactly as it always
-  has. Speech captured while she's talking is still delivered via the
-  normal on_speech() callback once the user stops talking.
+The listener is intentionally a pure capture component. It does not decide whether
+speech should interrupt Maya's current response; that policy is left to the
+higher-level processing path in `main.py` after the utterance has been transcribed,
+because the interrupt decision depends on the actual spoken text and wake-word
+match, not only on audio energy.
 
-  Deciding whether that speech should actually CUT HER OFF requires
-  knowing what was said — specifically, whether she was called by name
-  ("hey maya", "hello maya", "maya", ...) — and that requires the full
-  utterance to be transcribed first. Since transcription is a Google
-  STT round trip that only main.py's on_speech() has access to (via
-  core/transcriber.py), the barge-in decision itself is made there
-  (see main.py's on_speech(), which checks
-  core.wake_word.contains_wake_word() against the transcribed text and
-  calls state.interrupt() only when it matches). Listener.py stays a
-  pure audio-capture component with no opinion on interrupt policy.
-
-Frame-size fix (Windows):
-  Silero VAD requires sample_rate / frame_samples > 31.25.
-  At 16 000 Hz → minimum 512 samples (32 ms).
-  _FRAME_SAMPLES is clamped to 512 regardless of config.audio.chunk_ms.
-
-Startup log fix (Batch 4):
-  Maya starts AWAKE (main.py sets IDLE before the startup greeting), so
-  the mic-open log line now reflects the FSM's actual state instead of
-  unconditionally claiming she's sleeping — this used to be printed
-  regardless of state, a stale leftover from before "start awake" was
-  introduced (see docs/CHANGELOG.md's "Sleep not persisting" fix).
+Important implementation details:
+- the wake-word detector is always active, even while sleeping, so the system can
+  react immediately when the user says the wake phrase
+- VAD processing is skipped while sleeping to avoid capturing and queuing stray
+  audio after the agent has intentionally gone to sleep
+- `_FRAME_SAMPLES` is clamped to at least 512 samples so the Silero VAD input
+  remains valid on Windows and other environments with small chunk sizes
+- the listener uses a pre-roll buffer to keep the leading portion of speech when
+  VAD starts mid-frame, and it clears any partial utterance if sleep wins while
+  the mic remains active
 """
 
 import asyncio
@@ -60,21 +43,18 @@ logger = logging.getLogger(__name__)
 
 AudioCallback = Callable[[np.ndarray], Awaitable[None]]
 
-# ── Frame sizing ──────────────────────────────────────────────────────────────
-_SAMPLE_RATE     = config.audio.sample_rate
-_FRAME_SAMPLES   = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
-_FRAME_MS        = _FRAME_SAMPLES / _SAMPLE_RATE * 1000
-_SILENCE_FRAMES  = max(1, int(config.audio.silence_ms  / _FRAME_MS))
+_SAMPLE_RATE = config.audio.sample_rate
+_FRAME_SAMPLES = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
+_FRAME_MS = _FRAME_SAMPLES / _SAMPLE_RATE * 1000
+_SILENCE_FRAMES = max(1, int(config.audio.silence_ms / _FRAME_MS))
 _PRE_ROLL_FRAMES = max(1, int(config.audio.pre_roll_ms / _FRAME_MS))
 
 
 class Listener:
+    """Open the microphone, detect wake words, and emit completed utterance audio."""
+
     def __init__(self, on_speech: AudioCallback, on_wake: Callable[[], Awaitable[None]]):
-        """
-        Args:
-            on_speech : async callback → receives float32 numpy utterance array
-            on_wake   : async callback → fired when wake word is detected
-        """
+        """Initialize the mic pipeline and VAD model for the provided callbacks."""
         self._on_speech = on_speech
         self._loop: asyncio.AbstractEventLoop | None = None
         self._on_wake_cb = on_wake
@@ -104,10 +84,8 @@ class Listener:
         # Wake-word detector (initialised after event loop is known)
         self._wake_detector: WakeWordDetector | None = None
 
-    # ── Public ────────────────────────────────────────────────────────────────
-
     async def start(self) -> None:
-        """Open mic stream and run until cancelled."""
+        """Open the mic stream and block until the listener is cancelled."""
         self._loop = asyncio.get_running_loop()
 
         # Wire up the wake-word detector now that we have the loop
@@ -136,8 +114,6 @@ class Listener:
                 logger.info(f"✅ Awake and listening for commands.")
             await asyncio.Event().wait()
 
-    # ── Private ───────────────────────────────────────────────────────────────
-
     def _sd_callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
             logger.warning(f"sounddevice: {status}")
@@ -154,15 +130,14 @@ class Listener:
         self._overflow = buf[offset:]
 
     def _process_frame(self, frame: np.ndarray) -> None:
-        # Always feed wake-word detector (it self-gates when not sleeping)
+        # The wake-word detector is always active; it filters itself when Maya is awake.
         if self._wake_detector:
             self._wake_detector.feed_frame(frame)
 
-        # Skip VAD speech pipeline while sleeping
         if state.is_sleeping():
-            # Drop a half-captured utterance so it isn't delivered after wake.
+            # Discard any half-captured utterance so it cannot leak through after wake.
             if self._in_speech:
-                self._in_speech     = False
+                self._in_speech = False
                 self._silence_count = 0
                 self._speech_buffer = []
                 self._pre_roll.clear()

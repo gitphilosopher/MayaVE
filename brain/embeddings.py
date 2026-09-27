@@ -1,67 +1,42 @@
 """
 brain/embeddings.py
-Embedding provider abstraction for Maya's long-term semantic memory.
+Ollama-backed embedding service for Maya's semantic memory.
 
-Isolates the embedding backend behind Embedder so it can be swapped
-later without touching vector_store.py or conversation.py.
+This module provides the optional text-embedding layer used by higher-level
+semantic-memory features. `OllamaEmbedder` implements the small `Embedder`
+interface used across the project by calling Ollama's `/api/embeddings`
+endpoint, caching exact-text results, reusing an HTTP client, and logging slow
+requests for debugging.
 
-Default backend: Ollama's /api/embeddings endpoint. Reuses the local
-Ollama server Maya already requires for chat — no new pip dependency,
-no separate model-serving process. Requires an embedding model to be
-pulled once:
-    ollama pull nomic-embed-text
-If that model isn't available, embed() returns None and every caller
-in the Stage 2 pipeline is required to degrade gracefully rather than
-fail (see ContextManager in conversation.py).
-
-Latency fix: embed() used to open a brand-new httpx.AsyncClient on
-every call. It now reuses one lazily-created, process-wide client
-(_get_client()) so repeated embedding calls don't pay fresh
-connection-setup cost each turn. Timeout raised 8.0s -> 20.0s so a
-genuine cold model load (first embedding call after Ollama/Maya start)
-isn't cut off mid-load — this should only matter once per session now
-that OLLAMA_MAX_LOADED_MODELS=2 keeps both the chat and embedding
-models resident simultaneously (see Handoff) instead of Ollama
-evicting one to load the other on every turn.
-
-Latency pass 2: small LRU cache of exact-text results (embeddings are
-deterministic per model, so never stale), longer HTTP keep-alive, and
-per-call diagnostics (gap since last call, overlapping requests, and an
-automatic /api/ps snapshot when a call is slow).
+The embedder is intentionally resilient: absent models, failed requests, and
+empty vectors all return `None` so callers can degrade gracefully to recent-turn
+context rather than interrupt an active conversation. The abstraction is isolated
+so another provider can replace Ollama without changing the rest of the memory
+stack.
 """
 
 import asyncio
 import logging
 import os
+import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 
 import httpx
-import time
 
 from config.settings import config
 
 logger = logging.getLogger(__name__)
 
-_CACHE_MAX          = 64      # exact-text embeddings kept (a few hundred KB at most)
-_SLOW_EMBED_SECONDS = 2.0     # above this, log a warning + /api/ps snapshot
-_KEEPALIVE_EXPIRY   = 300.0   # httpx default is 5s — reconnects every idle gap between turns
+_CACHE_MAX = 64
+_SLOW_EMBED_SECONDS = 2.0
+_KEEPALIVE_EXPIRY = 300.0
 
-_bg_tasks: set[asyncio.Task] = set()   # keeps fire-and-forget diagnostics from being GC'd
+_bg_tasks: set[asyncio.Task] = set()
 
 
 def _resolve_embedding_device() -> str:
-    """
-    "cpu" forces the embedding model off the GPU via Ollama's num_gpu
-    runtime option (see _embedding_gpu_options). "auto" (default) sends
-    no override — today's existing behavior, whatever Ollama's own
-    default placement is.
-
-    Checked via env var first (MAYA_EMBEDDING_DEVICE=cpu) so the two
-    configurations can be A/B tested with a restart and no code/config
-    file edits; falls back to config.context.embedding_device via
-    getattr() so this also works if that field doesn't exist yet.
-    """
+    """Resolve the embedding device preference from env override or config fallback."""
     env_override = os.environ.get("MAYA_EMBEDDING_DEVICE")
     if env_override:
         return env_override.strip().lower()
@@ -69,20 +44,14 @@ def _resolve_embedding_device() -> str:
 
 
 def _embedding_gpu_options() -> dict | None:
-    """{'num_gpu': 0} to force CPU-only, or None to send no override."""
+    """Return `{"num_gpu": 0}` only when the embedder must be forced onto CPU."""
     if _resolve_embedding_device() == "cpu":
         return {"num_gpu": 0}
     return None
 
 
 async def describe_ollama_models() -> None:
-    """
-    Diagnostic only — logs each currently-loaded Ollama model's GPU/CPU
-    placement via GET /api/ps (size_vram / size = % resident in VRAM) and
-    its expires_at (shows whether keep_alive was actually applied), so a
-    device-placement change can be verified from Maya's own log
-    instead of external tooling. Best-effort; never raises.
-    """
+    """Log the currently loaded Ollama models for runtime placement and keep-alive diagnostics."""
     url = f"{config.llm.base_url.rstrip('/')}/api/ps"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -93,10 +62,10 @@ async def describe_ollama_models() -> None:
                 logger.info("[TIMING] Ollama /api/ps: no models currently loaded")
                 return
             for m in models:
-                name      = m.get("name", "?")
-                size      = m.get("size", 0)
+                name = m.get("name", "?")
+                size = m.get("size", 0)
                 size_vram = m.get("size_vram", 0)
-                pct_gpu   = (size_vram / size * 100) if size else 0.0
+                pct_gpu = (size_vram / size * 100) if size else 0.0
                 placement = "GPU" if pct_gpu >= 99 else "CPU" if pct_gpu <= 1 else f"MIXED({pct_gpu:.0f}% GPU)"
                 logger.info(
                     f"[TIMING] Ollama model '{name}': {placement}  "
@@ -108,32 +77,33 @@ async def describe_ollama_models() -> None:
 
 
 class Embedder(ABC):
+    """Common interface for text embedding providers."""
+
     @abstractmethod
     async def embed(self, text: str) -> list[float] | None:
+        """Return a numeric embedding for the input text, or `None` if unavailable."""
         ...
 
 
 class OllamaEmbedder(Embedder):
+    """Ollama-backed embedding client with a bounded exact-text cache and pooled HTTP usage."""
+
     def __init__(self, model: str | None = None, timeout: float = 20.0):
         self._model = model or config.context.embedding_model
         self._timeout = timeout
         self._url = f"{config.llm.base_url.rstrip('/')}/api/embeddings"
         self._device = _resolve_embedding_device()
         logger.info(f"[TIMING] Embedding device mode: '{self._device}' (model='{self._model}')")
-        # Sticky flag — once we confirm the model is missing, stop retrying
-        # every turn and just skip straight to "no embedding available".
         self._unavailable = False
-        # Lazily-created, reused across every embed() call instead of a
-        # fresh httpx.AsyncClient per request (see module docstring).
         self._client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
-        # Exact-text LRU + diagnostics state.
         self._cache: OrderedDict[str, list[float]] = OrderedDict()
         self._in_flight = 0
         self._last_call_at: float | None = None
         self._logged_first_request = False
 
     async def _get_client(self) -> httpx.AsyncClient:
+        """Lazily create and reuse a single HTTP client for embedding requests."""
         if self._client is None or self._client.is_closed:
             async with self._client_lock:
                 if self._client is None or self._client.is_closed:
@@ -144,17 +114,19 @@ class OllamaEmbedder(Embedder):
         return self._client
 
     async def aclose(self) -> None:
-        """Release the pooled connection — call on app shutdown if one exists."""
+        """Close the shared client when the app is shutting down."""
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
 
     def _remember(self, text: str, emb: list[float]) -> None:
+        """Cache an exact-text embedding and evict the oldest item when the limit is exceeded."""
         self._cache[text] = emb
         self._cache.move_to_end(text)
         while len(self._cache) > _CACHE_MAX:
             self._cache.popitem(last=False)
 
     def _report_slow(self, elapsed: float, gap: float | None, overlap: int) -> None:
+        """Log timing and model-placement diagnostics when an embedding request is unusually slow."""
         gap_s = f"{gap:.0f}s" if gap is not None else "first call"
         logger.warning(
             f"Slow embedding ({elapsed:.2f}s): model='{self._model}' device='{self._device}' "
@@ -165,6 +137,7 @@ class OllamaEmbedder(Embedder):
         task.add_done_callback(_bg_tasks.discard)
 
     async def embed(self, text: str) -> list[float] | None:
+        """Return an embedding for `text`, or `None` if the model is unavailable or the request fails."""
         if self._unavailable or not text.strip():
             return None
         cached = self._cache.get(text)
@@ -172,6 +145,7 @@ class OllamaEmbedder(Embedder):
             self._cache.move_to_end(text)
             logger.info("[TIMING]       embed cache hit")
             return cached
+
         overlap = self._in_flight
         self._in_flight += 1
         try:
@@ -181,11 +155,6 @@ class OllamaEmbedder(Embedder):
             payload = {
                 "model": self._model,
                 "prompt": text,
-                # Keep the embedding model resident well past a
-                # normal gap between conversational turns so it
-                # isn't evicted and forced to cold-load again on
-                # the next semantic-memory lookup (cold loads run
-                # several seconds — see Handoff debugging notes).
                 "keep_alive": "30m",
             }
             gpu_opts = _embedding_gpu_options()

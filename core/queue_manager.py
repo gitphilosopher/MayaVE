@@ -1,28 +1,26 @@
 """
 core/queue_manager.py
-The sequential backbone of Maya.
+Single-threaded command queue for Maya.
 
-All voice commands enter ONE asyncio.Queue.
-The worker loop drains it one item at a time — preventing overlapping
-responses no matter how fast the user speaks.
+This module serializes all inbound work through a single `asyncio.Queue`, ensuring
+that voice commands and scheduled jobs never overlap while the agent is handling
+one turn. The worker loop is the gatekeeper: it drains items in order, calls the
+registered handler for commands, and executes queued jobs in the same sequence.
 
 Queue item schema:
   {
     "text":      str,          # transcribed command ("" for jobs)
     "timestamp": float,        # time.time() at capture
-    "priority":  int,          # 0 = normal, 1 = interrupt (future)
-    "job":       callable,     # optional — see put_job()
+    "priority":  int,          # currently informational; normal/interrupt order is not yet used
+    "job":       callable,     # optional async callable for queued jobs
   }
 
-put() return value (Batch 4 — "Listening state edge cases"):
-  put() now returns True/False depending on whether the command was
-  actually enqueued. main.py's on_speech() already sets the FSM to
-  LISTENING before calling put(); Processor.handle() is what eventually
-  moves it to PROCESSING. If put() silently drops the item (queue full),
-  nothing would ever make that move, and the FSM — and the frontend's
-  idle-fidget gate along with it — would be stuck on LISTENING forever.
-  on_speech() uses the return value to reset immediately instead of
-  relying solely on main.py's LISTENING watchdog as a slower backstop.
+The queue is intentionally a backpressure point for the voice pipeline. `put()`
+returns whether the command was accepted, which lets callers detect a dropped
+command before the FSM remains stuck in LISTENING without any follow-up work.
+The `run()` loop keeps processing until `stop()` flips `_running` off, and each
+item is removed from the queue in a `finally` block so the worker can continue
+without deadlocking on exceptions.
 """
 
 import asyncio
@@ -38,20 +36,15 @@ Job = Callable[[], Awaitable[None]]
 
 
 class QueueManager:
+    """Serialize command and job execution behind a single worker queue."""
+
     def __init__(self, maxsize: int = 10):
         self._queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=maxsize)
         self._handler: CommandHandler | None = None
         self._running = False
 
-    # ── Producer side ─────────────────────────────────────────────────
-
     async def put(self, text: str, priority: int = 0) -> bool:
-        """
-        Enqueue a transcribed command. Returns True if it was queued,
-        False if the queue was full and it was dropped — callers whose
-        own FSM tracking depends on this actually being picked up should
-        check the return value (see main.py's on_speech).
-        """
+        """Enqueue a transcribed command and report whether it was accepted."""
         item = {
             "text":      text.strip(),
             "timestamp": time.time(),
@@ -79,17 +72,12 @@ class QueueManager:
         })
         logger.info(f"Queued job  (depth={self._queue.qsize()})")
 
-    # ── Consumer side ─────────────────────────────────────────────────
-
     def set_handler(self, handler: CommandHandler) -> None:
-        """Register the async function that processes each command."""
+        """Register the async function that processes each queued command."""
         self._handler = handler
 
     async def run(self) -> None:
-        """
-        Blocking worker loop — run as an asyncio Task.
-        Processes commands one at a time, in order.
-        """
+        """Drain the queue sequentially until stopped, executing commands and jobs in order."""
         if self._handler is None:
             raise RuntimeError("No handler registered. Call set_handler() first.")
 
@@ -100,7 +88,7 @@ class QueueManager:
             try:
                 item = await asyncio.wait_for(self._queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
-                continue   # nothing in queue — keep looping
+                continue
 
             try:
                 job = item.get("job")
@@ -118,5 +106,4 @@ class QueueManager:
         logger.info("QueueManager stopped.")
 
 
-# Singleton
 queue_manager = QueueManager()

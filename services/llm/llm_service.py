@@ -1,115 +1,28 @@
 """
 services/llm/llm_service.py
-============================
-Ollama Q&A handler with streaming + pipelined TTS.
+LLM reply generation with streaming phrase synthesis and playback.
 
-Pipeline (concurrent tasks):
-  Ollama token stream
-      ↓  phrase splitter + expression tag parser (see "Phrase-level
-         streaming" below — splits earlier than a full sentence)
-  [synth_queue]  — items: (phrase_text, expression, actions, is_final,
-                            attitude, intensity, continuation)
-      ↓  synth_worker: Kokoro TTS → float32 audio array
-  [play_queue]   — items: (audio_data, samplerate, expression, actions,
-                            attitude, intensity)
-      ↓  play_worker: broadcasts any action animations, then expression,
-                      then audio, waits for browser audio_done before
-                      the next phrase.
+This module is the main text-generation path for Maya: it sends the user turn to
+Ollama, assembles the contextual system prompt, streams tokens as they arrive,
+parses expression tags and action cues, and synthesizes each completed phrase or
+sentence through Kokoro before playing it back to the frontend or local audio
+output.
 
-Phrase-level streaming:
-  Previously the streamer waited for a full sentence ([.!?]) before
-  queuing anything for TTS. It now also splits at commas/semicolons/
-  dashes, and — for long unpunctuated runs — after _PHRASE_WORD_LIMIT
-  words, so the first phrase starts synthesising while Ollama keeps
-  streaming the rest of the sentence. Each queued item carries
-  is_final (True only for a real sentence end or the final flush) so
-  _enhance_prosody knows whether to apply full terminal-punctuation
-  shaping or just a light mid-sentence pause. The expression tag
-  resolved for a sentence's first phrase now carries forward to that
-  sentence's later phrases (_pending_expression is only cleared on
-  is_final) instead of resetting to neutral after every queued item.
+The important runtime contract is the pipeline:
+- build a prompt from the current mood, recent context, open loops, and semantic
+  memory notes
+- stream Ollama output asynchronously so TTS can begin before the full reply is
+  complete
+- split long replies into early phrase boundaries so the first chunk plays while
+  more output is still being generated
+- parse emotion, attitude, intensity, and action tags into behavior metadata
+- play the corresponding speech and avatar animation in order while respecting
+  interrupt/cancellation semantics
 
-Expression tags:
-  Ollama is prompted to prefix sentences with [tag] where tag is one of:
-    happy | sad | angry | surprised | relaxed | neutral | excited
-  Tags are stripped from TTS text. If no tag is present, expression
-  defaults to "neutral". After each sentence, expression resets to
-  Maya's current mood baseline (see core/mood.py) rather than a hard
-  "neutral" — this is what lets anger/sadness persist across turns.
-
-Semantic nuance tags (optional, additive):
-  Right after the emotion tag, Ollama may add [attitude:word] and/or
-  [intensity:word] (attitude: sincere|playful|teasing|mock; intensity:
-  low|medium|high) — see _parse_expression / _TAG_RE. Both default to
-  None when absent, and core/behavior_engine.py falls back to its
-  existing mood/personality-derived math exactly as before. This is a
-  minimal extension of the same [tag] parser, not a new format —
-  bare [happy] alone is unchanged.
-
-Action animations (*action* tags):
-  Ollama is given a fixed, closed vocabulary of physical actions in the
-  system prompt (see ACTION TAGS) — *nod* *giggle* *sigh* *shrug* *wink* —
-  the same way it's given a closed set of [expression] tags. This replaces
-  guessing at arbitrary hallucinated stage directions: the backend just
-  classifies the tag's text against that vocabulary (_resolve_action) and
-  maps it 1:1 to an avatar animation. Tags outside the vocabulary are still
-  stripped from the TTS text (Kokoro can't speak an asterisk sensibly) but
-  don't trigger any animation. The action fires in _play_worker right as
-  that sentence's audio starts, so the gesture lands in sync with the line
-  it was attached to.
-
-Duplicate-history fix:
-  processor.py calls conversation.add_user() before routing.
-  get_context() already includes the user turn.
-  Do NOT append {"role":"user"} here — Ollama would see it twice.
-
-Mood integration (core/mood.py):
-  - query() reports the user's raw text to mood_manager so an apology
-    can be detected before the turn is routed.
-  - _stream_and_speak() appends mood_manager.system_prompt_note() to the
-    system prompt each turn so Ollama's own generation stays in character
-    with Maya's current mood.
-  - _ollama_streamer() collects every resolved sentence expression for
-    the reply and reports them to mood_manager ONCE, after the full reply
-    is parsed — a sentence's delivery tone (e.g. a factual [neutral] line
-    inside an angry reply) is not the same as Maya having calmed down.
-  - _play_worker() resets to mood_manager.baseline_expression() between
-    sentences instead of a hardcoded "neutral".
-
-Context integration (Stage 2 — brain/conversation.py):
-  - _stream_and_speak() calls context_manager.build_context_package() to
-    get the recent window, active conversation state, relevant open
-    loops, and top semantic memories in one pre-assembled, size-bounded
-    package. This module does not implement retrieval/ranking itself —
-    it only formats the package into the system prompt.
-  - query() calls context_manager.record_assistant_turn() once the reply
-    is known, so state/open-loop/long-term-memory bookkeeping happens
-    after every LLM-routed turn. Best-effort — failures there never
-    surface here.
-
-Interrupt handling (core/state.py):
-  - query() no longer awaits its streaming/speaking work directly. It's
-    wrapped in state.run_interruptible(), which runs it as its own Task
-    and registers that Task with the global StateManager. If the
-    listener detects the user talking over Maya (barge-in),
-    state.interrupt() cancels this Task — the cancellation cascades down
-    through the asyncio.gather() here into _stream_and_speak()'s own
-    streamer/synther/player tasks, tearing the whole pipeline down in
-    one shot instead of needing bespoke cancellation logic at every
-    stage.
-  - A cancelled turn means _ollama_streamer() may never have reached its
-    final out_text.append(...), so _last_response can come back empty.
-    query() records a short, clearly-out-of-character marker for the
-    assistant turn in that case (Batch 4 — "Interrupted turn leaves
-    unanswered user turn") instead of leaving the just-recorded user turn
-    dangling with no paired assistant entry at all — see query()'s history
-    handling below.
-
-Model lifecycle (services/llm/ollama_lifecycle.py):
-  - The chat request sends keep_alive (chat_keep_alive()) so the model
-    isn't unloaded after Ollama's 5-minute default; main.py's warmup sends
-    the same value. Each finished turn logs cold/warm + tok/s and a
-    background /api/ps + GPU-memory snapshot (log_chat_turn()).
+A turn is wrapped in `state.run_interruptible()`, so a barge-in cancels the whole
+pipeline cleanly; memory/history bookkeeping runs after the reply is known, and
+short-circuiting or partial replies degrade gracefully instead of crashing the
+turn.
 """
 
 import asyncio
@@ -798,6 +711,7 @@ async def _play_filler() -> None:
 # ── Public entry point ────────────────────────────────────────────────────────
 
 async def query(intent: dict, text: str) -> str:
+    """Generate and speak a full assistant reply for a parsed user turn."""
     question = text.strip()
     if not question:
         return f"I didn't catch that, {config.user_name}. Could you repeat?"
@@ -908,10 +822,7 @@ _reply_finished = [False]         # set when _play_worker drains to _DONE
 
 
 async def _stream_and_speak(question: str, t_cmd_start: float) -> None:
-    # Stage 2: ContextManager assembles the recent window, active state,
-    # relevant open loops, and top semantic memories into one bounded
-    # package — this module just formats it, it doesn't retrieve/rank
-    # anything itself. Falls back to an empty note if retrieval fails.
+    """Assemble the prompt and run the streaming Ollama → synth → play pipeline for one turn."""
     t0 = time.perf_counter()
     context_package = await context_manager.build_context_package(question)
     logger.info(f"[TIMING] build_context_package: {time.perf_counter()-t0:.3f}s")
