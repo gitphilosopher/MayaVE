@@ -1,26 +1,19 @@
 /**
  * frontend/js/expression-lab.js
- * Standalone calibration tool for core/expression_library.py's
- * expressions.json (canonical location: frontend/assets/expressions.json)
- * — NOT wired into the runtime avatar.js/expression-composer.js pipeline.
+ * Standalone browser calibration tool for the recipes used by
+ * core/expression_library.py. Opened through frontend/expression-lab.html,
+ * it loads mayaaa.vrm and previews recipes by writing verified raw morph
+ * targets directly to mesh influences; it is not part of the runtime avatar.
  *
- * Every emotion|attitude|intensity combination is edited and persisted
- * independently in this browser's localStorage (versioned schema, see
- * STORAGE_KEY/SCHEMA_VERSION below) — slider edits save immediately and
- * survive a page reload. expressions.json itself is only ever written
- * by the explicit Export action, which dumps every locally-saved combination
- * at once (not just the one currently open) without clearing localStorage.
- * Import seeds/merges an existing expressions.json into localStorage.
+ * Each emotion|attitude|intensity combination is a versioned localStorage
+ * draft. Slider edits save immediately; Import merges a selected JSON library;
+ * Export downloads all saved combinations without clearing local drafts. The
+ * exported file belongs at frontend/assets/expressions.json.
  *
- * Deliberately browser-file-based (File API + localStorage) rather than
- * assuming Electron Node-integration is enabled in this renderer — keeps
- * the tool dependency-free and safe to run anywhere the dev server runs.
- *
- * The default composition mirrors core/expression_library.py's
- * _EMOTION_BASE / _ATTITUDE_MODIFIERS / intensity exponents so a
- * never-edited combination previews the same base the backend would
- * generate. Duplicated intentionally — this is a dev tool, not a shared
- * runtime module.
+ * Default recipes mirror the backend's emotion bases, attitude modifiers,
+ * and intensity exponents so unedited combinations preview its generated
+ * values. This logic is intentionally duplicated for the standalone tool.
+ * File import/export uses browser APIs rather than Electron Node integration.
  */
 
 import * as THREE from "three";
@@ -29,7 +22,7 @@ import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 
 const VRM_PATH = "assets/mayaaa.vrm";
 
-// Never composed/shown here — vowel/viseme mouth shapes belong to lip-sync.
+// Excluded from generated defaults; vowel/viseme shapes belong to lip-sync.
 const MOUTH_VISEME_KEYS = new Set(["Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_U", "Fcl_MTH_E", "Fcl_MTH_O"]);
 
 // Mirrors core/expression_library.py's _EMOTION_BASE.
@@ -58,6 +51,7 @@ const ATTITUDE_MODIFIERS = {
 const INTENSITY_BANDS = { low: 0.3, medium: 0.6, high: 0.9 };
 
 const INTENSITY_EXPONENT = { Fcl_BRW: 0.85, Fcl_EYE: 0.9, Fcl_MTH: 0.75 };
+/** Return the intensity exponent assigned to a VRoid morph family. */
 function exponentFor(key) {
     for (const [prefix, exp] of Object.entries(INTENSITY_EXPONENT)) {
         if (key.startsWith(prefix)) return exp;
@@ -69,6 +63,7 @@ function semanticKey(emotion, attitude, intensityWord) {
     return `${emotion}|${attitude}|${intensityWord}`;
 }
 
+/** Generate an unpersisted preview recipe using the backend's base formula. */
 function composeDefault(emotion, attitude, intensityWord) {
     const base = EMOTION_BASE[emotion] || EMOTION_BASE.neutral;
     const modifier = ATTITUDE_MODIFIERS[attitude] || {};
@@ -87,25 +82,19 @@ function composeDefault(emotion, attitude, intensityWord) {
     return recipe;
 }
 
-// ── Persistence — versioned localStorage, one entry per semantic key ───────
-//
-// Slider edits persist immediately to localStorage (never to a file while
-// editing — see task requirements). expressions.json is only ever written
-// by the explicit Export action, which dumps every locally-saved recipe at
-// once, in the same flat {semanticKey: recipe} schema
-// core/expression_library.py reads.
+// ── Versioned local drafts in localStorage ─────────────────────────────────
 
 const STORAGE_KEY     = "maya.expressionLab.recipes";
 const SCHEMA_VERSION  = 1;
 
+/** Load local drafts, falling back to an empty store for unsupported data. */
 function _loadStore() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return { version: SCHEMA_VERSION, recipes: {} };
         const parsed = JSON.parse(raw);
         if (parsed.version !== SCHEMA_VERSION || typeof parsed.recipes !== "object" || parsed.recipes === null) {
-            // Unknown/legacy shape — start fresh rather than risk corrupt data.
-            // Future schema bumps migrate here instead of dropping data.
+            // Unknown version or missing/non-object recipes field: start fresh.
             return { version: SCHEMA_VERSION, recipes: {} };
         }
         return parsed;
@@ -127,6 +116,7 @@ let store = _loadStore();         // { version, recipes: { semanticKey: recipe }
 let _activeKey = null;            // the combination currently shown/edited
 let _dirty = false;               // true once a slider was moved on the open combination
 
+/** Save one semantic-key draft to this browser's localStorage. */
 function persistRecipe(key, recipe) {
     if (!key) return;
     store.recipes[key] = recipe;
@@ -203,11 +193,10 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
 let vrm = null;
 
-// name -> Array<{mesh, index}> | null. Raw mesh morph targets — NOT
-// VRMExpressionManager presets/customs — same lookup as
-// frontend/js/expression-composer.js's _resolveMorphTargets.
+// Cache raw mesh morph-target matches (not VRMExpressionManager presets).
 const morphCache = new Map();
 
+/** Find all meshes exposing a morph target, caching both matches and misses. */
 function resolveMorphTargets(name) {
     if (morphCache.has(name)) return morphCache.get(name);
     const targets = [];
@@ -224,8 +213,7 @@ function resolveMorphTargets(name) {
     return result;
 }
 
-// All morph names actually collected so far (built up as recipes are
-// checked) — used only for the slider's "(unverified)" label.
+// Verified morphs written by previews, tracked so old values can be cleared.
 const seenVerified = new Set();
 
 const loader = new GLTFLoader();
@@ -273,6 +261,7 @@ function currentRecipe() {
     return recipe;
 }
 
+/** Clear previous preview weights, then apply the recipe's verified morphs. */
 function applyRecipeToVrm(recipe) {
     if (!vrm) return;
     // Clear every morph target seen so far (across any prior recipe) so
@@ -321,12 +310,7 @@ function buildSliders(recipe) {
     }
 }
 
-/**
- * Saves the outgoing combination's recipe if it was edited, then loads
- * the target combination — from localStorage if it's been edited before,
- * otherwise a freshly generated default (not persisted until edited).
- * Never touches expressions.json (see Export).
- */
+/** Save a dirty outgoing draft, then show the saved or generated target recipe. */
 function switchCombination() {
     if (_activeKey && _dirty) {
         persistRecipe(_activeKey, currentRecipe());

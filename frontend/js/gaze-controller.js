@@ -1,24 +1,20 @@
 /**
  * frontend/js/gaze-controller.js
- * Phase 3 — screen attention & gaze for Maya's avatar.
+ * Singleton attention-session and gaze-offset controller for the avatar.
+ * avatar.js forwards awake/speaking state and externally observed screen
+ * activity, and calls update() through main.js's per-frame loop. This module
+ * does not capture the screen or inspect its contents.
  *
- * Maintains an attention SESSION (not a per-frame reset): any reported
- * screen-activity event (typing, window focus, etc.) holds full attention
- * for a "few minutes" sustain window, refreshed by further activity at the
- * same spot. Once that window elapses — either because activity stopped
- * entirely, or because the same activity kept the SAME spot/type for the
- * whole window despite continuing — attention fades out and idle/fidget
- * behavior becomes eligible again. A genuinely new/different target (e.g.
- * switching windows) always overrides immediately, resetting both clocks.
+ * A new bucketed x/y target or type starts a fresh session at full attention.
+ * Same-target reports refresh the inactivity clock but do not restart boredom
+ * after a randomized ~3-minute sustain window. Continued activity then fades
+ * over four minutes; silence fades over six seconds. Speaking masks the gaze
+ * visually without discarding its active session.
  *
- * While OBSERVING, eyes hold a fixed "looking toward the screen" pose with
- * no idle drift (only vertical tracking of the target's y) — deliberately
- * NOT the small ambient jitter used elsewhere in the avatar, since a still
- * gaze reads as more attentive here. Head/neck contribution is kept small
- * (lower-priority/base tier — see avatar.js's startHeadMovement()).
- *
- * No screen capture / OCR / CV lives here — observeScreenActivity() is a
- * pure input API a future observation module can call.
+ * While observing, eyes hold a fixed screen-facing horizontal pose and track
+ * target y; small head offsets track target x/y. avatar.js consumes these
+ * offsets in its eye/head loops and yields head motion to higher-priority
+ * animations.
  */
 
 export const ATTENTION_STATE = Object.freeze({
@@ -31,17 +27,15 @@ export const ATTENTION_STATE = Object.freeze({
 const _TARGET_TYPES = new Set(["code", "text", "window", "notification", "general", "unknown"]);
 
 // ── Timing / tuning constants ────────────────────────────────────────────────
-const GAZE_SUSTAIN_BASE_MS   = 3 * 60_000;  // "a few minutes" a gaze session holds before boredom is eligible
-const GAZE_SUSTAIN_JITTER_MS = 45_000;      // +/- variation so it never expires on the dot
-const GAZE_FADE_MS           = 6000;        // time to ease attention 1 -> 0 once a session truly ends (no more activity at all)
-const BOREDOM_RAMP_MS        = 4 * 60_000;  // time to gradually ease attention 1 -> 0 while the SAME activity keeps pinging past the sustain threshold
+const GAZE_SUSTAIN_BASE_MS   = 3 * 60_000;  // baseline hold before boredom can begin
+const GAZE_SUSTAIN_JITTER_MS = 45_000;      // vary session duration to avoid a fixed expiry
+const GAZE_FADE_MS           = 6000;        // fade after activity reports stop
+const BOREDOM_RAMP_MS        = 4 * 60_000;  // gradual fade while the same activity continues
 const ATTENTION_MIN_ACTIVE   = 0.02;
 
 const SAME_TARGET_BUCKET = 0.03;            // normalized-distance bucket for "same spot" detection
 
-// Eyes hold this fixed yaw while OBSERVING instead of tracking left/right —
-// sign is whichever direction reads as "toward the screen" on this rig;
-// flip if it turns out to be mirrored once tested in-engine.
+// Fixed horizontal eye pose; sign must match the rig's screen-facing direction.
 const EYE_GAZE_LOCK_X = 0.3;
 const EYE_PITCH_RANGE = 0.14;               // vertical eye tracking still follows the target's y
 
@@ -55,11 +49,12 @@ function _clamp01(v) {
     return Math.max(0, Math.min(1, typeof v === "number" ? v : 0));
 }
 
-// Smooth, monotonic 0->1 ease used for the boredom ramp — no linear "cliff".
+// Smooth monotonic ramp avoids an abrupt boredom transition.
 function _smoothstep(p) {
     return p * p * (3 - 2 * p);
 }
 
+/** Maintains one attention session and its smoothed eye/head offsets. */
 class GazeController {
     constructor() {
         this._awake    = false;
@@ -79,12 +74,14 @@ class GazeController {
         this._headOffset = { x: 0, y: 0 };
     }
 
+    /** Choose a slightly varied sustain window for a new activity session. */
     _rollSustainDuration() {
         return GAZE_SUSTAIN_BASE_MS + (Math.random() * 2 - 1) * GAZE_SUSTAIN_JITTER_MS;
     }
 
     // ── External state hooks (called from avatar.js) ────────────────────────
 
+    /** Set wake state; sleeping clears the active target and attention session. */
     setAwake(awake) {
         this._awake = awake;
         if (!awake) {
@@ -98,8 +95,7 @@ class GazeController {
         }
     }
 
-    // Speaking overrides gaze visually but leaves the attention session
-    // (target/level/timers) untouched so gaze resumes where it left off.
+    /** Override visible gaze while preserving the current attention session. */
     setSpeaking(speaking) {
         this._speaking = speaking;
     }
@@ -107,19 +103,11 @@ class GazeController {
     // ── Input API ─────────────────────────────────────────────────────────
 
     /**
-     * observeScreenActivity({ x, y, intensity, type })
-     * x/y: normalized 0..1 screen coordinates.
-     * intensity: 0..1, defaults to 0.5.
-     * type: one of code|text|window|notification|general|unknown.
-     *
-     * Any call refreshes the "still active" clock. A call whose x/y/type
-     * differs enough from the last one (e.g. a window switch) is treated
-     * as a fresh gazing event: it resets the boredom clock too and jumps
-     * attention straight to full, overriding wherever gaze currently is.
-     * Repeated calls at the same spot (e.g. continued typing) keep
-     * attention up only until that same-activity session's own sustain
-     * window elapses — after that they no longer re-energize it, so she
-     * still gets bored of the same thing eventually.
+    * Record activity with normalized x/y, intensity in 0..1 (default 0.5),
+    * and type code|text|window|notification|general|unknown (other values
+    * become unknown). A new bucketed x/y or type starts a full-attention
+    * session; same-target pings refresh inactivity but do not restart
+    * boredom after the sustain window.
      */
     observeScreenActivity(target) {
         if (!this._awake || !target) return;
@@ -141,18 +129,17 @@ class GazeController {
         } else if (now - this._unchangedSinceAt <= this._sustainThreshold) {
             this._attentionLevel = 1;
         }
-        // else: this same activity already ran past its sustain window —
-        // boredom has already started ramping (see update()); further pings
-        // at the same spot must NOT reset attention back to 1 or restart
-        // the ramp — she still gets bored of the same thing eventually.
+        // Same-target pings after the sustain window must not restore attention
+        // or restart the boredom ramp.
 
         this._lastSignature = signature;
         this._lastEventAt   = now;
         this._target = { x, y, intensity, type };
     }
 
-    // ── Frame update — call every frame (e.g. from main.js's animate loop) ──
+    // ── Frame update ───────────────────────────────────────────────────────
 
+    /** Advance session timers (delta in seconds), state, and smoothed offsets. */
     update(delta) {
         if (!this._awake) {
             this._state = ATTENTION_STATE.SLEEPING;
@@ -165,16 +152,12 @@ class GazeController {
             const sinceLastEvent = now - this._lastEventAt;
             const unchangedFor   = now - this._unchangedSinceAt;
 
-            // Activity has genuinely stopped (no pings at all for the whole
-            // sustain window) — this is real session expiration, so keep the
-            // original fast GAZE_FADE_MS ease down to idle.
+            // No reports for the sustain window ends the session and uses the
+            // faster fade to idle.
             const sessionStopped = sinceLastEvent > this._sustainThreshold;
 
-            // Same activity is still pinging, but has run past its sustain
-            // window — boredom, not expiration. Ease down gradually over
-            // BOREDOM_RAMP_MS instead of the fast fade. sessionStopped
-            // implies this too (unchangedFor >= sinceLastEvent always), so
-            // it's only reached here when pings are still arriving.
+            // Ongoing same-target reports past the sustain window cause a
+            // gradual boredom fade. Session expiration takes precedence above.
             const boredomActive = !sessionStopped && unchangedFor > this._sustainThreshold;
 
             if (sessionStopped) {
@@ -187,8 +170,8 @@ class GazeController {
                 const p = Math.min(1, (now - this._boredomRampStartAt) / BOREDOM_RAMP_MS);
                 this._attentionLevel = 1 - _smoothstep(p);
             }
-            // else: still within the sustain window — attentionLevel stays
-            // at whatever observeScreenActivity() last set it to (1).
+            // Within the sustain window, attention stays at the level set by
+            // the latest new-target event.
 
             if (this._attentionLevel <= ATTENTION_MIN_ACTIVE) {
                 this._target = null;
@@ -215,8 +198,7 @@ class GazeController {
             const nx = (this._target.x - 0.5) * 2;   // -1..1
             const ny = (this._target.y - 0.5) * 2;
 
-            // Eyes hold a fixed "looking at the screen" pose — no drift,
-            // no left/right tracking off the target's x.
+            // Keep eyes screen-facing horizontally; only track vertical target position.
             desiredEyeX = EYE_GAZE_LOCK_X * this._attentionLevel;
             desiredEyeY = ny * EYE_PITCH_RANGE * this._attentionLevel;
 
@@ -232,6 +214,7 @@ class GazeController {
 
     // ── Output for avatar.js's eye/head loops ────────────────────────────────
 
+    /** Whether gaze should currently override idle eye/head motion. */
     hasActiveTarget() {
         return this._awake && !this._speaking && this._state === ATTENTION_STATE.OBSERVING;
     }
@@ -239,11 +222,12 @@ class GazeController {
     getEyeOffset()  { return this._eyeOffset; }
     getHeadOffset() { return this._headOffset; }
 
-    // ── Public status API — for the existing idle system / future use ───────
+    // ── Status API ─────────────────────────────────────────────────────────
 
     getAttentionState() { return this._state; }
     getAttentionLevel()  { return this._attentionLevel; }
 
+    /** Whether an active target has exceeded its sustain window. */
     isBored() {
         if (!this._target) return false;
         const now = performance.now();
@@ -252,5 +236,5 @@ class GazeController {
     }
 }
 
-// Singleton — one avatar, one attention session.
+// Shared so screen input, avatar motion, and fidget scheduling use one session.
 export const gazeController = new GazeController();

@@ -1,24 +1,23 @@
 /**
  * frontend/js/life-motion-controller.js
- * Phase 4 — subtle continuous "alive" motion: breathing, slow posture
- * variation, asymmetric shoulder micro-motion, and occasional posture
- * adjustments.
+ * Singleton controller for continuous breathing, posture, shoulder, and
+ * occasional hip motion. avatar.js calls update(vrm, state) from its existing
+ * head-motion frame loop; this module creates no separate animation loop.
  *
- * BASE-tier only (see animation-controller.js): every bone write is
- * gated on animationController.canWrite(boneName, PRIORITY.BASE) and
- * never calls claim() — a FIDGET/ACTION owner always wins outright, and
- * this controller yields the bone immediately when that happens. On
- * release, animationController.handoffProgress() eases the bone back
- * under this controller's control instead of snapping.
+ * All writes use the BASE tier without claiming bones, so higher-priority
+ * fidgets/actions take precedence. Released bones ease back through
+ * animationController.handoffProgress(). Speech and screen observation scale
+ * continuous motion down and prevent new hip shifts; an active hip tween pauses
+ * at its current value but continues writing for a smooth ownership handoff.
  *
- * Call update(vrm, state) once per frame from avatar.js's existing
- * head-sway rAF loop — no separate loop is created here.
+ * LIFE_MOTION_CONFIG contains the amplitudes, periods, and state scales.
+ * Deliberately different periods/phases keep the continuous signals from
+ * moving in sync. update() is a no-op while asleep or before the humanoid loads.
  */
 
 import { animationController, PRIORITY } from "./animation-controller.js";
 
-// Tunable amplitudes (radians) and periods (ms). Deliberately mismatched
-// periods/phases across signals so they never read as synchronized sines.
+// Tunable amplitudes (radians), periods (ms), phases, and state scales.
 export const LIFE_MOTION_CONFIG = {
     breathing: { period: 4200, amplitude: 0.012 },
     posture:   { period: 9000, amplitude: 0.01, phase: 0.8 },
@@ -49,13 +48,13 @@ class LifeMotionController {
         this._hipsNextDelay = this._rollHipsDelay();
     }
 
+    /** Choose the randomized delay before the next hips adjustment. */
     _rollHipsDelay() {
         const { minDelayMs, maxDelayMs } = LIFE_MOTION_CONFIG.hipsAdjust;
         return minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
     }
 
-    /** Writes `target` (already scaled) to bone.rotation[axis], respecting
-     *  BASE-tier ownership and easing back in via handoffProgress(). */
+    /** Write a BASE-tier target when available, easing in after ownership release. */
     _writeBlended(bone, axis, target) {
         if (!bone) return;
         if (!animationController.canWrite(bone.name, PRIORITY.BASE)) return;
@@ -64,10 +63,7 @@ class LifeMotionController {
         bone.rotation[axis] = current + (target - current) * progress;
     }
 
-    /**
-     * state: { awake, speaking, attentionState }
-     * Call once per frame. No-op entirely while asleep.
-     */
+    /** Apply one frame using `{ awake, speaking, attentionState }` from avatar.js. */
     update(vrm, state) {
         if (!vrm?.humanoid || !state?.awake) return;
 
@@ -121,6 +117,7 @@ class LifeMotionController {
         }
     }
 
+    /** Advance hip shifts when allowed, then write the current scaled value. */
     _applyHipsAdjustment(vrm, now, scale, allowAdjust) {
         const hips = vrm.humanoid.getNormalizedBoneNode("hips");
         if (!hips) return;
@@ -141,13 +138,11 @@ class LifeMotionController {
                 }
             }
         }
-        // else: hold at the last settled value — no new shifts while
-        // speaking/observing, but keep asserting it (see _writeBlended)
-        // so a released bone still eases back to the right resting spot.
+        // Suppression pauses an in-progress tween at its current value. Keep
+        // writing it so a released bone can ease back to this pose.
 
         this._writeBlended(hips, "z", this._hipsValue * scale);
     }
 }
 
-// Singleton — one avatar, one life-motion layer.
 export const lifeMotionController = new LifeMotionController();

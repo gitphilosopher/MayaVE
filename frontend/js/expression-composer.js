@@ -1,46 +1,30 @@
 /**
  * frontend/js/expression-composer.js
- * Expression Composer — turns a communicative-intent packet ({primary,
- * secondary, intensity, attitude, gaze, actions, recipe}) from the backend
- * Behavioral Engine (core/behavior_engine.py) into VRM expression weights.
+ * Applies backend communicative-intent packets to the VRM avatar. The legacy
+ * path maps semantic tags such as happy/sad/relaxed to the six supported
+ * expression-manager keys, then composes weights from intensity, attitude,
+ * and the client-side personality settings.
  *
- * CRITICAL VRM CONSTRAINT: the six-knob legacy path below assumes exactly
- * six emotional blendshapes — neutral, joy, fun, angry, sorrow, surprised.
- * There is no "happy"/"sad"/"relaxed" blendshape; those words only ever
- * appear as semantic tags (core/behavior_engine.py's _VALID_EXPRESSIONS)
- * and get translated into the six knobs here.
+ * If `intent.recipe` contains morph names present on the loaded model,
+ * those raw VRoid `Fcl_BRW_*`/`Fcl_EYE_*`/`Fcl_MTH_*` targets are written
+ * directly to mesh morph influences and legacy weights fade to zero.
+ * Missing names are ignored. If no recipe target resolves, semantic tags
+ * use the six-key path. Direct recipe writes bypass expressionController's
+ * layer system, which mediates only VRMExpressionManager keys.
  *
- * Semantic recipe path (additive, backward compatible): the backend may
- * also send `intent.recipe` — a dict of fine-grained, verified VRoid
- * `Fcl_BRW_*`/`Fcl_EYE_*`/`Fcl_MTH_*` weights composed from emotion +
- * attitude + intensity (see core/expression_library.py). These are RAW
- * mesh morph targets, not VRMExpressionManager presets/customs — they
- * are written directly via `mesh.morphTargetInfluences[index]` (found
- * through each mesh's `morphTargetDictionary`), the same technique VRoid
- * tooling uses, and bypass expressionController's layer system entirely
- * since that system only mediates VRMExpressionManager-registered keys.
- * A recipe key is only ever written after confirming some mesh actually
- * has that morph target; an unverified or missing key is dropped, never
- * invented. If no verified recipe key is found (older models, or a
- * packet with no recipe), the legacy six-knob path below runs exactly
- * as before.
- *
- * `Fcl_MTH_A/I/U/E/O` (viseme vowel shapes) are never part of a recipe —
- * those belong to lip-sync (see avatar.js's _startLipSync) — so there is
- * no ownership conflict to resolve here.
+ * Recipes come from core/expression_library.py, which excludes vowel
+ * visemes (`Fcl_MTH_A/I/U/E/O`) reserved for avatar.js lip-sync. Gaze is
+ * forwarded to avatar.js; body actions use the separate animation message.
+ * websocket.js calls applyBehavior() for incoming behavior packets.
  */
 
 import { expressionController, EXPRESSION_LAYER } from "./expression-controller.js";
 import { applyBehavioralGaze, vrm } from "./avatar.js";
 
-// The ONLY six valid legacy VRM emotional keys. Never emit anything outside this set.
+// Supported VRM expression-manager keys for the legacy composition path.
 const RENDERABLE = ["neutral", "joy", "fun", "angry", "sorrow", "surprised"];
 
-// Intrinsic character per semantic tag: which knob carries it (primary),
-// and which knob colours it with Maya's personality (accent). This is
-// the compact base a handful of tags are built from — not a table of
-// named expressions like "mock irritation" or "dramatic disbelief";
-// those emerge from composing primary + secondary + attitude below.
+// Map each semantic tag to its legacy primary key and optional personality accent.
 const BASE = {
     happy:     { primary: "joy",       accent: "fun" },
     excited:   { primary: "joy",       accent: "surprised" },
@@ -75,11 +59,7 @@ function _clamp01(v) {
     return Math.max(0, Math.min(1, v));
 }
 
-/**
- * Composes a communicative-intent packet into six continuous VRM
- * weights. Every step is a function of (tag, intensity, attitude,
- * personality) — no giant static expression table.
- */
+/** Compose a legacy six-key weight map from semantic intent and personality. */
 function _composeWeights(intent) {
     const primaryTag = BASE[intent.primary] ? intent.primary : "neutral";
     const base = BASE[primaryTag];
@@ -155,6 +135,7 @@ function _durationFor(key) {
     return TRANSITION_MS_BASE * (KEY_RATE[key] ?? 1.0) * (1 - PERSONALITY.dramaticity * 0.3);
 }
 
+/** Interpolate legacy weights, cancelling any older in-flight transition. */
 function _animateTo(target) {
     const token = ++_rafToken;
     const start = new Map(_current);
@@ -184,9 +165,7 @@ function _animateTo(target) {
 
 // ── Semantic recipe path — raw verified Fcl_* mesh morph targets ───────────
 
-// name -> Array<{mesh, index}> | null (null = confirmed absent on this VRM).
-// Populated lazily, one scene traversal per never-before-seen name — not
-// re-traversed on every write/frame.
+// Cache matches and confirmed misses after one lazy scene traversal per name.
 const _morphCache = new Map();
 
 function _resolveMorphTargets(name) {
@@ -219,6 +198,7 @@ function _setRawMorph(name, value) {
 let _recipeCurrent  = new Map();
 let _recipeRafToken = 0;
 
+/** Interpolate recipe morphs and ease keys omitted from the target back to zero. */
 function _animateRecipeTo(targetMap) {
     const allKeys = new Set([..._recipeCurrent.keys(), ...targetMap.keys()]);
     if (allKeys.size === 0) return;
@@ -262,11 +242,8 @@ function _logDebug(intent, weights) {
 }
 
 /**
- * Applies a composed behavior packet from the backend:
- * {primary, secondary, intensity, attitude, gaze, actions, recipe}.
- * Body actions (nod/giggle/...) are dispatched separately over the
- * existing "animation" WS message/channel — this only handles emotional
- * expression weights + gaze.
+ * Apply a backend behavior packet's expression weights and gaze. Body actions
+ * are dispatched separately over the animation message channel.
  */
 export function applyBehavior(intent) {
     if (!intent || !intent.primary) return;
@@ -292,8 +269,7 @@ export function applyBehavior(intent) {
             + Object.entries(verifiedRecipe).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(" ")
         );
     } else {
-        // No verified recipe key available (older/plain VRM, or a packet
-        // with no recipe) — legacy six-knob composition, unchanged.
+        // No recipe morph is available on this model; use semantic weights.
         _animateRecipeTo(new Map());   // ease out any stale recipe keys
         const weights = _composeWeights(intent);
         _logDebug(intent, weights);

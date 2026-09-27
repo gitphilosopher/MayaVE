@@ -1,38 +1,21 @@
 /**
  * frontend/js/websocket.js
  *
- * Mood note: handleState() used to force an expression on "processing"
- * and "idle" (neutral / relaxed), which fought with Maya's persistent
- * mood (core/mood.py on the backend). The backend now sends an explicit
- * `behavior` message — composed by core/behavior_engine.py, already
- * mood-aware — right alongside every state change, so handleState()
- * only owns "listening" here.
+ * Browser client for the backend avatar protocol. main.js imports this module
+ * for its connection side effects; the current WebSocket is also exported as
+ * `ws`.
  *
- * Behavior note: `behavior` messages (composed communicative intent —
- * primary/secondary emotion, intensity, attitude, gaze) are handed to
- * expression-composer.js's applyBehavior(), which blends them into VRM
- * weights instead of the old flat tag -> single blendshape map.
+ * Routes audio and state messages to avatar.js, behavior packets to
+ * expression-composer.js, and animation events to avatar actions. Playback
+ * completion is reported as `audio_done` while the socket is open; `stop_audio`
+ * cancels local playback. Async VRMA actions are not awaited, so asset loading
+ * cannot delay speech. Transcript messages currently have no UI handler.
  *
- * Idle-fidget note: handleState() also forwards every state value to
- * avatar.js's setAvatarState() so the idle-fidget scheduler (see
- * avatar.js's "Idle fidget animations" section) knows when it's actually
- * safe to play one — only while the backend reports "idle", never during
- * listening/processing/speaking.
- *
- * Backend voice-sleep note (Batch 4 — "Avatar never visually sleeps"):
- * the backend now sends state "sleeping" once the go-to-sleep goodbye
- * line finishes playing (see core/speaker.py's Speaker.speak()), on top
- * of every other state it already sent. handleState() is now the SINGLE
- * source of truth for the avatar's visual sleep/wake — "sleeping" calls
- * sleepAvatar(), and every other value (including the very first state
- * the server replays on connect — see ws_server.py's _handler) calls
- * wakeAvatar(), which is a no-op if she's already awake. Because of this,
- * ws.onopen below no longer unconditionally wakes the avatar itself: it
- * would otherwise show her waking up for an instant even when the
- * backend is actually still asleep, only for the very next message to
- * put her back to sleep. ws.onclose still puts her to sleep immediately
- * on disconnect — that's a separate, connection-level signal the backend
- * can't send once the socket is already down.
+ * Every backend state reaches the fidget gate, which requires `idle` for
+ * automatic fidgets. `sleeping` selects the sleep path; `listening` also
+ * applies its expression, and all other states wake the avatar. The server
+ * replays its last state on connect, so socket open only updates transport
+ * status; socket close sleeps the avatar and schedules a reconnect.
  */
 
 import {
@@ -48,23 +31,21 @@ const RECONNECT_MS = 2000;
 
 export let ws = null;
 
-// Tell avatar.js to notify us when a sentence finishes — we send audio_done to backend
+// Report streamed-audio completion to the backend while the socket is open.
 setAudioDoneCallback(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "audio_done" }));
     }
 });
 
+/** Open the backend socket and install handlers; closure schedules a retry. */
 function connect() {
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
         console.log("[Maya WS] Connected");
         setStatus("connected");
-        // No wakeAvatar() here — the server always replays its actual last
-        // state (including "sleeping") right after this fires, and
-        // handleState() below is the single source of truth for whether
-        // the avatar shows awake or asleep. See module docstring.
+        // The replayed backend state, not transport connection, sets sleep/wake.
     };
 
     ws.onmessage = (event) => {
@@ -82,24 +63,15 @@ function connect() {
                 applyBehavior(data);
                 break;
             case "stop_audio":
-                // Barge-in: backend cancelled Maya's current speech task
-                // (core/state.py's interrupt()) — halt playback here too
-                // instead of letting an already-queued sentence finish.
+                // Stop current playback immediately when the backend interrupts speech.
                 stopCurrentAudio();
                 break;
             case "transcript":
-                // Reserved for transcript overlay — no-op for now
+                // No transcript UI is currently connected.
                 break;
             case "animation":
-                // Fire-and-forget: several of these (wave, nod, giggle,
-                // sigh, shrug) are now async in avatar.js since they load
-                // a .vrma file before playing. They're intentionally never
-                // awaited here — playback of the incoming "audio" message
-                // (handled above, also fire-and-forget) must never wait on
-                // an animation, so Maya can speak while an animation is
-                // still loading or mid-playback. .catch() just prevents an
-                // unhandled-rejection warning if a .vrma fails to load;
-                // it does not delay anything.
+                // Fire-and-forget so animation loading never delays concurrent audio.
+                // Log promise rejections at the WebSocket event boundary.
                 switch (data.name) {
                     case "wave":   playWaveAnimation()?.catch(_logAnimationError);   break;
                     case "nod":    playNodAnimation()?.catch(_logAnimationError);    break;
@@ -122,34 +94,21 @@ function connect() {
     ws.onerror = (err) => console.error("[Maya WS] Error:", err);
 }
 
+/** Sync fidget eligibility and the avatar's visual awake/sleep state. */
 function handleState(value) {
-    // Let the idle-fidget scheduler know the backend's current state
-    // regardless of which branch (if any) below fires for it.
+    // The scheduler needs every backend state, including "sleeping".
     setAvatarState(value);
 
     switch (value) {
         case "listening":
             setExpression("surprised", 0.3);
-            // Defensive — see the "sleeping" case and the default branch
-            // below; LISTENING can't actually occur while backend-asleep
-            // (the VAD pipeline is skipped then), but this costs nothing
-            // if it ever does.
             wakeAvatar();
             break;
         case "sleeping":
-            // Backend voice-sleep (main.py's on_speech "go to sleep" path)
-            // — independent of the socket connection, which stays open
-            // the whole time. See module docstring.
+            // Voice-triggered sleep is a backend state; the socket remains open.
             sleepAvatar();
-            setStatus("sleeping");   // reuses the existing 💤 indicator
+            setStatus("sleeping");
             break;
-        // "processing"/"speaking"/"idle" no longer force an expression
-        // here (see module docstring) but DO mean the backend is awake —
-        // wake the avatar if it wasn't already (wakeAvatar() no-ops if it
-        // was). This also covers the very first state ws_server.py
-        // replays on every new connection, so a fresh/reloaded page ends
-        // up in the right visual state without waiting to guess from
-        // ws.onopen alone.
         default:
             wakeAvatar();
             setStatus("connected");
@@ -162,6 +121,7 @@ function setStatus(status) {
     if (el) el.textContent = status === "connected" ? "" : "💤";
 }
 
+/** Decode an incoming base64 audio payload for avatar playback. */
 function base64ToArrayBuffer(b64) {
     const binary = atob(b64);
     const buf    = new ArrayBuffer(binary.length);

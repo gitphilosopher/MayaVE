@@ -1,5 +1,19 @@
 /**
  * frontend/js/avatar.js
+ * Owns the browser-side VRM avatar lifecycle and coordinates its expressions,
+ * gaze, audio/lip-sync, animations, and automatic idle fidgets. loadAvatar()
+ * attaches the model to the scene; main.js drives the frame updates, while
+ * websocket.js supplies audio, backend state, wake/sleep, and action events.
+ *
+ * Exported hooks also let expression-composer.js apply behavioral gaze and
+ * let other callers control expressions or animations. Screen-attention data
+ * is accepted as input here; this module does not capture or inspect the
+ * screen. The window.maya object exposes manual animation and gaze controls.
+ *
+ * Audio playback and lip-sync are tied to the actual audio source. Generation
+ * and frame tokens invalidate work that finishes after a stop or replacement.
+ * Automatic fidgets require an awake, idle, non-speaking avatar and are
+ * further gated by active animations, idle duration, cooldowns, and attention.
  */
 
 import * as THREE from "three";
@@ -20,52 +34,42 @@ import { expressionController, EXPRESSION_LAYER } from "./expression-controller.
 export let vrm;
 export let isSpeaking = false;
 
-// ── Post-launch calm period (Phase 9) ──────────────────────────────────────
+// ── Post-launch calm period ────────────────────────────────────────────────
 // Maya intentionally does not start automatic idle/fidget behavior for a
 // short window after avatar init, so she doesn't appear to fidget the
 // instant she's summoned. Timestamp is captured at module load (this file
-// is evaluated once, synchronously, when main.js starts) — not on wake or
-// first message. Only gates the scheduler's own initiation in
-// _canFidgetNow(); every other animation path (actions, window.maya.*,
-// gaze, life motion, speaking/lip-sync, blink/wink, sleep/wake) is untouched.
+// is evaluated once when main.js starts), not on wake or first message. It
+// gates only automatic fidget scheduling, not manually triggered behavior.
 const _CALM_PERIOD_MS = 5 * 60_000;
 const _avatarInitAt   = performance.now();
 function _isCalmPeriodActive() {
     return performance.now() - _avatarInitAt < _CALM_PERIOD_MS;
 }
 
-// Tracks the in-flight audio source so stopCurrentAudio() can halt a
-// barge-in immediately — see Handoff §3.12 for the full backend chain.
+// Tracks current playback so stopCurrentAudio() can halt a barge-in immediately.
 let _currentSource  = null;   // AudioBufferSourceNode from speakFromBytes
-let _audioGen = 0;   // bumped by stopCurrentAudio(); drops audio whose decode finished after a stop
+let _audioGen = 0;            // invalidates audio whose decode finishes after a stop
 let _currentAudioEl = null;   // HTMLAudioElement from speak()
 
-// Callback set by websocket.js to send audio_done signal to backend
 let _onAudioDone = null;
+/** Set the callback invoked when streamed audio finishes or cannot be played. */
 export function setAudioDoneCallback(fn) { _onAudioDone = fn; }
 
-// Called whenever new audio playback begins. The idle-fidget scheduler
-// (see further down) runs on its own free-running 7–18s timer that isn't
-// otherwise synced to speech — without this, a tick already due can land
-// right as audio ends and fire a fidget immediately instead of waiting a
-// natural pause. Only restarts the countdown — must NOT touch active
-// animations, since e.g. the greet wave is dispatched right as speech
-// starts and would otherwise get cut off before it plays.
+// Restart the independent fidget timer around speech without interrupting
+// deliberate animations that may have been dispatched with the audio.
 function _onSpeakingStart() {
     _scheduleNextFidget();
     gazeController.setSpeaking(true);
 }
 
-// Called whenever audio playback ends — restarts the countdown again so
-// the next fidget is a full 7–18s away from the moment speech actually
-// stopped, not from whenever it happened to last tick.
+// Start a fresh fidget delay from the actual end of speech.
 function _onSpeakingEnd() {
     _scheduleNextFidget();
     gazeController.setSpeaking(false);
 }
 
-// Single AudioContext reused for the lifetime of the page
 let _audioCtx = null;
+/** Return the page-wide audio context, recreating it if it was closed. */
 function getAudioContext() {
     if (!_audioCtx || _audioCtx.state === "closed") {
         _audioCtx = new AudioContext();
@@ -73,13 +77,11 @@ function getAudioContext() {
     return _audioCtx;
 }
 
-// ── Behavioral gaze hook ────────────────────────────────────────────────────
-// Execution-only: WHICH mode and WHEN is decided by the Behavioral Engine
-// (core/behavior_engine.py) and forwarded via expression-composer.js —
-// this just applies the resulting eye offset, at lower priority than
-// speaking and screen-attention gaze (see startEyeMovement() below).
+// The behavior engine chooses the mode and timing; this hook applies its
+// temporary eye offset. Speaking and screen-attention gaze take precedence.
 let _behGazeX = 0, _behGazeY = 0, _behGazeUntil = 0;
 
+/** Apply a temporary behavioral gaze mode: "away", "soft", or "direct". */
 export function applyBehavioralGaze(mode) {
     if (!_awake) return;
     const now = performance.now();
@@ -107,10 +109,7 @@ let _blinkingActive = false;  // true while the blink loop is scheduled
 let _blinkTimeout   = null;   // pending blink tick — cleared on re-wake to avoid duplicate loops
 let _eyeLoopStarted = false;  // eye-movement loop is started once per page, not per wake
 
-/**
- * Called by websocket.js when WS connects.
- * Opens eyes and starts normal idle animations.
- */
+/** Mark the avatar awake and start its idle, blink, and eye-motion behavior. */
 export function wakeAvatar() {
     if (_awake) return;
     _awake = true;
@@ -126,8 +125,8 @@ export function wakeAvatar() {
 }
 
 /**
- * Called by websocket.js when WS disconnects.
- * Closes eyes and stops the blink loop.
+ * Mark the avatar asleep, stop idle/blink behavior, and restore resting
+ * expressions when the VRM is loaded.
  */
 export function sleepAvatar() {
     if (!_awake) return;
@@ -149,19 +148,9 @@ export function sleepAvatar() {
     expressionController.setValue(EXPRESSION_LAYER.EMOTION, "neutral",   0);
 }
 
-// ── Lip-sync ──────────────────────────────────────────────────────────────────
-// Driven purely by the AnalyserNode attached to whichever audio is actually
-// playing (see speakFromBytes/speak below) — not by any LLM/TTS response
-// event. Mouth shapes + the speaking "happy" boost go through the LIPSYNC
-// tier of expressionController so they layer over (and never permanently
-// clobber) mood/skill-response expressions written on the EMOTION tier —
-// e.g. an active [happy] mood tag is no longer stomped to a flat 0.08 by
-// the per-frame mouth loop while Maya is speaking that same line.
-//
-// _lipSyncToken guards against overlapping loops: each _startLipSync() call
-// gets its own token, and a loop whose token no longer matches the current
-// one (because a newer start or a stop bumped it) exits on its very next
-// frame instead of continuing to run alongside the newer loop.
+// Lip-sync analyzes the audio actually playing, not a speech/TTS event. Its
+// expression layer overlays mouth shapes without replacing emotion values.
+// Tokens make older animation-frame loops exit after a replacement or stop.
 
 let _lipSyncToken  = 0;
 let _lipSyncActive = false;
@@ -217,8 +206,12 @@ function _stopLipSync() {
     expressionController.setValue(EXPRESSION_LAYER.BASE, "relaxed", 0.4);
 }
 
-// ── speakFromBytes — called by websocket.js ───────────────────────────────────
+// ── Streamed audio ─────────────────────────────────────────────────────────
 
+/**
+ * Decode and play backend audio, reporting completion through the registered
+ * callback.
+ */
 export async function speakFromBytes(arrayBuffer) {
     if (!vrm) {
         if (typeof _onAudioDone === "function") _onAudioDone();   // don't leave the backend waiting 30 s
@@ -259,7 +252,7 @@ export async function speakFromBytes(arrayBuffer) {
     _startLipSync(analyser);
 }
 
-// ── speak — local file (testing only) ────────────────────────────────────────
+// Local-file playback is retained for manual testing.
 
 export function speak(audioFile) {
     if (!vrm) return;
@@ -285,7 +278,7 @@ export function speak(audioFile) {
     _startLipSync(analyser);
 }
 
-// ── Barge-in: stop whatever is currently playing ─────────────────────────────
+// ── Stop active audio ───────────────────────────────────────────────────────
 
 /** Halts whichever audio path is active + stops lip-sync. Safe no-op if idle. */
 export function stopCurrentAudio() {
@@ -314,11 +307,10 @@ export function setExpression(name, value) {
     expressionController.setValue(EXPRESSION_LAYER.EMOTION, name, value);
 }
 
-// ── VRMA-driven animation system — see Handoff §3.11 / §3.12 for the full
-// design rationale (track filtering, fade envelopes, shoulder protection,
-// expression-track caveat) ─────────────────────────────────────────────────
+// ── VRMA animation system ───────────────────────────────────────────────────
 
-// Full .vrma inventory — not all are wired to anything yet, see §3.12.
+// Complete registered asset inventory; some animations are not yet triggered
+// automatically.
 const _VRMA_ASSETS = {
     wave:         "assets/vrmas/wave.vrma",
     nod:          "assets/vrmas/hard_nod.vrma",
@@ -355,7 +347,7 @@ const _FADE_OVERRIDES = {
 };
 const _DEFAULT_FADE = { fadeInMs: 350, fadeOutMs: 1500 };
 
-// Bones no .vrma may ever rotate — preserves custom shoulder pose (§3.11).
+// VRMA clips never rotate the shoulders, preserving the custom resting pose.
 const _PROTECTED_BONE_KEYS = ["leftShoulder", "rightShoulder"];
 
 function _protectedBoneNames() {
@@ -392,7 +384,7 @@ async function _loadVrmaAnimation(name, url) {
     return promise;
 }
 
-/** Retargets + filters a VRMAnimation to quaternion/weight tracks only (§3.11). */
+/** Retarget a VRM animation and keep only supported bone/expression tracks. */
 function _buildFilteredClip(vrma, name) {
     const rawClip = createVRMAnimationClip(vrma, vrm);
     const excludedBones = _protectedBoneNames();
@@ -409,7 +401,7 @@ function _buildFilteredClip(vrma, name) {
         return false; // drop position/scale and anything else unrecognised
     });
 
-    // Empty after filtering usually means root-motion, not bone rotation (§3.11).
+    // Empty clips usually rely on root-motion tracks, which this system strips.
     if (clip.tracks.length === 0) {
         console.warn(
             `[Maya] '${name}' has NO playable tracks after filtering — its ` +
@@ -449,23 +441,13 @@ export function updateGaze(delta) {
     gazeController.update(delta);
 }
 
-/** Generic VRMA player: load (cached) → filter → fade in → play once → fade out (§3.11).
- *  Claims the clip's bone tracks in animation-controller.js (FIDGET tier for
- *  the idle-fidget pool, ACTION tier otherwise) so base idle motion (head
- *  sway, gaze) yields those bones for the duration of playback. */
+/** Load, filter, and play one VRMA clip while coordinating its bone ownership. */
 async function playVrmaAnimation(name) {
     if (!vrm || _activeNames.has(name)) return;
 
-    // A deliberately-triggered animation (wave/nod/giggle/sigh/shrug, or a
-    // manually-tested one) must not run at the same time as a randomised
-    // idle fidget. Two independent THREE.AnimationMixer instances driving
-    // the same bone fight every frame, and when the newer one later stops
-    // and restores, it restores to whatever it captured as "original" at
-    // its own start — the fidget's mid-motion pose, not the fidget's real
-    // rest pose — leaving the fidget's bone frozen there even after it's
-    // long gone. Cleanly stop any active fidget first (same stop + forced
-    // mixer.update(0) restore used for a normal fidget's own end-of-clip
-    // cleanup, see below) so only one bone-driving mixer is ever live.
+    // Avoid two mixers writing the same bones: a later mixer would capture
+    // the fidget's transient pose as its restore pose and could leave it stuck.
+    // Stop and restore active fidgets before starting a deliberate animation.
     if (!_FIDGET_VRMA_NAMES.has(name)) {
         for (const fidgetName of _FIDGET_VRMA_NAMES) {
             const entry = _activeMixers.get(fidgetName);
@@ -492,13 +474,8 @@ async function playVrmaAnimation(name) {
     try {
         const vrma = await _loadVrmaAnimation(name, url);
 
-        // The load above is async — on an uncached .vrma (first play this
-        // session) it can take long enough for speech to start in the
-        // meantime. The scheduler only checks _canFidgetNow() BEFORE this
-        // await; without a re-check here, a fidget requested while idle
-        // would still start playing the moment it finishes loading, even
-        // over/right after speech that began in between. Actions are
-        // exempt — they must always play regardless of timing.
+        // Loading can outlast the idle state that requested a fidget. Check
+        // again before starting it; deliberate actions are not gated by speech.
         if (_FIDGET_VRMA_NAMES.has(name) && isSpeaking) {
             _activeNames.delete(name);
             return;
@@ -538,7 +515,7 @@ async function playVrmaAnimation(name) {
             const current = _activeMixers.get(name);
             if (current && current.mixer !== mixer) return;
             action.stop();
-            mixer.update(0);   // forces THREE's pose restore before we stop ticking it (§3.11)
+            mixer.update(0);   // force THREE to restore the clip's original pose
             _activeMixers.delete(name);
             _activeNames.delete(name);
             animationController.release(name);
@@ -552,7 +529,7 @@ async function playVrmaAnimation(name) {
     }
 }
 
-// ── Public animation entry points — same names/signatures as before (§3.11) ─
+// ── Public animation entry points ──────────────────────────────────────────
 
 export function playWaveAnimation()         { return playVrmaAnimation("wave"); }
 export function playNodAnimation()          { return playVrmaAnimation("nod"); }
@@ -563,7 +540,7 @@ export function playWeightShiftAnimation()  { return playVrmaAnimation("weightSh
 export function playLookAroundAnimation()   { return playVrmaAnimation("lookAround"); }
 export function playStretchAnimation()      { return playVrmaAnimation("stretch"); }
 
-// Registered but not yet wired up — manual testing only, see §3.12.
+// Registered for manual use, but not connected to backend events or the fidget scheduler.
 export function playIdleAnimation()          { return playVrmaAnimation("idle"); }
 export function playAngryAnimation()         { return playVrmaAnimation("angry"); }
 export function playBashfulAnimation()       { return playVrmaAnimation("bashful"); }
@@ -579,7 +556,7 @@ export function playRejectedAnimation()      { return playVrmaAnimation("rejecte
 export function playThankfulAnimation()      { return playVrmaAnimation("thankful"); }
 export function playWavingAnimation()        { return playVrmaAnimation("waving"); }
 
-// ── Manual (procedural) animations — deliberately not VRMA-backed (§3.11) ──
+// ── Manual procedural animations ───────────────────────────────────────────
 
 let _winkActive = false;
 
@@ -597,6 +574,7 @@ export function playWinkAnimation() {
 let _headTiltActive = false;
 let _headTiltStop   = null;   // cancels the running tween and restores the neck
 
+/** Run a neck-tilt fidget; deliberate animations can cancel and restore it. */
 export function playHeadTiltAnimation() {
     if (!vrm || _headTiltActive) return;
     const neck = vrm.humanoid.getNormalizedBoneNode("neck");
@@ -645,6 +623,7 @@ export function playHeadTiltAnimation() {
 
 let _shoulderRollActive = false;
 
+/** Run a short shoulder-roll fidget on one randomly selected shoulder. */
 export function playShoulderRollAnimation() {
     if (!vrm || _shoulderRollActive) return;
     const shoulder = Math.random() < 0.5
@@ -675,8 +654,7 @@ export function playShoulderRollAnimation() {
     requestAnimationFrame(tick);
 }
 
-// ── Idle fidgets — gated on backend state + isSpeaking (§3.12), modulated
-// by screen-attention/boredom (Phase 5, see _gazeFidgetFactor below) ─────
+// ── Automatic idle fidgets ─────────────────────────────────────────────────
 
 let _currentBackendState = null;   // mirrors "idle" | "listening" | "processing" | "speaking"
 let _idleFidgetTimeout   = null;
@@ -685,7 +663,10 @@ let _idleFidgetTimeout   = null;
 // or null when it isn't. Drives the 30-minute "grab attention" wave below.
 let _idleSince = null;
 
-/** Called by websocket.js on every "state" message (drives _canFidgetNow). */
+/**
+ * Update backend state used to gate idle fidgets and track continuous idle
+ * time.
+ */
 export function setAvatarState(stateValue) {
     _currentBackendState = stateValue;
     if (stateValue === "idle") {
@@ -712,7 +693,7 @@ function _isActionAnimationPlaying() {
     return false;
 }
 
-// Pool of fidgets the scheduler picks from at random. Order doesn't matter.
+// Candidates for randomized automatic idle fidgets.
 const _FIDGET_POOL = [
     { name: "weightShift",  fn: playWeightShiftAnimation },
     { name: "lookAround",   fn: playLookAroundAnimation },
@@ -724,22 +705,15 @@ const _FIDGET_POOL = [
     { name: "waving",       fn: playWavingAnimation },
 ];
 
-// True while any fidget (VRMA-backed or manual/procedural) is still mid-
-// playback. Without this, two fidgets sharing a bone (e.g. lookAround and
-// headTilt both drive the neck) could overlap: a manual tween like headTilt
-// captures its "rest" rotation at start, and if that capture happens while
-// a VRMA fidget is still mid-motion, headTilt writes that mid-motion pose
-// back as the neck's resting rotation when it finishes — visibly "stuck".
+// Prevent overlapping fidgets from capturing another fidget's transient
+// bone pose as their restore pose.
 function _isAnyFidgetPlaying() {
     return _FIDGET_POOL.some(({ name }) => _activeNames.has(name))
         || _headTiltActive || _shoulderRollActive;
 }
 
-// Longest any real fidget should ever take. If _isAnyFidgetPlaying() is
-// still true after this long, one of its flags failed to reset (e.g. an
-// rAF-driven tween like headTilt/shoulderRoll stalled because this window
-// never holds focus and got background-throttled) — force-clear rather
-// than let it block every future fidget forever.
+// Recover if a background-throttled animation-frame tween fails to clear its
+// active flag, rather than permanently blocking future fidgets.
 const _FIDGET_STUCK_TIMEOUT_MS = 15_000;
 let _fidgetStartedAt = 0;
 
@@ -756,10 +730,8 @@ function _clearStuckFidgetState() {
     animationController.release("shoulderRoll");
 }
 
-// Extra per-animation min spacing on top of the 7–18s pool interval (§3.12).
-// Cooldowns ratchet up each time that fidget plays (base -> +step per play,
-// capped at max) so a repeated gesture gradually becomes rarer instead of
-// firing at a fixed interval forever.
+// Per-animation spacing grows by step after each play, up to max, so repeated
+// gestures gradually become less frequent.
 const _FIDGET_COOLDOWN_CONFIG = {
     lookAround: { base: 2 * 60_000,  step: 30_000,       max: 5 * 60_000 },
     idle:       { base: 2 * 60_000,  step: 30_000,       max: 5 * 60_000 },
@@ -805,20 +777,14 @@ const _FIDGET_MIN_IDLE_MS = {
     waving:  _ATTENTION_IDLE_MS,
 };
 
-// ── Phase 5 — screen-attention-aware fidget modulation ──────────────────
-// Reuses gazeController's existing attention/boredom signal (no second
-// timer). Full attention (new/changing screen activity) suppresses fidgets
-// almost entirely; as that attention decays toward boredom the factor rises
-// back to 1, restoring normal probability. Outside OBSERVING (plain idle,
-// speaking, sleeping) this is always 1 — unchanged pre-Phase-5 behaviour.
+// Reuse the gaze controller's attention signal rather than adding another timer.
+// Attention suppresses fidgets; as it fades, normal scheduling resumes.
 function _gazeFidgetFactor() {
     if (gazeController.getAttentionState() !== ATTENTION_STATE.OBSERVING) return 1;
     return Math.max(0, Math.min(1, 1 - gazeController.getAttentionLevel()));
 }
 
-// Fidgets subtle enough to allow while boredom is still building during
-// OBSERVING — larger/attention-grabbing gestures (stretch, waving,
-// lookAround, cuteThink) stay reserved for genuine idle (factor === 1).
+// Only subtle fidgets are eligible while screen attention is still fading.
 const _SUBTLE_FIDGET_NAMES = new Set(["weightShift", "headTilt", "shoulderRoll"]);
 
 function _scheduleNextFidget() {
@@ -866,9 +832,7 @@ function _scheduleNextFidget() {
                         return now - lastPlayed >= cooldown;
                     });
 
-                    // Boredom is still building (screen activity ongoing,
-                    // attention only partially faded) — keep it to subtle
-                    // fidgets rather than a big attention-grabbing gesture.
+                    // Keep attention-grabbing gestures out until attention fades.
                     if (gazeController.getAttentionState() === ATTENTION_STATE.OBSERVING) {
                         const subtle = eligible.filter(({ name }) => _SUBTLE_FIDGET_NAMES.has(name));
                         if (subtle.length > 0) eligible = subtle;
@@ -896,22 +860,23 @@ function _scheduleNextFidget() {
     }, delay);
 }
 
-/** Started from wakeAvatar() — begins the randomised idle-fidget loop. */
+/** Start the recurring randomized idle-fidget scheduler. */
 export function startIdleFidgets() {
     _hasPlayedFirstFidget = false;
     _scheduleNextFidget();
 }
 
-/** Stopped from sleepAvatar() — no fidgeting while Maya's asleep. */
+/** Stop the idle-fidget timer, such as when the avatar goes to sleep. */
 export function stopIdleFidgets() {
     clearTimeout(_idleFidgetTimeout);
     _idleFidgetTimeout = null;
 }
 
-// ── Screen attention / gaze — Phase 3 (see gaze-controller.js) ─────────────
-// Pure input API for a future screen-observation module; no capture/OCR/CV
-// happens here. Consumed by startEyeMovement()/startHeadMovement() below.
+// ── Screen-attention input and queries ─────────────────────────────────────
+// Callers provide attention data; this module performs no screen capture or
+// image analysis. Gaze and fidget behavior consume the shared controller state.
 
+/** Forward externally computed screen-attention data to the gaze controller. */
 export function observeScreenActivity(target) {
     gazeController.observeScreenActivity(target);
 }
@@ -919,8 +884,12 @@ export function getAttentionState() { return gazeController.getAttentionState();
 export function getAttentionLevel()  { return gazeController.getAttentionLevel(); }
 export function isAttentionBored()   { return gazeController.isBored(); }
 
-// ── Avatar loader ─────────────────────────────────────────────────────────────
+// ── Avatar loading ─────────────────────────────────────────────────────────
 
+/**
+ * Load the VRM, attach it to `scene`, and initialize its resting pose and
+ * motion loops.
+ */
 export function loadAvatar(scene) {
     const loader = new GLTFLoader();
     loader.register(parser => new VRMLoaderPlugin(parser));
@@ -953,7 +922,7 @@ export function loadAvatar(scene) {
     });
 }
 
-// ── Internal animations ───────────────────────────────────────────────────────
+// ── Blink, eye, and head-motion loops ───────────────────────────────────────
 
 function startBlinking() {
     _blinkingActive = true;
@@ -973,12 +942,9 @@ function startBlinking() {
     blink();
 }
 
-// Base-tier (see animation-controller.js) continuous head sway. Layers a
-// gaze-driven offset (Phase 3) on top when GazeController is actively
-// observing something, and yields the neck/spine bones entirely whenever a
-// higher-priority fidget or action animation currently owns them. Also
-// drives Phase 4's LifeMotionController (breathing/posture/shoulders) each
-// frame — reuses this loop rather than starting a second one.
+// Continuous BASE-tier head sway layers in active gaze and yields neck/spine
+// to higher-priority animations. It also ticks breathing, posture, and
+// shoulder life motion so those behaviors share this frame loop.
 function startHeadMovement() {
     let t = 0;
     function update() {
@@ -1009,9 +975,7 @@ function startHeadMovement() {
     update();
 }
 
-// Idle-drift eye loop. When GazeController has an active screen-attention
-// target it takes over the look direction (Phase 3); otherwise this keeps
-// its original random idle-drift behaviour. isSpeaking still wins either way.
+// Screen attention overrides idle eye drift; speaking takes precedence over both.
 function startEyeMovement() {
     const leftEye  = vrm.humanoid.getNormalizedBoneNode("leftEye");
     const rightEye = vrm.humanoid.getNormalizedBoneNode("rightEye");
@@ -1083,7 +1047,7 @@ window.maya = {
     rejected: playRejectedAnimation,
     thankful: playThankfulAnimation,
     waving: playWavingAnimation,
-    // Phase 3 — screen attention / gaze manual testing.
+    // Screen-attention controls for manual testing.
     observeScreenActivity: observeScreenActivity,
     getAttentionState: getAttentionState,
     getAttentionLevel: getAttentionLevel,

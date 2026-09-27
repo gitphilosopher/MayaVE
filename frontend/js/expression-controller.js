@@ -1,15 +1,17 @@
 /**
  * frontend/js/expression-controller.js
- * Phase 2 — centralized, layered expressionManager.setValue() arbiter.
+ * Centralized per-key arbiter for VRMExpressionManager values. Writers store
+ * values in priority layers; the highest layer holding a key is applied to
+ * the attached manager.
  *
- * Several systems want to drive VRM expression keys at once: mood/skill
- * responses (emotion), short one-off overlays (wink's blinkLeft), the
- * mouth shapes during speech (lip-sync), and the blink cycle. Each layer
- * tracks its own key->value writes; for any given key, the highest-
- * priority layer that has set a value wins and is applied.
+ * avatar.js attaches the manager when the VRM loads and routes its expression
+ * writes here; expression-composer.js uses the EMOTION layer. EXPRESSION_LAYER
+ * defines the shared ordering for resting values, emotion, actions, lip-sync,
+ * and blinking. Clearing a key reveals the next layer; when none holds it,
+ * the manager is explicitly set to zero to avoid stale values.
  *
- * This does NOT replace setExpression()'s public signature — it's the
- * funnel every expression write in avatar.js now goes through.
+ * This layers registered manager keys behind avatar.js's setExpression API.
+ * Direct mesh morph-target recipe writes bypass this controller.
  */
 
 // Higher number = higher priority.
@@ -21,9 +23,10 @@ export const EXPRESSION_LAYER = Object.freeze({
     BLINK:   4,   // eyelid open/close
 });
 
-// Checked highest-to-lowest when resolving a key's final value.
+// Resolve strongest-to-weakest so the first layer holding a key wins.
 const _TIERS_DESC = Object.values(EXPRESSION_LAYER).sort((a, b) => b - a);
 
+/** Resolves per-key expression layers into the attached VRM manager. */
 class ExpressionController {
     constructor() {
         this._manager = null;
@@ -64,5 +67,4 @@ class ExpressionController {
     }
 }
 
-// Singleton — one avatar, one expression arbiter.
 export const expressionController = new ExpressionController();
