@@ -767,13 +767,16 @@ def _build_prompt(intent_entry: dict, existing_examples: list[str], count: int) 
         f"Write {count} NEW, natural spoken utterances a real person might say for this "
         f"exact intent. Include a mix of short commands, casual/slang phrasing, and a "
         f"couple of incomplete or ASR-mishearing-style variants. Do not repeat or closely "
-        f"paraphrase the existing examples above. One utterance per line, no numbering, "
-        f"no quotes, no explanations — just the raw lines."
+        f"paraphrase the existing examples above. Write every utterance in lowercase and "
+        f"use minimal punctuation, keeping apostrophes only when needed for contractions. "
+        f"One utterance per line, no numbering, no quotes, no explanations — just the raw lines."
     )
 
 
 def _quality_filter(line: str) -> str | None:
-    line = _LIST_PREFIX_RE.sub("", line).strip().strip('"\'')
+    line = _LIST_PREFIX_RE.sub("", line).strip().strip("\"'").lower()
+    line = re.sub(r"[^\w\s']", " ", line)
+    line = re.sub(r"\s+", " ", line).strip(" '")
     if not line:
         return None
     words = line.split()
