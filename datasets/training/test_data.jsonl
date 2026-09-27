@@ -31,31 +31,31 @@
 {"text": "goodbye", "intent": "farewell", "id": "67a3c655be", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "cheers", "intent": "thanks", "id": "96c81c8761", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what's the difference between a virus and a bacteria", "intent": "general_query", "id": "2b0afec6ba", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "which is more powerful", "intent": "general_query", "id": "2950a8101c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "which is better iphone or android", "intent": "general_query", "id": "186d63fd88", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "which is more powerful", "intent": "unknown", "id": "2950a8101c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "which is better iphone or android", "intent": "opinion", "id": "186d63fd88", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "compare ssd and hdd", "intent": "general_query", "id": "265748e926", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what is nasa", "intent": "general_query", "id": "9a2d811b02", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "tell me about tesla", "intent": "general_query", "id": "f963c4c0ed", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what is inflation", "intent": "general_query", "id": "760ee68b4b", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "who is steve jobs", "intent": "general_query", "id": "acaf459c4e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "are you sad", "intent": "smalltalk", "id": "d7057affd1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "are you sad", "intent": "opinion", "id": "d7057affd1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "how are you", "intent": "smalltalk", "id": "ba11f6207b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "are you happy", "intent": "smalltalk", "id": "cd4be32dc5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "are you happy", "intent": "opinion", "id": "cd4be32dc5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "you good", "intent": "smalltalk", "id": "34eeecf63f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "are you awake", "intent": "smalltalk", "id": "e4bbc7e157", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "just vibing over here", "intent": "smalltalk", "id": "07b0ee2ec5", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "r u bored", "intent": "smalltalk", "id": "ecc3094c28", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what should i do now", "intent": "smalltalk", "id": "5256267843", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what are you doing", "intent": "smalltalk", "id": "246e112b52", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "you seem happy", "intent": "smalltalk", "id": "98b4ffab29", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "you seem happy", "intent": "opinion", "id": "98b4ffab29", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "surviving I guess", "intent": "smalltalk", "id": "e70bd16032", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "ok i'm ready", "intent": "smalltalk", "id": "0f108d7e10", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "ok i'm ready", "intent": "confirm", "id": "0f108d7e10", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "are you bored today", "intent": "smalltalk", "id": "08edb8aded", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what is your name", "intent": "identity", "id": "3e8925fe42", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "are you chatgpt", "intent": "identity", "id": "1b046e4618", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "tell me a joke", "intent": "joke", "id": "35575e8e9d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "say something positive", "intent": "motivate", "id": "4de81e87fb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "do you have emotions", "intent": "opinion", "id": "1e688b5271", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "do you have emotions", "intent": "opinion", "id": "1e688b527b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "do you have a personality", "intent": "opinion", "id": "fe1117d842", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "can you clarify that", "intent": "followup", "id": "3423d37fd9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "explain further", "intent": "followup", "id": "f4ec308e76", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -63,12 +63,12 @@
 {"text": "disregard that", "intent": "dismissal", "id": "d3f008a9d1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "yeah that is correct", "intent": "confirm", "id": "cbaf9c0b9e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "wynk at me", "intent": "perform_action", "id": "5b22104a21", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "what commands do you support", "intent": "general_query", "id": "7a40fbd43b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "my phone battery drains so fast now", "intent": "general_query", "id": "f7aba0ebad", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "what commands do you support", "intent": "help", "id": "7a40fbd43b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "my phone battery drains so fast now", "intent": "help", "id": "f7aba0ebad", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "well", "intent": "smalltalk", "id": "abc0926315", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "not gonna lie", "intent": "smalltalk", "id": "4702e0f9e2", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I burned the toast again", "intent": "general_query", "id": "4b7a1b77f1", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "my chair keeps squeaking", "intent": "general_query", "id": "547ee4dd17", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "I burned the toast again", "intent": "unknown", "id": "4b7a1b77f1", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "my chair keeps squeaking", "intent": "help", "id": "547ee4dd17", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "no more timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "delete the timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "delete clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
