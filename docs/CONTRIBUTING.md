@@ -37,11 +37,12 @@ All project knowledge so far comes from **static inspection; nothing has been ru
 * Extra `expressions.json` entries stay Lab-only; no `default` fallback recipe is added (runtime lookup stays deterministic).
 * Closed emotion/attitude/action vocabularies are not expanded to reach stored recipes.
 * `lock_screen` is immediate (no confirmation); `shutdown`/`restart` require spoken confirmation.
-* Unused config fields are kept but marked `UNUSED`; removal (e.g. `LLMConfig.api_key`) belongs in a dedicated config cleanup, not behavioral work.
+* Unused config fields have already been fully removed, not just marked (see `docs/CHANGELOG.md`'s "Config surface fully trimmed"): `LLMConfig` now defines only `model`/`base_url`/`max_tokens`/`temperature` (no `provider`/`api_key`/`system_prompt`), `STTConfig` only `language`, `TTSConfig` has no `cpu_threads`. Do not reintroduce a field "for later" without a concrete near-term use.
 * Interrupted LLM turns record only the phrases that were played; barge-in cancels PROCESSING/filler turns.
 * Reminder text is kept and the timer alert is routed through the injected `Speaker` under `run_interruptible`.
-* `skills/utilities/reminder.py` is dead code (`set_reminder` routes to `timer.py`). Decide delete-vs-keep explicitly; do not "fix" it silently.
+* `skills/utilities/reminder.py` has already been deleted (`set_reminder` routes to `timer.py` — see CHANGELOG's "Dead reminder skill and stray files removed"). If a similar orphaned module turns up elsewhere, decide delete-vs-keep explicitly rather than silently "fixing" it.
 * A skill's `own blocking dispatch` work (before it starts speaking) is still not interruptible — only LLM turns, timer alerts, and any call already inside `Speaker.speak()` are. Extending this further is a deliberate future scope decision, not an oversight.
+* `datasets/intents.json` is the single source of truth for intent ids, descriptions, keyword triggers, the dismissal exact-phrase list, and the `perform_action` action-word map — see `brain/intent_engine.py`'s module docstring. Do not reintroduce a hardcoded intent/keyword list in `brain/intent_engine.py` or `brain/router.py`.
 
 ## Start Here
 

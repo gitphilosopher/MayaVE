@@ -1,6 +1,5 @@
 {"text": "what is the time right now", "intent": "get_time", "id": "bb68f047f7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what's the time", "intent": "get_time", "id": "db86e01688", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "clock", "intent": "get_time", "id": "c7612c8e07", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what time", "intent": "get_time", "id": "2f46b053dc", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "current time", "intent": "get_time", "id": "f89c6d2c5a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "time please", "intent": "get_time", "id": "473b1f65e4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -14,7 +13,7 @@
 {"text": "ping me in an hour to check the oven", "intent": "set_timer", "id": "0bc5e9e22e", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "alarm in 5 minutes", "intent": "set_timer", "id": "284870e743", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "remind me to drink water in 15 minutes", "intent": "set_timer", "id": "82234c1b7c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "set timer", "intent": "set_timer", "id": "eac425a42d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "set a timer", "intent": "set_timer", "id": "eac425a42d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "set reminder for 1 hour", "intent": "set_timer", "id": "74b8e90a14", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "give me a nudge in ten minutes to stretch", "intent": "set_timer", "id": "24a495880f", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "don't let me forget to email the team in 30 minutes", "intent": "set_timer", "id": "fbac6a6717", "source": "manual_expansion", "verified": true, "variant": "natural"}
@@ -30,7 +29,7 @@
 {"text": "search android phones", "intent": "search_web", "id": "1e2cbc4746", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "google latest news", "intent": "search_web", "id": "077a3ceb56", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "search iphone 16", "intent": "search_web", "id": "9fbef3fcc6", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "look up the weather", "intent": "search_web", "id": "b13efb48e7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "look up the weather", "intent": "get_weather", "id": "b13efb48e7", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "search for python tutorials", "intent": "search_web", "id": "da88c57b2a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "open linkedin", "intent": "open_target", "id": "13da9a1f67", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "navigate to stackoverflow", "intent": "open_target", "id": "ec99cf913f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -53,7 +52,6 @@
 {"text": "play a song", "intent": "play_music", "id": "9242c3e859", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "pause music", "intent": "pause_music", "id": "8ce7e3b547", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "next song", "intent": "next_track", "id": "bf611d8984", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "go back", "intent": "prev_track", "id": "f9ed54bfc4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "volume up", "intent": "volume_up", "id": "498f77f518", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "louder please", "intent": "volume_up", "id": "f1fa1e563c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "turn it down", "intent": "volume_down", "id": "9ef840e6ef", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -122,7 +120,6 @@
 {"text": "show all notes", "intent": "note_view", "id": "d13ba1b722", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "remove that note", "intent": "note_delete", "id": "1ead83e148", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "delete my note", "intent": "note_delete", "id": "00c8b2dff2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "open my note in notepad", "intent": "note_view", "id": "1c6cfd181e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "open the note", "intent": "note_view", "id": "9efd0c8c8a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "hey", "intent": "greet", "id": "a56ada29a4", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "good evening", "intent": "greet", "id": "10816a59d9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -138,9 +135,7 @@
 {"text": "goodnight", "intent": "farewell", "id": "48711d0923", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "see you later", "intent": "farewell", "id": "0af7fe510f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "take care", "intent": "farewell", "id": "f203923c4d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "exit", "intent": "farewell", "id": "0ffb1ff975", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "see ya", "intent": "farewell", "id": "5d59be365b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "quit", "intent": "farewell", "id": "6d68130761", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "bye", "intent": "farewell", "id": "9cb5b86227", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "thank you", "intent": "thanks", "id": "fd3e586aec", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "much appreciated", "intent": "thanks", "id": "afd2f9a809", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -251,7 +246,7 @@
 {"text": "how was your day", "intent": "smalltalk", "id": "b1d7cb6d02", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what's your mood", "intent": "smalltalk", "id": "9c1b0c2b3a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "what r u doing", "intent": "smalltalk", "id": "e663ff150e", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "so what does that mean", "intent": "smalltalk", "id": "0603f521d0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "so what does that mean", "intent": "followup", "id": "0603f521d0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "wyd", "intent": "smalltalk", "id": "e89b906769", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "that's not bad", "intent": "smalltalk", "id": "20bc1f787b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "alright then", "intent": "smalltalk", "id": "c1b966fe86", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -293,7 +288,7 @@
 {"text": "how r u", "intent": "smalltalk", "id": "948d81c3fb", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "doing alright, you?", "intent": "smalltalk", "id": "3d96c290c1", "source": "manual_expansion", "verified": true, "variant": "natural"}
 {"text": "how goes it", "intent": "smalltalk", "id": "2481c7e97a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "what do you think about that", "intent": "smalltalk", "id": "451993d03c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what do you think about that", "intent": "opinion", "id": "451993d03c", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "huh okay", "intent": "smalltalk", "id": "7d84d39f6a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "talk to me", "intent": "smalltalk", "id": "efce7927b2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "u okay", "intent": "smalltalk", "id": "ac5a755c30", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -396,15 +391,15 @@
 {"text": "nevermind", "intent": "dismissal", "id": "04c71dc0bf", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "don't bother", "intent": "dismissal", "id": "830051ee94", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "actually forget it", "intent": "dismissal", "id": "0b72bdbf78", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "are you sure", "intent": "confirm", "id": "dc2b39355d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "you sure about that", "intent": "confirm", "id": "c60ccb6cd0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "are you certain", "intent": "confirm", "id": "7a657ca20f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "is that right", "intent": "confirm", "id": "7a31dfbad5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "can you confirm that", "intent": "confirm", "id": "ac4e003648", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "really", "intent": "confirm", "id": "922920edc0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "yes that's correct", "intent": "confirm", "id": "dc2b39355d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "confirmed", "intent": "confirm", "id": "c60ccb6cd0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "that's right", "intent": "confirm", "id": "7a657ca20f", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "yep, correct", "intent": "confirm", "id": "7a31dfbad5", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "sounds right to me", "intent": "confirm", "id": "ac4e003648", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "yes go ahead", "intent": "confirm", "id": "922920edc0", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "can you giggle", "intent": "perform_action", "id": "843820a3df", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "can you shrug", "intent": "perform_action", "id": "70860639d9", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "can you wynk", "intent": "perform_action", "id": "5637c7b391", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "can you wink", "intent": "perform_action", "id": "5637c7b391", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "sigh for me", "intent": "perform_action", "id": "5b30e0658a", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "can you sigh", "intent": "perform_action", "id": "56cfd209dd", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "can you nod", "intent": "perform_action", "id": "beacd1412b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
@@ -413,50 +408,1245 @@
 {"text": "shrug for me", "intent": "perform_action", "id": "7262db114b", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "wink at me", "intent": "perform_action", "id": "d6097a68ce", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "how does this work", "intent": "general_query", "id": "799ee77188", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "show me what you can do", "intent": "general_query", "id": "ca73ed924d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "give me a list of commands", "intent": "general_query", "id": "09fc6294e6", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "how do i use you", "intent": "general_query", "id": "e2ce0d74e3", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "show me what you can do", "intent": "identity", "id": "ca73ed924d", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "give me a list of commands", "intent": "identity", "id": "09fc6294e6", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "how do i use you", "intent": "identity", "id": "e2ce0d74e3", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "i need help", "intent": "general_query", "id": "487d9230f1", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "assist me", "intent": "general_query", "id": "0e947b4903", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "what can i ask you", "intent": "general_query", "id": "f31c893ec2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
+{"text": "what can i ask you", "intent": "identity", "id": "f31c893ec2", "source": "legacy_training_data", "verified": true, "variant": "natural"}
 {"text": "help me", "intent": "general_query", "id": "a54179e382", "source": "legacy_training_data", "verified": true, "variant": "natural"}
-{"text": "I keep losing my earbuds", "intent": "general_query", "id": "f87018570b", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "there's a spider on the wall", "intent": "general_query", "id": "c56029f56a", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the game went into overtime", "intent": "general_query", "id": "cacca3f380", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I think I'm coming down with something", "intent": "general_query", "id": "ad10d58f89", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "my laptop fan is so loud", "intent": "general_query", "id": "e56fc8b9fa", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I lost track of what I was doing", "intent": "general_query", "id": "d2f5de5cc0", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "someone parked in my spot", "intent": "general_query", "id": "f822a31722", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the printer is jammed again", "intent": "general_query", "id": "219c688dd0", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I'm not sure what day it feels like", "intent": "general_query", "id": "1163313614", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "traffic was insane this morning", "intent": "general_query", "id": "9d6ff7346a", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I just finished a really long call", "intent": "general_query", "id": "9a47aaf844", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "never seen anything like that", "intent": "general_query", "id": "e1f0df8baa", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the sky looks kind of orange today", "intent": "general_query", "id": "717afcf7d4", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the wifi has been flaky all week", "intent": "general_query", "id": "0cb828105b", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "so anyway", "intent": "general_query", "id": "80a9b87857", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "this coffee tastes off somehow", "intent": "general_query", "id": "d72292f171", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "kind of a weird week honestly", "intent": "general_query", "id": "ed363e783e", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the package still hasn't arrived", "intent": "general_query", "id": "fbdc9b3549", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "that's a whole thing", "intent": "general_query", "id": "83e015edbe", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I think my plant is dying", "intent": "general_query", "id": "02eb9f5b89", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I can't decide what to cook tonight", "intent": "general_query", "id": "8031dfaeca", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "hmm", "intent": "general_query", "id": "b5f884234e", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I forgot to water the plants", "intent": "general_query", "id": "f4ccee1810", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "wait what was I saying", "intent": "general_query", "id": "c7dee905a4", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "someone left the door open", "intent": "general_query", "id": "3d571cb22a", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I think I left my keys at the office", "intent": "general_query", "id": "f067dbd02b", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "there's construction noise outside", "intent": "general_query", "id": "dfde2c96b0", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I'm out of milk again", "intent": "general_query", "id": "266b5c8bda", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "my glasses are scratched", "intent": "general_query", "id": "e9bb344a15", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the meeting ran way over time", "intent": "general_query", "id": "bc48f08dcf", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I can't find my charger anywhere", "intent": "general_query", "id": "376303e7d9", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "my dog just knocked over a plant", "intent": "general_query", "id": "3c322157ea", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "it's really cold in this room", "intent": "general_query", "id": "cf6c5e4ed2", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I spilled water on my desk", "intent": "general_query", "id": "73969f9cc7", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "there's a bird stuck on the balcony", "intent": "general_query", "id": "e9fca2eafe", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "my back has been hurting", "intent": "general_query", "id": "0c84a9a849", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "I haven't slept well in days", "intent": "general_query", "id": "ef590c51c8", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "uh", "intent": "general_query", "id": "389772143c", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "the elevator is out of service", "intent": "general_query", "id": "aa153d0f75", "source": "manual_expansion", "verified": true, "variant": "natural"}
-{"text": "hold on a second", "intent": "general_query", "id": "9b1db53dbc", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "previous song", "intent": "prev_track", "id": "6e2053efce", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "previous track", "intent": "prev_track", "id": "c3ff950f94", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "go back a track", "intent": "prev_track", "id": "77fbee69b1", "source": "manual_expansion", "verified": true, "variant": "natural"}
+{"text": "cancel my timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn off timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop timer please", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey cancel timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop timer from working", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn off the timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete that timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cancel the timer now", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you cancel that timer for me", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "kill the timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop timer now", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut off timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop that timer thing", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer off please", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cancel timer", "intent": "cancel_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard right now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete the clipboard now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clip", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "empty the clipboard now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "wipe clipboard clean", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear my clipboard data", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear clipboard contents", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "erase my clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you get rid of what's in the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "erase whatever's on the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear clipboard stuff", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard space", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard thingy", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear my clipboard please", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "wipe the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the stuff in the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "empty clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard area", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "erase clipboard now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "erase the clipboard", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard today", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of clipboard data", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "wipe the clipboard now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "clear the clipboard now", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remove clipboard content", "intent": "clipboard_clear", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to know what's on the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's currently on clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's on my computer clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Get me what's on clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard display", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Read me what's on the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Show me what's on my computer clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard show", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard display now", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What did I save to clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Display clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Read me clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's on clipboard right now", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's on the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Read out my clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Show me the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Get what's on clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard view", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Read out what's on the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard contents please", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to see what I copied", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you tell me what's on the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you show me clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's saved to clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's copied to clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you read my clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's on the clipboard thing", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "My clipboard contents", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's currently copied", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Show me what's on clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Clipboard read out", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's currently on clipboard now", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's in the clipboard", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Read me my clipboard contents", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's on my clipboard now", "intent": "clipboard_read", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get this on clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get it copied to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save the words to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save this in clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy this and save to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put hello on the clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "paste to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy and paste to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save it for later clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy the text and save to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write it to the clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write it to clipboard now", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you write to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save it to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save this to clipboard later", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy that to clipboard now", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save text to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy text to the clipboard please", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy this", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write to clipboard for later", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get it on clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy that and save to clipboard", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "copy this to clipboard not phone", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get it copied", "intent": "clipboard_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Just confirm it", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Confirm what you just said", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Confirm that for me", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Is that what I think it is", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to make sure I got it right", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Confirm the details", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Yeah confirm it", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I just wanted to make sure", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you just confirm", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Are you sure you're sure", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you confirm that for me", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I don't want to get it wrong", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can I just confirm", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Is that right in your books", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let me get this straight", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Check that again please", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Confirm on that", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let me make sure I understand", "intent": "confirm", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'll stop there", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can we just move on", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Too late", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not even thinking about it", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop it", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "No thank you", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not now, please", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not worth my time", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let's just stop", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Drop the subject", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let's move on", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not relevant", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let's go with something else", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm not interested", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Don't care", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Moving on to something else", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's a no", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not now, maybe later", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "No way", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Don't go there", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not going to happen", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Don't get me started", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can we move on", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Shut your mouth up", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Forget about it", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not even worth discussing", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Moving on", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "No need", "intent": "dismissal", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "bye for now", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Signing off", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take it easy", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "later gator", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Time to wrap", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "see you", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "peace out homie", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "peace out", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "goodbye my friend", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "later days", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Later buddy", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "talk to you soon", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "later all", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "catch you later", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "talk to you later", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Peace love and sleep", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "see you around", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "nighty night", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "see ya buddy", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "bye maya", "intent": "farewell", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not what I'm looking for", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's the next part", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not clear to me", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What was the point", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Let's pick up where we left off", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You're missing a word", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You didn't finish saying", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you get to the point", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you walk me through it again", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's the rest of the story", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i didn't quite catch it", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What did you say exactly", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Double back on that", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "umm what did you say exactly", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You're not done yet", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you say that again", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I didn't understand the end", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you fill in the gaps", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not what I asked", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not what I thought", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You haven't finished", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm not sure I caught that", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not what I meant", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "break it down some more", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I think I missed something", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you elaborate some more", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want more context", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain that to me", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's the rest", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I got lost there", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you repeat it for me", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you give me the full picture", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Not what I'm here for", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you spell it out", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "That's not what I thought I heard", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Yeah go on with that", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You skipped a step", "intent": "followup", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain the difference between a meteor and a comet", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What are the benefits of using a password manager", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what causes hair to turn gray", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you tell me about the history of the internet", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the difference between a mac and a pc", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Explain the water cycle in simple terms", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does google's algorithm work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a computer hard drive work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does ai work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what causes the Northern Lights", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain what is a database management system", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the difference between a comet and an asteroid", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain the difference between a LAN and a WAN", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does voice recognition work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what are the advantages of python over java", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What is the purpose of a database", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain why time zones exist", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What causes a browser to crash", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is machine learning used for", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the concept of the internet of things", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's the deal with quantum entanglement", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the theory behind 3D printing", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain the concept of quantum entanglement", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the concept of a black hole singularity", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a smartphone battery last so long", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a robot learn", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you explain the concept of consciousness", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How does facial recognition software work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a computer process information", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a computer virus spread", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain the concept of gravitational waves", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What are the benefits of solar power", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How does bitcoin mining work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the history of the internet", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What are the main types of programming languages", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How does a computer chip work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the science behind wireless charging", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the difference between a database and a spreadsheet", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How does a webcam work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the average airspeed velocity of an unladen swallow", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the history of artificial intelligence", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What are the advantages of cloud storage", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the difference between a tornado and a hurricane", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a computer motherboard work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what causes power outages", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you explain the concept of neural networks", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a solar panel generate power", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "explain why we need sleep", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a jet engine work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How does a router work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a microwave oven work", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the average temperature on mars", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the definition of artificial intelligence", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "compare diesel and gasoline cars", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how does a solar panel generate electricity", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the purpose of a motherboard", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the purpose of a cpu", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do you get internet on a plane", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What is the difference between a modem and a router", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What is the purpose of a cooling system in a computer", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the difference between a hard drive and a solid state drive", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the science behind 3D printing", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what causes traffic jams", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What is the difference between a laptop and a tablet", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you tell me about the basics of circuitry", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What causes a network connection to drop", "intent": "general_query", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "year currently", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "today's date and month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "today's date is what", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "today's date please", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "date today in numbers", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "day of the month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "day this month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Date please", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "date for today", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what day is it now", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me today's year", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "year of now", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the date today", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "tell me the year", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "today's month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the day today", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Current day", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what month is tomorrow", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "year now", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "day today is", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Today's day", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "current month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's the current month", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "year is it", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "tell me the current year", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what is the date now", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "current year is", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What month is it now", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the current date", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "month of the year", "intent": "get_date", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "current clock time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "whats the hour right now", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the clock say", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the time in my area", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what time is it here", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me the current hour", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "current hour", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "tell me the clock time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "time now", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the current hour", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just give me the time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me the hour", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i want to know the time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much time is it", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the hour now", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me the time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "time is it now", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just tell me the hour", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the time here", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "current hour please", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how late is it", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just the time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my current time", "intent": "get_time", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me the forecast", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it snowing somewhere", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me the weather", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's it looking outside", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "will it be dry today", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it going to be hot", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how about the weather tomorrow morning", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the current temperature outside", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather forecast", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather in london", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the temperature outside my window", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it gonna be hot tomorrow", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the forecast for this afternoon", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the outlook", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it going to be warm", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you check the weather for me", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather like outside now", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather forecast for tomorrow morning", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do we need to bring umbrellas", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather update please", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it going to rain tomorrow", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather like", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather like in london", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's it like in new york", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the forecast", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather forecast for the next three days", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the weather looking for the week", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the weather in the city", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather conditions in new york", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the temperature right now", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather like outside", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what the forecast sayin for tonight", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it sunny in paris", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it sunny in new york", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "will it be cold at night", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it raining in mumbai", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the weather today in paris", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it cold and rainy", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "tell me about the weather", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the weather in europe", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you check the forecast for me", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather conditions in the us", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me the weather for the next few days", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the forecast for today", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "will it be sunny today", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me the weather for tomorrow", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the weather in california", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the temperature in celsius", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "will it be warm this weekend", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "is it raining outside", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "find out the weather forecast", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me the weather", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "weather forecast for the whole week", "intent": "get_weather", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "good evening folks", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey girl", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hello sweetie", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hello there", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey there buddy hello", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "good morning everyone", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's good everyone", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hiya boo", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hi there friend", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey girl it's me", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's good", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's it going", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "morning sunshine", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "sup guys", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey what's up", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey sweetheart", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hiya love", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey y'all", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "sup dude", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey you", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "morning love", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey love", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Hey buddy", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hi love", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey y'all howdy", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey there buddy", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey y'all it's me", "intent": "greet", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me more about yourself", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Are you like a Siri or Alexa", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Are you a product of some big company", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "who did you get built by", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you describe yourself", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to know more about Maya", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Who built Maya", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "who coded you", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you describe your capabilities", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you give me a quick intro", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How did you learn all this", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How did Maya come about", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Are you an AI or a chatbot", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's your purpose", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You're an AI assistant", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to know more about your creators", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "You seem smart but how did you get that way", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you explain who you are", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "How did you get here", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Are you a real person", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you share a bit about your creators", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me more about yourself", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's your story", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you tell me your origin", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's your personality like", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what kind of tech you run on", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's your background", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What makes you unique", "intent": "identity", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me a riddle that's tricky", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's a good pun for today?", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'd love to hear a joke now", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Something that'll make me lol", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a funny joke", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Give me a joke about dogs", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me something funny", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm starving for a joke", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me a joke from the news", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Got a funny one to share", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me a joke or I'll leave", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Give me a laugh", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm in the mood for something ridiculous", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I need a joke for my niece", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me somethin thats gonna make me chuckle", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "whats a good joke to tell me", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Tell me something silly", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I need a joke fix", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Come on, say something funny", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Hey, be funny for once", "intent": "joke", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the computer now", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my laptop", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my computer now", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the computer", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you lock my laptop", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my desktop", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock this computer", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my laptop now", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my device", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my workstation", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the desktop", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the machine", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the laptop", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock my screen", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the PC down", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the laptop now", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the workstation", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock the device", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lock down the computer", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you lock the screen", "intent": "lock_screen", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you give me a motivational tip", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm struggling to stay motivated right now", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's a good motivational phrase to wake me up", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you say something uplifting", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really hopeless", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really tired and unmotivated", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really down today", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What can I do to stay motivated", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really stuck and unsure", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Give me a motivational speech", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I just need a reminder that I can do this", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I need something to look forward to", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really defeated", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you give me a motivational story", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can you say something inspiring", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I need a dose of positivity", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm in a rut and need to get out", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I need a pick-me-up", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm in a funk and need to turn it around", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm struggling to stay focused", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "help me get out of this funk", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really discouraged", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "What's a good quote to get me moving", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Help me stay positive", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm feeling really anxious and stressed", "intent": "motivate", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "no noise", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cut the volume", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "quiet now", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut up the music", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "silence the phone", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "no more noise", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "mute music", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "keep audio off", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "mute this", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cut the sound", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop the audio", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "silent please", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "silent mode", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cut the audio", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop the noise please", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "no more sound", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut the sound", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "keep quiet", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "keep music quiet", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop the noise", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "mute the music", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the sound off", "intent": "mute", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song's coming", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can we skip this song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "let's go to the next song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song please", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "move to the next song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play the next one", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Move on to the next song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next track coming up", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song coming", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "skip the song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Skip that song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "skip this song already", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song up now", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song up", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Can I skip to next", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next track here", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next song's up", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "skip the current song", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "skip this track", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "next track up", "intent": "next_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete this note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete note now", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I don't need it anymore", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you get rid of it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of that", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete it please", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remove the note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "throw out that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I want to delete it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "delete it for me", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I don't want that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you delete it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just erase it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "rip that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "that note's gotta go", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "kill the note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of that note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remove the last one", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "erase the note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just delete it", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get rid of this note", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can I trash that one", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "rip it out", "intent": "note_delete", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can u show me my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me a list of my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read out my saved note", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read my saved notes to me", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i want to see the notes i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you read me my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read out my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "list notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i wrote a note can you read it", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what are the notes i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you list my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what notes have i got", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me the notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read back my note", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's in my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need you to read my note", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's in my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you show me my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what have I saved in my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's all my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read my notes from this week", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "list the saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read me my latest note", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do i view my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's on the note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "list the notes i have", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "list my saved notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the saved note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need to see my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what did i note down yesterday", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read my notes from last week", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what notes are saved", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read out my note", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what notes have i written", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can i get a list of my notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read out the note i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me the list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you read my notes to me", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read me the notes i took", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's on my note list", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need a list of notes", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what notes am i saved", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "read the note i wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the latest note I wrote", "intent": "note_view", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "append the thing", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add to notes", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just add this to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "append some content", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "note it down", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "update my note with this", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "create a note quickly", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write a note quick", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save my thoughts for later", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save note for later", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add this to my note list", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add that to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "note that too", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put that in my notes", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "append the note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "create note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write it down", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add a new note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get a new note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a note now", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "note for later", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "jot this down", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "also add that note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add this to the note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write it down now", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a note of it", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add it to the existing note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write it down for me", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "record a note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a note of this", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "note to self", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add a note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "don't forget to save this", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save the note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stick it in the note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "note the rest of this", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put it in notes", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just append this", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "also note the following", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "create a note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "create a note real fast", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save my note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put that in notes", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a note about the party tonight", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save a new note", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "write a note for me", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "add to the note now", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "save this thought", "intent": "note_write", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch my email", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just open google", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open messenger", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open vimeo", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just wanna open the browser", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get on amazon", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "visit pinterest", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch the app store", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open file manager", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "visit tumblr", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open ebay", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up nasa", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "go to wiki", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open tumblr", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "run java", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch outlook", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open firefox", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open skype", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take me to steam", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "go to flipkart", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up calculator app", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets open itunes", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hit me with the bbc website", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch the camera", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "go to walmart", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open instagram", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open outlook please", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "access the wiki", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open pinterest", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take me to imdb", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open stack overflow", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open my calendar", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open minecraft", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start terminal", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open chrome browser", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open my word processor", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "run calculator", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open safari", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets get started with vscode", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "go to bing", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "launch browser window", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start notepad", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets get whatsapp", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start up chrome", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up google drive", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open outlook", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets get visual studio", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open xbox", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "run java program", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open word document", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "run teamviewer", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "open up word", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get itunes up", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take me to instagram", "intent": "open_target", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you more of a city or beach person", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you get frustrated with slow internet", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you feel energized after workouts", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you a morning coffee person or not", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do you feel about long-distance relationships", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you relate to feeling anxious", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you feel happy when people appreciate you", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you feel sad sometimes", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you have a preference for coffee or tea", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you enjoy playing games", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you get anxious about deadlines", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what do you think of veganism", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you like getting spontaneous invitations", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you get excited about new movies", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do you feel about public speaking", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you relate to feeling overwhelmed", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you feel tired after long workdays", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you like getting feedback", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you a fan of 80s music", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do you feel about Mondays", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how do you feel about pineapple pizza", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you have a favorite TV show", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's your opinion on vegan restaurants", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you more of a morning person", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's your take on climate change", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do you enjoy conversations", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's your stance on social media", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you a fan of spicy food", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me about your favorite travel destination", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me about your favorite childhood memory", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you tell me about your hobbies", "intent": "opinion", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause this track", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put the music on pause", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop that music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop playing the music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you pause the music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put the music in pause", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the song right away", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you pause music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the music now", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the playback", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the music right now", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause this song", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "let's pause the music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause music for a sec", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop the music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop music", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop playing that", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause the current song", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "pause music for a minute", "intent": "pause_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you give me a wink", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do the sigh thing", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me a giggle", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need a wink", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do the giggle", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i want to see you nod", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do a shrug", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you do a shrug", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "wink please", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "sighing now", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "giggle now", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i want you to wink", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you nod at me", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me a nod", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "sigh in relief", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "nod to that", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "maya nod for me", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you do the shrug", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "do a sigh", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "nod your head", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "sigh it out for me", "intent": "perform_action", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "let's jam", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "put on some music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play the album", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets start the music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start playing music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "let's listen", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play audio", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the music on", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "get music going", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "music time", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lets play music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play some music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play my faves", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play music now please", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play some jams", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play the album now", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn music on", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "music on please", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play music for me", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play the radio", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play music now", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the beat", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the mix", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play music please", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start music", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play my playlist", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "play some tunes", "intent": "play_music", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Go back to previous track", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Switch to previous track", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Previous song please", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Previous track on loop", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Previous track please", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Go back a song", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Previous song on repeat", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Take me back to the previous song", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'd like to go back to the last song", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Previous song on shuffle", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Go to previous song", "intent": "prev_track", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restart my computer", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system needs a reboot", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "computer crashing give me a restart", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need to reboot", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "reboot my laptop", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need to restart my computer", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restart this thing for me", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down restart now", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restart now", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system restart please", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system needs restarting", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "reboot my machine", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn off and restart", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "reboot it", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "this computer's slow restart it", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restart please", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey restart the pc", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i wanna restart", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "computer froze restart it", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "computer needs a reboot", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "reboot now", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "computer is being slow restart it", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restarting please", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "restart the whole thing", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just restart the thing", "intent": "restart", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "capture my screen now", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "snap my screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can u take a screenshot", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "capture my screen please", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make a screenshot", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "screenshot now", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "capture the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take a shot of the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "screenshot this", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take a pic of my screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you take a screenshot", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "snap the screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "screen shot", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "take a screenshot of this screen", "intent": "screenshot", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the history of the Olympics", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the latest updates on the coronavirus", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for flights to Tokyo", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the meaning of quantum", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google how to fix my laptop", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the history of the pyramids", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "look up the current price of bitcoin", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google latest updates on the facebook outage", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "web search for best restaurants", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you look up the weather in Sydney", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search web for latest news on amazon", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search google for the latest deals on apple watches", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the latest news on climate change", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the top 10 movies of 2022", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the best restaurants in London", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for restaurants near the eiffel tower", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the best hiking trails in Colorado", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the best fitness apps for android", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google how to invest in the stock market", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the latest news on the stock market", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google how to make a budget", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google what's the difference between ios and android", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you look up the definition of artificial intelligence", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the top 10 books of 2022", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "web search for recipes using leftover chicken", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google cheapest ways to travel in thailand", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search the latest sports scores", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "look up the price of a MacBook", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the best hiking trails in the world", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the best Italian food in the city", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "web search for cheapest airbnb options in new york", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "look up the definition of sustainability", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search the web for reviews on the new galaxy watch", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the best restaurants in nyc", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for hotels in san francisco", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for hotels near me", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the best beaches in California", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the top 10 movies of all time", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search web for best laptops under 1000", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "look up the definition of blockchain", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google latest news on climate change", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the history of the world cup", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search the web for the meaning of life", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "look up the price of a Tesla", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for concerts in my area", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "search for the best hotels in london", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google the best Italian restaurants in NYC", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google latest news on space exploration", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you google the weather in new york", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "google what's the best phone", "intent": "search_web", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a countdown for ten minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to water the garden in 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a timer for a 5 minute break", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a countdown timer for 1 hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "10 minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me a heads up in 20 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a 10 minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set the timer for 5 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "quick 3 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for five minutes please", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a timer to go off in 10 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "5 minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a 1 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me a nudge in 30 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a 20 second timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a timer for one hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a 1 hour timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "20 minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "countdown timer for 2 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the timer for five minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a quick timer for thirty seconds", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "two minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the 30 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set an alert for 30 minutes from now", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for 10 seconds", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a countdown timer for 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "countdown timer for twenty minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer going off in 5 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a reminder to feed the cat at 3 pm", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for twenty minutes please", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set the timer for three minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer going off in 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the clock for five minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to take out the trash tonight", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a 10 minute warning to finish the task", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set alarm for 1 minute", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "one minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "countdown timer for one hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the timer for 5 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to call mom tonight", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a countdown for 30 seconds", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a timer for ten minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set timer to go off in 45 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "nudge me in 30 seconds to grab the phone", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a countdown from 5 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for 1 hour 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "five minute countdown", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a reminder to meet at 2pm", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to take a break in 20 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a 30 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start a 25 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "countdown 45 seconds", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set countdown for thirty seconds", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set a timer for thirty minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start timer for 2 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to water the plants in an hour", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "set an alarm to go off in 25 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer for 2 hours and 15 minutes", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "remind me to pack my bag", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "start the 20 minute timer", "intent": "set_timer", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down now", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down the machine", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down the computer", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut the computer down", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you turn the PC off", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shutting down", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn off the PC", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shutdown computer now", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut down the system", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop working computer", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shut the laptop down", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "shutdown time", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn off the computer now", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "kill the computer", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just power the PC off", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "power off the computer", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "power off please", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "stop the machine", "intent": "shutdown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i think i left my keys in the car", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Just made a really good cup of coffee", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you feelin relaxed", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "umm so i was thinking about getting a dog", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "so yeah i went to the beach yesterday", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you having fun", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you're still alive", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "Oh, just saw a really good movie over the weekend", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "This traffic is crazy, isn't it?", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "hey are you awake", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just wanted to say hi", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm trying to decide what to wear today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "it's really quiet in here today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm so tired I think I'm going to sleep", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm thinking about starting a garden", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's cookin", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I just got a new book that I'm excited about", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I just had a really good idea for a story", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got a new job offer", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm so glad it's finally Friday", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "it's been ages since i last saw my family", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's new with you", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "This weather is just so unpredictable", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you still there dude", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you still alive", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you still in meetings", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you feelin stressed", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "um what was the question again", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just saw the funniest meme on social media", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got a new pair of shoes", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "there's a new restaurant opening up down the street", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "it's really sunny outside today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm just waiting for the bus right now", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "oh yeah yeah", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got a haircut yesterday", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "This pizza is kind of a letdown", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i don't think i'm a morning person", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got outta bed", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got a new phone case", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i was just thinkin about you", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how was your weekend", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just learned how to ride a bike at 30", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you feelin okay", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's your day going", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just got a new hair cut", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you still at the store", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "just woke up", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just saw a really good movie last night", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's on your mind", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just realized i haven't called my mom in weeks", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm dyin over here", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i don't think i'm going to be able to make it to work", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm thinking about taking a road trip soon", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm so bored", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i just saw the funniest video", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I'm just going to go for a walk", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's your vibe", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm so glad it's friday now", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm still here by the way", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm trying to figure out this recipe", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "are you hungry", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i think i need to get new glasses", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I've been meaning to learn how to play chess", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm thinking about getting a new laptop", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm not sure what's for lunch", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "This traffic light is really slow", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "It's been ages since I've seen my grandma", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "my cat's name is whispy", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "I don't really feel like cooking today", "intent": "smalltalk", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my cpu temperature", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check system usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu health", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "my battery's almost dead", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check battery life", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu info", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much memory do i have", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu temperature", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu performance monitor", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's my disk space", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu usage level", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check my cpu", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much storage do i have left", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system disk space", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu usage percentage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my storage space", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my disk status", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system cpu usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my battery percentage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my cpu usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the battery level", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my cpu speed", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu usage info", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my system status", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm low on ram", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my cpu", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "battery level please", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's my ram", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much ram is left", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system battery status", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu usage currently", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much cpu power do i have", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system memory usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much disk space do i have left", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check battery health", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the disk usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "disk usage monitor", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check my system resources", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "my ram is full", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check my battery level", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much disk space is left", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system ram usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's my ram looking", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cpu usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's my disk usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check system resources", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's the battery", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system disk usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how's my battery doing", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "system resource usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "battery level", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much ram is available", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i need to know my battery level", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much ram is being used", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how hot is my cpu", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "disk usage", "intent": "system_info", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i appreciate it", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thank ya", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "much obliged", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks a ton", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for the help", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "many thanks in advance", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks a million", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cheers to you", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you're a lifesaver", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i appreciate that", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cheers mate", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm so thankful", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i owe you one", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "appreciate it so much", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cheerio mate", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "cheerio buddy", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks so much again", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for your time", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "i'm in your debt", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for that", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for the save", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "u a lifesaver", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "you're the best", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "appreciate your effort", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for being awesome", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thanks for the rescue", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "thank you kindly", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "grateful for your help", "intent": "thanks", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer status please", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what timer is running", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's left on the timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the status on my timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me the timer status", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's left on my timers", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what timers are still on", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the timer situation", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me the timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the current time left", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the timer status", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "which timers are on", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me my active timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "how much time is left on my timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what timers are set", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "status on the timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's going on with the timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me my timers status", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's the time on my timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "show me my active timers", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my timer status", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "what's my reminder for today", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me a timer update", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "update on the timer", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "give me a timer rundown", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "timer time left", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "check the timer status", "intent": "timer_status", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume down low", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lower the decibels", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "quieter please love", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume down a bit please", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lower volume down", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "lower the sound", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you lower the volume", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "quieter please sweetheart", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume down to here", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume down some", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "reduce the noise", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn volume down a click", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume down more please", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn thevolume down a bit more", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume down a bit", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you turn volume down", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume down now", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume down to 0", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "not so loud", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn down the volume", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume down", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume's too loud", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "increase the volume to max", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume up to max", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "it's too quiet can you turn the volume up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "increase the volume some", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the sound up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume louder", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "increase the volume a bit", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the sound louder", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "volume up please", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn up the volume", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "too quiet can you turn the volume up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "make the sound louder", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume way up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "increase volume to max", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume up a notch", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume up a bit more", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume up some", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you make it more audible", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn music up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "can you turn the volume up louder", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "turn the volume louder please", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "increase volume", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}

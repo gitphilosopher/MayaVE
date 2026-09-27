@@ -334,7 +334,7 @@
     {
       "id": "note_view",
       "category": "notepad",
-      "description": "User wants to see their notes — read one back, list all of them, or open one in an external editor, the skill decides which from the wording (e.g. 'list'/'all notes' vs. 'open in notepad' vs. a bare 'read my note').",
+      "description": "User wants to see their notes — read one back or list all of them, the skill decides which from the wording (e.g. 'list'/'all notes' vs. 'open in notepad' vs. a bare 'read my note').",
       "min_examples": 160,
       "keywords": [],
       "response_mode": "skill"
@@ -521,7 +521,7 @@
       "id": "general_query",
       "category": "conversation",
       "description": "Factual questions, explanations, and comparison/opinion-style knowledge queries routed to the LLM. Absorbs what were previously the separate 'help' and 'unknown' intents (see docs/CHANGELOG.md); low-confidence ensemble output also falls back here when no keyword rule matches.",
-      "min_examples": 200,
+      "min_examples": 150,
       "keywords": [
         "what is",
         "who is",

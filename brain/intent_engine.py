@@ -84,23 +84,23 @@ from config.settings import config
 logger = logging.getLogger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_MODEL_DIR    = Path(__file__).parent.parent / "models"
+_DATASETS_DIR    = Path(__file__).parent.parent / "datasets"
 _CONFIG_DIR   = Path(__file__).parent.parent / "config"
 _LOG_DIR      = Path(__file__).parent.parent / "logs"
 
-_PT_MODEL     = _MODEL_DIR / "pytorch_intent.pt"
-_TF_MODEL     = _MODEL_DIR / "tf_intent.keras"
-_VOCAB_FILE   = _MODEL_DIR / "vocab.json"
-_LABELS_FILE  = _MODEL_DIR / "labels.json"
-_HASH_FILE    = _MODEL_DIR / "training_hash.txt"
+_PT_MODEL     = _DATASETS_DIR / "pytorch_intent.pt"
+_TF_MODEL     = _DATASETS_DIR / "tf_intent.keras"
+_VOCAB_FILE   = _DATASETS_DIR / "vocab.json"
+_LABELS_FILE  = _DATASETS_DIR / "labels.json"
+_HASH_FILE    = _DATASETS_DIR / "training_hash.txt"
 
-_INTENTS_FILE     = _CONFIG_DIR / "intents.json"
-_TRAIN_FILE       = _CONFIG_DIR / "train_data.jsonl"
-_VALIDATION_FILE  = _CONFIG_DIR / "validation_data.jsonl"
-_TEST_FILE        = _CONFIG_DIR / "test_data.jsonl"
+_INTENTS_FILE     = _DATASETS_DIR / "intents.json"
+_TRAIN_FILE       = _DATASETS_DIR / "training" / "train_data.jsonl"
+_VALIDATION_FILE  = _DATASETS_DIR / "training" / "validation_data.jsonl"
+_TEST_FILE        = _DATASETS_DIR / "training" / "test_data.jsonl"
 _FAILURES_FILE    = _LOG_DIR / "intent_failures.jsonl"
 
-_MODEL_DIR.mkdir(exist_ok=True)
+_DATASETS_DIR.mkdir(exist_ok=True)
 _LOG_DIR.mkdir(exist_ok=True)
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
