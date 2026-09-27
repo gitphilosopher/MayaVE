@@ -223,6 +223,39 @@ _SLOT_PROPER_RE = re.compile(r"\b[A-Z][a-zA-Z]*\b")
 _VALID_VERDICT_RE   = re.compile(r"^\s*valid\s*$", re.IGNORECASE)
 _INVALID_VERDICT_RE = re.compile(r"invalid\s*:\s*([a-zA-Z0-9_]+)", re.IGNORECASE)
 
+# ── Restored-intent semantic checks (help / unknown) ────────────────────────
+# 'help' requires an actual, explicit request for assistance — not just any
+# utterance that happens to be short or vague.
+_HELP_REQUEST_RE = re.compile(
+    r"\b(help|assist(?:ance)?|support me|i'?m stuck|i'?m confused|"
+    r"what can you do|how do i|how does this work|walk me through|"
+    r"show me how|can you help|i need help|i want help)\b",
+    re.IGNORECASE,
+)
+
+# ── Closely-related skill-intent boundary phrases ───────────────────────────
+# Curated, deterministic phrase patterns for intent pairs that vocabulary-
+# overlap (Jaccard) alone can't reliably separate — the two intents often
+# share almost no vocabulary in common but a handful of *specific phrasings*
+# sit right on the boundary between them. A hit here doesn't say who's
+# right; it just means the pair needs a human semantic call.
+_SKILL_AMBIGUOUS_PAIRS: list[tuple[frozenset[str], "re.Pattern[str]"]] = [
+    (frozenset({"play_music", "volume_up"}),
+     re.compile(r"\bturn\s+(?:it|that|the volume)?\s*up\b", re.IGNORECASE)),
+    (frozenset({"next_track", "open_target"}),
+     re.compile(r"\b(?:next up|move on|next one|skip (?:ahead|to next))\b", re.IGNORECASE)),
+    (frozenset({"get_time", "get_date"}),
+     re.compile(r"\b(?:my birthday|date of birth|what day is it|what'?s?\s*(?:is\s*)?today)\b",
+                re.IGNORECASE)),
+    (frozenset({"cancel_timer", "set_timer"}),
+     re.compile(r"\b(?:stop|cancel|end)\b.*\btimer\b|\btimer\b.*\b(?:off|cancel|stop|end)\b",
+                re.IGNORECASE)),
+    (frozenset({"mute", "volume_down"}),
+     re.compile(r"\bturn\s+(?:it|that|the volume)?\s*down\b|\bquiet(?:er)?\b", re.IGNORECASE)),
+    (frozenset({"search_web", "general_query"}),
+     re.compile(r"\bsearch\b|\blook up\b|\bgoogle\b", re.IGNORECASE)),
+]
+
 
 def _tokens(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
@@ -267,7 +300,13 @@ def _template_signature(text: str) -> str:
 class AuditIssue:
     index: int
     code: str        # e.g. "malformed", "duplicate_batch", "vocab_confusable", ...
-    severity: str    # "reject" | "flag"
+    severity: str    # "reject" | "flag" | "info"
+    # "info" is a non-blocking annotation: it never rejects, never counts
+    # toward "flagged", and never lands in the human review_queue — it
+    # exists purely so a genuinely valid ML-only paraphrase (e.g. one that
+    # simply lacks a deterministic keyword) still leaves a visible trail
+    # in the row's audit issues and in `report.reasons`, without demanding
+    # a human look at it.
     detail: str
 
 
@@ -490,9 +529,16 @@ def audit_candidate_rows(
     Deterministic checks (always run, no network):
       malformed, duplicate (within-batch and vs. the trusted dataset),
       contradiction (same/near-identical text under conflicting intents),
-      overly-generic, keyword/vocabulary-based intent confusability,
-      near-duplicate, template/paraphrase clustering, per-intent
-      linguistic diversity.
+      overly-generic, keyword/vocabulary-based intent confusability split
+      into a genuine "keyword_boundary_conflict" vs. a merely coincidental
+      "keyword_gap" (info-only, never blocks a valid ML-only paraphrase),
+      restored-intent semantic checks for 'help' (must contain an actual
+      request for assistance) and 'unknown' (must not cleanly match any
+      intent's keyword rule), curated boundary-phrase checks for closely
+      related skill-intent pairs (play_music/volume_up, next_track/
+      open_target, get_time/get_date, cancel_timer/set_timer, mute/
+      volume_down, search_web/general_query), near-duplicate, template/
+      paraphrase clustering, per-intent linguistic diversity.
 
     Optional LLM-assisted check (`use_llm=True`, capped at
     `max_llm_calls`): only for candidates a deterministic check already
@@ -550,26 +596,89 @@ def audit_candidate_rows(
             _add(idx, "overly_generic", "flag",
                  "too few content words for an intent whose examples are usually more specific")
 
+        # ── keyword signal: split into "genuine boundary conflict" vs.
+        # "coincidental overlap on an ML-only paraphrase" (see module
+        # docstring item 1B). Both are always "flag"/"info" severity —
+        # a keyword-level disagreement alone never auto-rejects a candidate.
         kw_matches = auditor.keyword_matches(norm)
-        if kw_matches and intent not in kw_matches:
-            other = kw_matches[0]
-            _add(idx, "keyword_mismatch", "flag",
-                 f"matches intent '{other}' keyword rule, not '{intent}'")
-            report.confusion_pairs[(intent, other)] += 1
-        elif len(kw_matches) > 1:
-            others = [i for i in kw_matches if i != intent]
-            if others:
-                _add(idx, "keyword_overlap", "flag",
-                     f"also matches keyword rule(s) for {others}")
-                for other in others:
-                    report.confusion_pairs[(intent, other)] += 1
-
+        own_match = intent in kw_matches
+        other_matches = [i for i in kw_matches if i != intent]
         best_other, best_score, claimed_score = auditor.best_alternate_intent(tokens, intent)
-        if best_other and best_score >= _MIN_CONFUSABLE_SCORE and best_score >= claimed_score + _CONFUSION_MARGIN:
+        vocab_favors_other = (
+            best_other is not None
+            and best_score >= _MIN_CONFUSABLE_SCORE
+            and best_score >= claimed_score + _CONFUSION_MARGIN
+        )
+        keyword_conflict_used_vocab = False
+
+        if own_match and other_matches:
+            _add(idx, "keyword_overlap", "flag",
+                 f"also matches keyword rule(s) for {other_matches}")
+            for other in other_matches:
+                report.confusion_pairs[(intent, other)] += 1
+        elif len(other_matches) > 1:
+            _add(idx, "keyword_boundary_conflict", "flag",
+                 f"matches multiple other intents' keyword rules {other_matches}, not '{intent}''s own")
+            for other in other_matches:
+                report.confusion_pairs[(intent, other)] += 1
+        elif len(other_matches) == 1:
+            other = other_matches[0]
+            if vocab_favors_other and best_other == other:
+                # The keyword hit AND the vocabulary both point away from
+                # the claimed intent — a genuine conflict with that
+                # intent's keyword/rule boundary, not a coincidence.
+                _add(idx, "keyword_boundary_conflict", "flag",
+                     f"wording conflicts with '{other}''s keyword/rule boundary — vocabulary "
+                     f"overlap also favors '{other}' ({best_score:.2f}) over '{intent}' "
+                     f"({claimed_score:.2f})")
+                report.confusion_pairs[(intent, other)] += 1
+                keyword_conflict_used_vocab = True
+            else:
+                # Only the keyword pattern fired, not the vocabulary —
+                # this is the "simply lacks a deterministic keyword"
+                # case: a semantically valid, ML-only paraphrase that
+                # happens to brush against another intent's surface
+                # pattern. Never auto-rejected, never pushed to the
+                # human review queue.
+                _add(idx, "keyword_gap", "info",
+                     f"lacks a deterministic keyword for '{intent}' but only superficially "
+                     f"touches '{other}''s keyword pattern (vocabulary still favors '{intent}'); "
+                     f"likely a valid ML-only paraphrase")
+        # else: no keyword pattern matched anywhere — a plain ML-only
+        # candidate with no keyword signal at all. Nothing to flag.
+
+        if vocab_favors_other and not keyword_conflict_used_vocab:
             _add(idx, "vocab_confusable", "flag",
                  f"vocabulary overlap fits '{best_other}' (score={best_score:.2f}) better than "
                  f"'{intent}' (score={claimed_score:.2f})")
             report.confusion_pairs[(intent, best_other)] += 1
+
+        # ── restored-intent semantic checks: 'help' and 'unknown' ───────────
+        if intent == "help" and not _HELP_REQUEST_RE.search(text):
+            if other_matches:
+                _add(idx, "help_looks_stale", "flag",
+                     f"no explicit request for assistance, and wording cleanly matches "
+                     f"concrete intent {other_matches} — check whether this predates 'help' "
+                     f"being restored (see _LEGACY_INTENT_MAP)")
+            else:
+                _add(idx, "help_missing_request", "flag",
+                     "labeled 'help' but contains no actual request for assistance")
+
+        if intent == "unknown" and kw_matches:
+            _add(idx, "unknown_looks_classifiable", "flag",
+                 f"labeled 'unknown' but cleanly matches keyword rule(s) for {kw_matches} — "
+                 f"genuine 'unknown' examples shouldn't match any intent's rule; check for "
+                 f"stale pre-restoration mislabeling")
+
+        # ── closely-related skill-intent boundary phrases ───────────────────
+        for pair, pattern in _SKILL_AMBIGUOUS_PAIRS:
+            if intent in pair and pattern.search(text):
+                counterpart = next(iter(pair - {intent}))
+                _add(idx, "skill_pair_ambiguous", "flag",
+                     f"wording sits on the '{intent}'/'{counterpart}' boundary — needs semantic "
+                     f"review to confirm '{intent}' over '{counterpart}'")
+                report.confusion_pairs[(intent, counterpart)] += 1
+                break
 
         # Near-duplicate vs. an earlier candidate of the SAME intent already kept this batch.
         for other_idx, other_norm in batch_texts_by_intent[intent]:
@@ -683,17 +792,22 @@ def audit_candidate_rows(
             rejected.append(out_row)
             report.rejected += 1
             stat["rejected"] += 1
-        elif issues:
+        elif any(i.severity == "flag" for i in issues):
+            # "info"-severity issues ride along in the same issues list for
+            # transparency, but only a real "flag" pushes a row into the
+            # human review queue / the "flagged" count.
             out_row["audit"] = {"status": "flagged", "issues": [_issue_dict(i) for i in issues]}
             kept.append(out_row)
             report.flagged += 1
             stat["flagged"] += 1
             report.review_queue.append({
                 "text": row.get("text", ""), "intent": intent,
-                "issues": [i.code for i in issues],
+                "issues": [i.code for i in issues if i.severity == "flag"],
             })
         else:
-            out_row["audit"] = {"status": "passed", "issues": []}
+            # No issues, or "info"-only (e.g. keyword_gap) — a valid
+            # ML-only candidate is accepted, not held up for review.
+            out_row["audit"] = {"status": "passed", "issues": [_issue_dict(i) for i in issues]}
             kept.append(out_row)
             report.accepted += 1
             stat["accepted"] += 1
@@ -1142,8 +1256,6 @@ def cmd_failures_promote(args: argparse.Namespace) -> None:
 #     carrying a reminder message are now one intent; the skill already
 #     told them apart by whether a message was present).
 _LEGACY_INTENT_MAP: dict[str, str] = {
-    "help":         "general_query",
-    "unknown":      "general_query",
     "note_create":  "note_write",
     "note_append":  "note_write",
     "note_read":    "note_view",
@@ -1296,8 +1408,7 @@ def main() -> None:
     mig = sub.add_parser(
         "migrate-legacy-intents",
         help="Relabel rows under a retired intent id onto its replacement, then dedupe. "
-             "Default mapping (see _LEGACY_INTENT_MAP): help/unknown -> general_query; "
-             "note_create/note_append -> note_write; note_read/note_list/note_open -> "
+             "Default mapping (see _LEGACY_INTENT_MAP): note_create/note_append -> note_write; note_read/note_list/note_open -> "
              "note_view; open_app/open_website -> open_target; set_reminder -> set_timer.",
     )
     mig.add_argument(

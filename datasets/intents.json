@@ -76,7 +76,7 @@
       "id": "set_timer",
       "category": "utility",
       "description": "User wants a countdown timer — a bare timer ('set a timer for 5 minutes') or one carrying a reminder message to speak back when it expires ('remind me to drink water in 15 minutes'). Merged from the former separate 'set_timer'/'set_reminder' intents — the skill decides whether a message is attached from the wording, not from the intent id.",
-      "min_examples": 170,
+      "min_examples": 80,
       "keywords": [
         "set a timer",
         "set a reminder",
@@ -92,7 +92,7 @@
       "id": "search_web",
       "category": "web",
       "description": "User wants a web/Google search for a query.",
-      "min_examples": 100,
+      "min_examples": 80,
       "keywords": [
         "search for",
         "look up",
@@ -106,7 +106,7 @@
       "id": "open_target",
       "category": "system",
       "description": "User wants something opened — a website or a desktop application, the skill resolves which (known site table, then known app table, then generic URL/launch heuristics) rather than the intent id telling it apart.",
-      "min_examples": 200,
+      "min_examples": 50,
       "keywords": [
         "go to",
         "navigate to",
@@ -134,7 +134,7 @@
       "id": "play_music",
       "category": "media",
       "description": "User wants music/audio playback started.",
-      "min_examples": 60,
+      "min_examples": 50,
       "keywords": [
         "play music",
         "play song",
@@ -146,7 +146,7 @@
       "id": "pause_music",
       "category": "media",
       "description": "User wants playback paused or stopped.",
-      "min_examples": 60,
+      "min_examples": 50,
       "keywords": [
         "stop music",
         "pause the",
@@ -182,7 +182,7 @@
       "id": "volume_up",
       "category": "media",
       "description": "User wants the volume increased.",
-      "min_examples": 50,
+      "min_examples": 40,
       "keywords": [
         "volume up",
         "turn it up",
@@ -194,7 +194,7 @@
       "id": "volume_down",
       "category": "media",
       "description": "User wants the volume decreased.",
-      "min_examples": 50,
+      "min_examples": 40,
       "keywords": [
         "volume down",
         "turn it down",
@@ -206,7 +206,7 @@
       "id": "mute",
       "category": "media",
       "description": "User wants audio muted/silenced.",
-      "min_examples": 50,
+      "min_examples": 40,
       "keywords": [
         "mute",
         "silence"
@@ -217,7 +217,7 @@
       "id": "system_info",
       "category": "system",
       "description": "User asks about battery, CPU, RAM, or disk status.",
-      "min_examples": 100,
+      "min_examples": 60,
       "keywords": [
         "battery level",
         "cpu usage",
@@ -237,7 +237,7 @@
       "id": "screenshot",
       "category": "system",
       "description": "User wants a screenshot captured.",
-      "min_examples": 50,
+      "min_examples": 40,
       "keywords": [
         "screenshot",
         "capture screen"
@@ -283,7 +283,7 @@
       "id": "get_weather",
       "category": "weather",
       "description": "User asks about current or forecast weather, optionally for a named location.",
-      "min_examples": 100,
+      "min_examples": 80,
       "keywords": [],
       "response_mode": "skill"
     },
@@ -331,7 +331,7 @@
       "id": "note_write",
       "category": "notepad",
       "description": "User wants a note created or added to, the skill decides whether to start a new note or append to the latest existing one from the wording and whether any notes already exist.",
-      "min_examples": 130,
+      "min_examples": 80,
       "keywords": [
         "take a note",
         "write a note",
@@ -347,7 +347,7 @@
       "id": "note_view",
       "category": "notepad",
       "description": "User wants to see their notes — read one back or list all of them, the skill decides which from the wording (e.g. 'list'/'all notes' vs. 'open in notepad' vs. a bare 'read my note').",
-      "min_examples": 160,
+      "min_examples": 80,
       "keywords": [
         "read my note",
         "read my notes",
@@ -398,7 +398,7 @@
       "id": "greet",
       "category": "conversation",
       "description": "A greeting opening the conversation.",
-      "min_examples": 60,
+      "min_examples": 50,
       "keywords": [
         "hey maya",
         "hi maya",
@@ -465,7 +465,7 @@
       "id": "smalltalk",
       "category": "conversation",
       "description": "Casual check-ins, presence/mood questions, and light back-and-forth reactions that should reach the LLM for a natural, context-aware reply.",
-      "min_examples": 150,
+      "min_examples": 80,
       "keywords": [],
       "response_mode": "llm"
     },
@@ -570,7 +570,7 @@
       "id": "general_query",
       "category": "conversation",
       "description": "Genuine general-knowledge, factual, explanatory, or comparison/opinion-style information questions that should be answered by the LLM. Does not include explicit requests for help/assistance (see 'help') or unclassifiable/ambiguous input (see 'unknown').",
-      "min_examples": 150,
+      "min_examples": 80,
       "keywords": [
         "what is",
         "who is",
@@ -605,7 +605,7 @@
       "id": "unknown",
       "category": "fallback",
       "description": "Unsupported, ambiguous, incomplete, or otherwise unclassifiable input that should not be force-fit into a known intent. Reached only when no keyword rule matches and the classifier's own confidence is too low to trust a specific label — never a first-choice destination.",
-      "min_examples": 100,
+      "min_examples": 80,
       "keywords": [],
       "response_mode": "llm"
     }
