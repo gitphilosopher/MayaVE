@@ -90,7 +90,12 @@ class NodeConfig:
     max_backoff_s: float = 300.0
     auth_token: str | None = None
     state_dir: str | None = None
-
+    # Step 3 — per-sync-round upload caps so one round never tries to
+    # push an unbounded outbox in a single request; anything past the
+    # cap simply stays pending for the next round (see
+    # services/node/sync_manager.py's _sync_once).
+    max_events_per_sync: int = 200
+    max_memory_per_sync: int = 200
 
 @dataclass
 class MayaConfig:

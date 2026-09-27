@@ -181,6 +181,7 @@ MayaVE/
 │
 ├── datasets/
 │   ├── training/
+│   ├── intent_model/
 │   ├── intents.json
 │
 ├── main.py

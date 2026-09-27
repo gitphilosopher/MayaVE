@@ -10,6 +10,8 @@ __pycache__/
 tests/
 temp.py
 edge-automation-profile
+test_*.py
+review_*.py
 
 # Runtime logs
 logs/

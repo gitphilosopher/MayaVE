@@ -1,69 +1,32 @@
 """
 brain/intent_engine.py
 ======================
-Dual-model ML intent classification for Maya.
+Intent classification and target extraction for Maya's command pipeline.
 
-Architecture
-------------
-Two independent models vote on every utterance:
+The engine loads and validates the intent taxonomy from
+``datasets/intents.json`` and the labelled training split from
+``datasets/training/train_data.jsonl``. It compiles the configured keyword
+rules and response modes, applies deterministic dismissal, presence, and
+action guards, then combines predictions from a PyTorch BiLSTM with attention
+and a TensorFlow/Keras 1-D CNN. Keyword matches take precedence; otherwise a
+high-confidence ensemble result is used, followed by a chance-relative
+low-confidence floor and the ``unknown`` fallback.
 
-  Model A — PyTorch  : BiLSTM + Attention (bag-of-words token embeddings)
-  Model B — TensorFlow/Keras : 1-D CNN over character n-grams
+On startup, saved models, vocabulary, and labels are reused when their
+fingerprint matches the current intent configuration and training data.
+Missing or stale artifacts trigger training and update
+``datasets/intent_model/training_hash.txt``. ``brain.train_intent`` remains the explicit
+retraining and evaluation entry point. Adding an intent therefore requires a
+definition in ``intents.json`` and labelled training examples, followed by a
+restart or manual retrain.
 
-Final prediction = argmax of averaged softmax probabilities from both.
-
-On first run, both models are TRAINED on TRAINING_DATA (loaded from
-datasets/training/train_data.jsonl — see "Data sources" below) and saved to
-datasets/pytorch_intent.pt and datasets/tf_intent.keras. Subsequent runs
-load the saved weights — inference is instant.
-
-Data sources (Maya VE11 — externalized, see datasets/intents.json)
-------------------------------------------------------------------
-This module used to hardcode intent names, descriptions, and keyword
-trigger lists in Python. As of VE11:
-
-  datasets/intents.json          — every intent's id/category/description/
-                                  min_examples/keywords, the dismissal
-                                  guard's exact-phrase list, and the
-                                  perform_action guard's action-word map.
-                                  brain/dataset_tools.py validates this
-                                  file (duplicate ids, missing fields,
-                                  invalid categories/references).
-  datasets/training/train_data.jsonl      — TRAINING_DATA (model training only)
-  datasets/training/validation_data.jsonl — VALIDATION_DATA (dev-time tuning)
-  datasets/training/test_data.jsonl       — TEST_DATA (final unbiased evaluation)
-
-Python remains responsible only for classification *logic* (tokenizing,
-model architecture, guards, ensemble/threshold behaviour, keyword
-regex compilation). Loading/validating the above files happens once,
-at import time, via load_intent_config() / load_dataset().
-
-Automatic retrain detection
-----------------------------
-A sha256 fingerprint of (intents.json + train_data.jsonl) is saved
-alongside the models in datasets/training_hash.txt. On every startup,
-_load_or_train() compares the current fingerprint against the saved
-one:
-
-  - Models missing            → train from scratch (first run)
-  - Fingerprint matches       → load saved weights, instant startup
-  - Fingerprint doesn't match → data changed since the models were
-                                 trained — retrain automatically, no
-                                 manual file deletion required
-
-To retrain from scratch, delete the model files and restart Maya — the
-missing-files path above still exists for a full manual reset.
-brain/train_intent.py remains the preferred entry point for a full
-manual retrain: it wipes every saved file (including the hash) up
-front and prints train/validation/test metrics at the end.
-
-Adding new intents
-------------------
-1. Add the intent's definition to datasets/intents.json ("intents" list).
-2. Add labelled examples to datasets/training/train_data.jsonl (and, ideally, a
-   few held-out ones to validation/test).
-3. Restart Maya — the fingerprint no longer matches the saved hash, so
-   models retrain automatically on that startup.
+The public contract is ``IntentEngine.classify(text)`` returning
+``intent``, ``target``, ``confidence``, ``raw``, ``model``, and
+``response_mode`` fields. The router consumes the result to select a skill or
+the LLM; target extraction removes command phrases for intents such as
+``open_target``, ``search_web``, and ``set_timer``. Dataset validation is
+strict so malformed taxonomy or training records fail at startup instead of
+silently changing classification behavior.
 """
 
 from __future__ import annotations
@@ -84,15 +47,16 @@ from config.settings import config
 logger = logging.getLogger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_DATASETS_DIR    = Path(__file__).parent.parent / "datasets"
+_DATASETS_DIR = Path(__file__).parent.parent / "datasets"
+_MODEL_DIR    = _DATASETS_DIR / "intent_model"
 _CONFIG_DIR   = Path(__file__).parent.parent / "config"
 _LOG_DIR      = Path(__file__).parent.parent / "logs"
 
-_PT_MODEL     = _DATASETS_DIR / "pytorch_intent.pt"
-_TF_MODEL     = _DATASETS_DIR / "tf_intent.keras"
-_VOCAB_FILE   = _DATASETS_DIR / "vocab.json"
-_LABELS_FILE  = _DATASETS_DIR / "labels.json"
-_HASH_FILE    = _DATASETS_DIR / "training_hash.txt"
+_PT_MODEL     = _MODEL_DIR / "pytorch_intent.pt"
+_TF_MODEL     = _MODEL_DIR / "tf_intent.keras"
+_VOCAB_FILE   = _MODEL_DIR / "vocab.json"
+_LABELS_FILE  = _MODEL_DIR / "labels.json"
+_HASH_FILE    = _MODEL_DIR / "training_hash.txt"
 
 _INTENTS_FILE     = _DATASETS_DIR / "intents.json"
 _TRAIN_FILE       = _DATASETS_DIR / "training" / "train_data.jsonl"
@@ -101,6 +65,7 @@ _TEST_FILE        = _DATASETS_DIR / "training" / "test_data.jsonl"
 _FAILURES_FILE    = _LOG_DIR / "intent_failures.jsonl"
 
 _DATASETS_DIR.mkdir(exist_ok=True)
+_MODEL_DIR.mkdir(exist_ok=True)
 _LOG_DIR.mkdir(exist_ok=True)
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
@@ -110,7 +75,17 @@ _MAX_LEN      = 30        # tokens per utterance (pad / truncate)
 _EPOCHS       = 40
 _BATCH        = 16
 _LR           = 1e-3
-_CONF_THRESH  = 0.65      # below this → fall back to keyword rules
+_CONF_THRESH  = 0.65      # at/above this, the ensemble's own label is final
+
+# Below _CONF_THRESH the ensemble's label is no longer "final" on its own,
+# but it is still evidence. _LOW_CONF_FLOOR is the point below which that
+# evidence is too weak to trust at all — set relative to chance level
+# (1 / number of classes) rather than as an independent guess, and marked
+# for retuning once real validation/test metrics exist post-retrain (see
+# module docstring and docs/CONTRIBUTING.md's "Verification Basis").
+_LOW_CONF_FLOOR_MULTIPLIER = 8.0   # "at least 8x better than a random guess"
+_LOW_CONF_FLOOR_MIN        = 0.20  # absolute floor regardless of class count
+_LOW_CONF_FLOOR_MAX        = 0.45  # absolute ceiling regardless of class count
 
 # ══════════════════════════════════════════════════════════════════════════════
 # datasets/intents.json — schema, loading, validation
@@ -213,13 +188,11 @@ def _intent_by_id(cfg: dict) -> dict[str, dict]:
 
 def build_keyword_patterns(cfg: dict) -> list[tuple[str, re.Pattern]]:
     """
-    Compile the ordered keyword-fallback rules from intents.json into the
-    same word-boundary + inflection-suffix regex shape the engine always
-    used, just sourced from data instead of a hardcoded Python list.
-    Intents in keyword_rules_order come first (in that order, mirroring
-    the old _KEYWORD_RULES priority — multi-word/specific before broad
-    single-word); any other intent with a non-empty keywords list is
-    appended afterward in intents.json declaration order.
+    Compile configured keyword rules into ordered word-boundary regexes.
+
+    Entries in ``keyword_rules_order`` are compiled first; other intents with
+    keywords follow in their declaration order. The optional suffix supports
+    the inflections handled by the classifier's fallback path.
     """
     by_id = _intent_by_id(cfg)
     ordered_ids = list(cfg.get("keyword_rules_order", []))
@@ -327,6 +300,7 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _tokenize(text: str) -> list[str]:
+    """Normalize an utterance into the lowercase tokens used by both models."""
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
@@ -450,7 +424,7 @@ def _predict_pytorch(model, X_single: list[int], device) -> np.ndarray:
 
 def _build_tf_model(vocab_size: int, n_classes: int):
     import tensorflow as tf
-    from tensorflow import keras # type: ignore
+    from tensorflow import keras  # type: ignore
 
     inp  = keras.Input(shape=(_MAX_LEN,), dtype="int32")
     x    = keras.layers.Embedding(vocab_size, _EMBED_DIM, mask_zero=True)(inp)
@@ -488,10 +462,10 @@ class IntentEngine:
     """
     Dual-model ML classifier with keyword-rule fallback.
 
-    Usage (same public API as before VE11):
+    Usage:
         engine = IntentEngine()
         result = engine.classify("open youtube")
-        # → {"intent": "open_website", "target": "youtube",
+        # → {"intent": "open_target", "target": "youtube",
         #    "confidence": 0.93, "raw": "open youtube",
         #    "model": "ensemble"}
     """
@@ -533,6 +507,7 @@ class IntentEngine:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def classify(self, text: str) -> dict:
+        """Classify one utterance and return the router-facing result record."""
         text = text.strip()
         intent, confidence, source = self._predict(text)
         target = self._extract_target(text.lower(), intent)
@@ -559,7 +534,20 @@ class IntentEngine:
 
     # ── Initialisation ────────────────────────────────────────────────────────
 
+    def _low_conf_floor(self) -> float:
+        """
+        Chance-relative floor below which an unconfirmed ensemble
+        prediction is treated as too weak to trust (see module docstring).
+        Derived from the current number of classes so it tracks the
+        taxonomy automatically instead of being a fixed number picked in
+        isolation; clamped to a sane absolute range either way.
+        """
+        n = max(len(self._labels), 1)
+        floor = (1.0 / n) * _LOW_CONF_FLOOR_MULTIPLIER
+        return min(_LOW_CONF_FLOOR_MAX, max(_LOW_CONF_FLOOR_MIN, floor))
+
     def _load_or_train(self) -> None:
+        """Load compatible artifacts or train and persist a current model set."""
         models_exist = (
             _PT_MODEL.exists() and
             _TF_MODEL.exists() and
@@ -702,15 +690,19 @@ class IntentEngine:
         re.IGNORECASE,
     )
 
+    _COMPARISON_WORDS = ("which", "compare", " vs ", "difference between",
+                         "pros and cons", "better than", "or hdd", "or ssd")
+
     def _predict(self, text: str) -> tuple[str, float, str]:
         """Returns (intent, confidence, source_label)."""
         if not self._ready or self._vocab is None:
-            return self._keyword_fallback(text)
+            kw_intent, kw_conf, _ = self._keyword_fallback(text)
+            return (kw_intent, kw_conf, "keyword") if kw_conf > 0 else ("unknown", 0.0, "keyword")
 
         t = text.lower().strip()
+        tokens = re.findall(r"[a-z0-9]+", t)
 
         # ── Negation / dismissal guard ────────────────────────────────────────
-        tokens = re.findall(r"[a-z0-9]+", t)
         if self._is_dismissal(t):
             return "dismissal", 1.0, "negation_guard"
 
@@ -724,18 +716,17 @@ class IntentEngine:
             logger.debug(f"Action-request guard fired for '{text}' → perform_action")
             return "perform_action", 1.0, "action_guard"
 
-        # ── Keyword-first guard ───────────────────────────────────────────────
-        _COMPARISON_WORDS  = ("which", "compare", " vs ", "difference between",
-                               "pros and cons", "better than", "or hdd", "or ssd")
-        is_comparison = any(w in t for w in _COMPARISON_WORDS)
-        use_keywords = not is_comparison and len(tokens) <= 3
-        if use_keywords:
-            kw_intent, kw_conf, _ = self._keyword_fallback(text)
-            if kw_conf > 0:
-                return kw_intent, kw_conf, "keyword_short_input"
-            # No keyword rule matched a short input — general_query is the
-            # catch-all conversational intent (absorbs the old 'unknown').
-            return "general_query", 1.0, "short_input_fallback"
+        # ── Deterministic keyword check ─────────────────────────────────────
+        # Computed once and reused by both the short-input path and the
+        # low-confidence path below — a keyword match always wins outright
+        # over the ensemble, at any utterance length or confidence level.
+        kw_intent, kw_conf, _ = self._keyword_fallback(text)
+
+        is_comparison = any(w in t for w in self._COMPARISON_WORDS)
+        is_short = not is_comparison and len(tokens) <= 3
+
+        if is_short and kw_conf > 0:
+            return kw_intent, kw_conf, "keyword_short_input"
 
         enc = self._vocab.encode(text, _MAX_LEN)
         probs_list = []
@@ -757,7 +748,11 @@ class IntentEngine:
                 logger.debug(f"TensorFlow inference error: {e}")
 
         if not probs_list:
-            return self._keyword_fallback(text)
+            # Neither model is available/loaded — the only remaining
+            # signal is the keyword check already computed above.
+            if kw_conf > 0:
+                return kw_intent, kw_conf, "keyword_fallback"
+            return "unknown", 0.0, "keyword_fallback"
 
         avg_probs = np.mean([p for _, p in probs_list], axis=0)
         idx       = int(np.argmax(avg_probs))
@@ -765,48 +760,47 @@ class IntentEngine:
         intent    = self._labels[idx]
         source    = "+".join(name for name, _ in probs_list)
 
-        if conf < _CONF_THRESH:
-            kw_intent, kw_conf, _ = self._keyword_fallback(text)
-            if kw_conf > 0:
-                logger.debug(
-                    f"ML confidence {conf:.2f} < threshold; "
-                    f"using keyword fallback → '{kw_intent}'"
-                )
-                return kw_intent, kw_conf, "keyword_fallback"
-            # No keyword rule matched either — don't force a low-confidence
-            # label onto a specific intent. general_query is the catch-all
-            # conversational intent (absorbs the old 'unknown') and is
-            # always response_mode="llm", so an uncertain utterance still
-            # gets a natural, context-aware reply instead of a wrong skill.
-            return "general_query", conf, "low_confidence_fallback"
+        if conf >= _CONF_THRESH:
+            return intent, conf, source
 
-        return intent, conf, source
+        # A deterministic keyword match still wins below the high-confidence
+        # bar because it is stronger evidence than the ensemble estimate.
+        if kw_conf > 0:
+            logger.debug(
+                f"ML confidence {conf:.2f} < threshold; "
+                f"using keyword fallback → '{kw_intent}'"
+            )
+            return kw_intent, kw_conf, "keyword_fallback"
+
+        # Without keyword corroboration, retain an ensemble label only when
+        # its probability is meaningfully above chance for this taxonomy.
+        if conf >= self._low_conf_floor():
+            return intent, conf, "low_confidence_trusted"
+
+        return "unknown", conf, "low_confidence_fallback"
 
     def _keyword_fallback(self, text: str) -> tuple[str, float, str]:
+        """Return the first matching configured keyword rule, if any."""
         t = text.lower()
         for intent, pattern in self._keyword_patterns:
             if pattern.search(t):
                 return intent, 1.0, "keyword"
-        # No keyword rule matched at all — general_query (absorbs the old
-        # 'unknown') is the catch-all, always routed to the LLM.
-        return "general_query", 0.0, "keyword"
+        # The zero-confidence intent is a sentinel; callers use it only when
+        # the paired confidence is positive.
+        return "unknown", 0.0, "keyword"
 
     # ── Target extraction ─────────────────────────────────────────────────────
 
     def _extract_target(self, text: str, intent: str) -> str:
-        """Strip the intent trigger to leave the target entity."""
+        """Remove a known command phrase and return the remaining target text."""
         trigger_map = {
-            # Merged from the former separate open_website/open_app
-            # triggers (see datasets/intents.json's "open_target") — most
-            # specific phrases first so e.g. "go to netflix" and "launch
-            # notepad" strip correctly before the generic "open" fallback.
+            # Specific phrases precede generic fallbacks so multi-word
+            # commands such as "go to" and "launch" are stripped correctly.
             "open_target": ["go to", "navigate to", "open website",
                              "launch", "start", "open"],
             "search_web":  ["search for", "google", "look up", "search"],
-            # Merged from the former separate set_timer/set_reminder
-            # triggers (see datasets/intents.json's "set_timer") — a bare
-            # timer request has none of these phrases and falls through
-            # with the whole utterance as target, same as before.
+            # A bare timer request has no trigger and keeps the complete
+            # utterance as the target for the timer parser.
             "set_timer":   ["remind me to", "remind me", "set a timer for",
                              "set a reminder for", "timer for", "alarm for"],
         }

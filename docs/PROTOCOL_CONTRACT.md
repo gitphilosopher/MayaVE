@@ -73,11 +73,19 @@ Every item in `events` is an **EventEnvelope**:
 | `device_id` | no | defaults to the request's own `device_id` when absent. |
 | `payload` | no | JSON object, defaults to `{}`. Its required sub-fields are defined per `event_type` by whichever side registers that type. |
 
-Only one event type is defined by this contract today:
-**`protocol.ping`** (`schema_version: 1`, no required payload fields) —
-a connectivity/idempotency dial tone, not real application data. No
-MayaVE event types are defined yet; adding one means extending this
-document plus both implementations' registries in the same change.
+Two event types are defined by this contract today:
+
+- **`protocol.ping`** (`schema_version: 1`, no required payload fields)
+  — a connectivity/idempotency dial tone, not real application data.
+- **`mayave.turn_completed`** (`schema_version: 1`, required payload
+  field `intent: string`) — records that a MayaVE conversation turn was
+  resolved to a given intent. Produced by
+  `services/node/events.py::record_event()`; consumed identically to
+  any other event by `services/sync_service.py`.
+
+Adding another event type means extending this document plus both
+implementations' registries (`services/node/protocol.py` and
+`node/protocol.py`) in the same change.
 
 ## Memory write (unchanged from Step 1)
 

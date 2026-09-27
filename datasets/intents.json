@@ -20,6 +20,9 @@
     "search_web",
     "open_target",
     "set_timer",
+    "note_write",
+    "note_view",
+    "note_delete",
     "system_info",
     "lock_screen",
     "pause_music",
@@ -34,6 +37,7 @@
     "mute",
     "get_time",
     "get_date",
+    "help",
     "general_query",
     "greet",
     "farewell",
@@ -326,9 +330,17 @@
     {
       "id": "note_write",
       "category": "notepad",
-      "description": "User wants a note created or added to,the skill decides whether to start a new note or append to the latest existing one from the wording and whether any notes already exist.",
+      "description": "User wants a note created or added to, the skill decides whether to start a new note or append to the latest existing one from the wording and whether any notes already exist.",
       "min_examples": 130,
-      "keywords": [],
+      "keywords": [
+        "take a note",
+        "write a note",
+        "create a note",
+        "save a note",
+        "add a note",
+        "jot down",
+        "jot this down"
+      ],
       "response_mode": "skill"
     },
     {
@@ -336,7 +348,20 @@
       "category": "notepad",
       "description": "User wants to see their notes — read one back or list all of them, the skill decides which from the wording (e.g. 'list'/'all notes' vs. 'open in notepad' vs. a bare 'read my note').",
       "min_examples": 160,
-      "keywords": [],
+      "keywords": [
+        "read my note",
+        "read my notes",
+        "read notes",
+        "list my notes",
+        "list notes",
+        "all my notes",
+        "all notes",
+        "open my note",
+        "open notes",
+        "note in notepad",
+        "show my notes",
+        "show my note"
+      ],
       "response_mode": "skill"
     },
     {
@@ -344,7 +369,12 @@
       "category": "notepad",
       "description": "User wants a note deleted (requires spoken confirmation).",
       "min_examples": 50,
-      "keywords": [],
+      "keywords": [
+        "delete note",
+        "delete my note",
+        "remove note",
+        "remove my note"
+      ],
       "response_mode": "skill"
     },
     {
@@ -377,7 +407,9 @@
         "good morning",
         "good evening",
         "good afternoon",
-        "howdy"
+        "howdy",
+        "hello",
+        "hi"
       ],
       "response_mode": "skill"
     },
@@ -409,6 +441,23 @@
         "thanks",
         "appreciate",
         "much appreciated"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "help",
+      "category": "conversation",
+      "description": "User explicitly asks what Maya can do, or asks for help/assistance in general (not help with a specific factual topic — that's general_query).",
+      "min_examples": 60,
+      "keywords": [
+        "help me",
+        "i need help",
+        "can you help",
+        "how do i use",
+        "assist me",
+        "what can you do",
+        "list your commands",
+        "what commands"
       ],
       "response_mode": "skill"
     },
@@ -520,7 +569,7 @@
     {
       "id": "general_query",
       "category": "conversation",
-      "description": "Factual questions, explanations, and comparison/opinion-style knowledge queries routed to the LLM. Absorbs what were previously the separate 'help' and 'unknown' intents (see docs/CHANGELOG.md); low-confidence ensemble output also falls back here when no keyword rule matches.",
+      "description": "Genuine general-knowledge, factual, explanatory, or comparison/opinion-style information questions that should be answered by the LLM. Does not include explicit requests for help/assistance (see 'help') or unclassifiable/ambiguous input (see 'unknown').",
       "min_examples": 150,
       "keywords": [
         "what is",
@@ -548,12 +597,16 @@
         "is hdd",
         "vs ",
         " or ",
-        "which one",
-        "help me",
-        "i need help",
-        "how do i use",
-        "assist me"
+        "which one"
       ],
+      "response_mode": "llm"
+    },
+    {
+      "id": "unknown",
+      "category": "fallback",
+      "description": "Unsupported, ambiguous, incomplete, or otherwise unclassifiable input that should not be force-fit into a known intent. Reached only when no keyword rule matches and the classifier's own confidence is too low to trust a specific label — never a first-choice destination.",
+      "min_examples": 100,
+      "keywords": [],
       "response_mode": "llm"
     }
   ]

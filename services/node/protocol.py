@@ -173,6 +173,15 @@ register_event_type(
     description="No-op connectivity/idempotency check event; carries no application data.",
 )
 
+# First real MayaVE-originated event type (Step 3) — records that a
+# conversation turn was resolved to a given intent, for cross-device
+# history/analytics. Kept intentionally minimal; more event types are
+# added here (and mirrored in node/protocol.py, per module docstring)
+# only as concrete need arises — see docs/PROTOCOL_CONTRACT.md.
+register_event_type(
+    "mayave.turn_completed", schema_version=1, required_fields={"intent": str},
+    description="A MayaVE conversation turn was resolved to the given intent.",
+)
 
 def _check_json_serializable(payload: Any) -> None:
     try:
