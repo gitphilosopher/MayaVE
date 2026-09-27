@@ -17,6 +17,11 @@ logs/
 
 # Local/model files
 frontend/assets/mmodel.vroid
+datasets/labels.json
+datasets/pytorch_model.pt
+datasets/tf_model.h5
+datasets/training_hash.txt
+datasets/vocab.json
 
 # Environment & secrets
 .env
