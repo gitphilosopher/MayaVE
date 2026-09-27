@@ -11,7 +11,7 @@ tests/
 temp.py
 edge-automation-profile
 test_*.py
-review_*.py
+review_candidates.py
 
 # Runtime logs
 logs/
@@ -19,11 +19,7 @@ logs/
 
 # Local/model files
 frontend/assets/mmodel.vroid
-datasets/labels.json
-datasets/pytorch_model.pt
-datasets/tf_model.h5
-datasets/training_hash.txt
-datasets/vocab.json
+datasets/intent_model/
 
 # Environment & secrets
 .env
