@@ -1,32 +1,20 @@
 """
 skills/system/open_target.py
+Resolve a user request to either a known website, a known desktop app, or an
+unqualified target that should be passed to the OS.
 
-Merged from the former separate skills/web/open_website.py and
-skills/system/open_app.py, behind the single 'open_target' intent (see
-datasets/intents.json) — the classifier no longer tells a website request
-apart from an app-launch request, so this skill resolves it itself.
+This skill is the single `open_target` handler for both website-opening and
+app-launch requests. The classifier does not separate them cleanly, so the logic
+must decide which interpretation is most likely from the spoken text and the
+parsed target. The resolution order is intentionally conservative: known website
+names are checked first, then known Windows app aliases, then explicit website
+signals such as a URL or a dotted host, then pass-through app launch, and only
+then a last-resort website guess for a bare word.
 
-Resolution order (most to least confident):
-  1. A known name from _SITES appearing anywhere in the utterance
-     (checked on the raw text, same as the former open_website).
-  2. A known name from _APP_TABLE (Windows launch table), after cleaning
-     the extracted target ("the chrome browser please" -> "chrome").
-  3. A strong website signal in the raw target — explicit http(s) URL,
-     a dotted host ("example.org"), or spoken "dot" ("github dot com").
-  4. App-launch pass-through: the cleaned target handed to the OS
-     unchanged (ShellExecute/os.startfile can resolve many registered
-     apps by name even when they're not in _APP_TABLE) — same as the
-     former open_app's fallback for an unrecognised name.
-  5. Last resort: treat a bare single-word target as a website label
-     ("wikipedia" -> https://www.wikipedia.com) — same as the former
-     open_website's weakest heuristic, now tried only AFTER an app
-     launch has already failed. Guessing a wrong domain silently
-     "succeeds" while being wrong, which is worse than the apology an
-     app-launch failure already gives, so it's deliberately last.
-
-Table entries are Windows-only and unverified at runtime — extend
-_APP_TABLE as real launch failures show up. On macOS/Linux the cleaned
-name is used as-is for app launches (see _launch).
+The purpose is to keep the router simple while preserving the older behavior of
+`open_website` and `open_app`: known destinations are opened directly, stronger
+signals win before weaker ones, and failures degrade to a user-facing apology
+instead of silently opening the wrong destination.
 """
 import asyncio
 import logging
@@ -65,8 +53,7 @@ _FILLER_RE = re.compile(r"^(?:the\s+)?(?:website\s+)?")
 
 
 def _resolve_url_strong(target: str) -> str | None:
-    """Explicit URL, dotted host, or spoken 'dot' — a target that already
-    unambiguously reads as a website. None if it doesn't."""
+    """Recognize a direct website target such as a URL, dotted host, or spoken 'dot' form."""
     t = target.strip().lower().rstrip(".?!,")
     if not t:
         return None
@@ -82,9 +69,7 @@ def _resolve_url_strong(target: str) -> str | None:
 
 
 def _resolve_url_label_guess(target: str) -> str | None:
-    """Weakest signal: a bare single-word target guessed as <label>.com.
-    Only tried after every stronger signal AND an app-launch attempt have
-    already failed (see module docstring, step 5)."""
+    """Guess a bare single-word target as a website label only after stronger options fail."""
     t = _FILLER_RE.sub("", target.strip().lower().rstrip(".?!,")).strip()
     if t and _LABEL_RE.match(t):
         return f"https://www.{t}.com"
@@ -122,7 +107,7 @@ _TRAILING_WORDS = {"app", "application", "program", "browser", "please"}
 
 
 def _clean_app_name(target: str) -> str:
-    """'the chrome browser please.' -> 'chrome'. Never strips the last word."""
+    """Normalize an app-like target by stripping filler words and trailing app labels."""
     t = _LEADING_RE.sub("", target.lower().strip().rstrip(".?!,"))
     words = t.split()
     while len(words) > 1 and words[-1] in _TRAILING_WORDS:
@@ -131,16 +116,14 @@ def _clean_app_name(target: str) -> str:
 
 
 def _lookup_app(name: str) -> tuple[str, tuple[str, ...]] | None:
-    """(display name, launch candidates) if `name` is a known app; None if
-    it isn't — callers decide what an unknown name means (pass-through vs.
-    a website guess), this just reports the table lookup itself."""
+    """Return known Windows app metadata for a normalized name if it exists in the lookup table."""
     if _OS == "Windows" and name in _APPS:
         return _APPS[name]
     return None
 
 
 def _launch(candidates: tuple[str, ...]) -> None:
-    """Blocking — runs in an executor. Raises if nothing could be launched."""
+    """Attempt each launch candidate in order until one opens successfully or all fail."""
     if _OS == "Windows":
         last: OSError | None = None
         for candidate in candidates:
@@ -158,8 +141,7 @@ def _launch(candidates: tuple[str, ...]) -> None:
 
 
 async def _launch_app(display: str, candidates: tuple[str, ...]) -> str | None:
-    """Returns the spoken success reply, or None on failure so the caller
-    can move on to the next fallback instead of apologising immediately."""
+    """Launch an app and return a success message only if the candidate list succeeds."""
     try:
         await asyncio.get_running_loop().run_in_executor(None, _launch, candidates)
         return f"[happy] Opening {display}, {_U}."
@@ -169,9 +151,9 @@ async def _launch_app(display: str, candidates: tuple[str, ...]) -> str | None:
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Resolve a target to a website or app launch using the fallback priority defined for this skill."""
     t = text.lower()
 
-    # 1. Known website name anywhere in the utterance.
     for name, url in _SITES.items():
         if _SITE_RES[name].search(t):
             webbrowser.open(url)
@@ -180,7 +162,6 @@ async def execute(intent: dict, text: str) -> str:
     raw_target = intent.get("target", "").strip()
     cleaned = _clean_app_name(raw_target) if raw_target else ""
 
-    # 2. Known desktop app.
     if cleaned:
         known = _lookup_app(cleaned)
         if known:
@@ -188,21 +169,17 @@ async def execute(intent: dict, text: str) -> str:
             if reply:
                 return reply
 
-    # 3. Strong website signal — explicit URL, dotted host, spoken "dot".
     if raw_target:
         url = _resolve_url_strong(raw_target)
         if url:
             webbrowser.open(url)
             return f"[happy] Opening {url} senpai!"
 
-    # 4. App-launch pass-through for an unrecognised name — previous
-    # open_app fallback: hand it to the OS unchanged.
     if cleaned:
         reply = await _launch_app(cleaned, (cleaned,))
         if reply:
             return reply
 
-    # 5. Last resort — guess a bare single word as a website label.
     if raw_target:
         url = _resolve_url_label_guess(raw_target)
         if url:

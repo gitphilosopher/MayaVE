@@ -1,10 +1,16 @@
 """
 services/llm/ollama_lifecycle.py
-Chat-model lifecycle helpers shared by llm_service.py, main.py's warmup and
-tests/bench_llm_lifecycle.py: keep_alive policy, per-turn load/speed summary,
-and a post-turn residency snapshot (/api/ps + CUDA memory).
+Lifecycle helpers for the Ollama-backed chat model.
 
-Kept dependency-light (config + stdlib) so it imports without torch/kokoro.
+This module centralizes the model-residency behavior used by the LLM pipeline and
+startup warmup. It owns the `keep_alive` policy, extracts per-turn timing and
+throughput metrics from Ollama's final response object, and emits a best-effort
+post-turn residency snapshot so cold starts and unexpected eviction are visible
+without interrupting normal runtime.
+
+It intentionally stays dependency-light and imports only config and stdlib
+helpers so it can be used safely from the LLM service, warmup code, and
+diagnostic tooling without depending on the full speech/TTS stack.
 """
 
 import asyncio
@@ -23,11 +29,7 @@ _bg_tasks: set = set()
 
 
 def chat_keep_alive():
-    """
-    keep_alive for the chat model. Must be sent on EVERY request that touches
-    it (chat + warmup): a request without it resets the expiry to Ollama's
-    5-minute default. Override with config.llm.keep_alive ("-1" = never unload; sent as the number -1).
-    """
+    """Return the per-request keep_alive value for the active chat model."""
     raw = getattr(config.llm, "keep_alive", _DEFAULT_KEEP_ALIVE)
     try:
         return int(str(raw).strip())   # "-1"/"3600" must be sent as numbers, not strings
@@ -36,12 +38,13 @@ def chat_keep_alive():
 
 
 def placement(size: float, size_vram: float) -> str:
+    """Classify a model's placement as GPU-, CPU-, or mixed-backed from VRAM share."""
     pct = (size_vram / size * 100) if size else 0.0
     return "GPU" if pct >= 99 else "CPU" if pct <= 1 else f"MIXED({pct:.0f}% GPU)"
 
 
 def summarize_metrics(data: dict) -> dict:
-    """Derive load/prompt/generation figures from Ollama's final stream object."""
+    """Extract load, prompt, and generation timings from Ollama's final stream payload."""
     ns = 1e9
     load = (data.get("load_duration") or 0) / ns
     pe_n, pe_s = data.get("prompt_eval_count") or 0, (data.get("prompt_eval_duration") or 0) / ns
@@ -59,7 +62,7 @@ def summarize_metrics(data: dict) -> dict:
 
 
 def _log_gpu_memory() -> None:
-    """Whole-device VRAM (all processes) vs. this process (Kokoro). Best-effort."""
+    """Emit a best-effort VRAM snapshot for the whole device and this Python process."""
     try:
         import torch
         if not torch.cuda.is_available():
@@ -75,7 +78,7 @@ def _log_gpu_memory() -> None:
 
 
 async def log_residency() -> None:
-    """Post-turn snapshot: /api/ps (placement, size_vram, expires_at) + GPU memory. Never raises."""
+    """Query live model residency and GPU usage after a turn without raising runtime errors."""
     try:
         from brain.embeddings import describe_ollama_models
         await describe_ollama_models()
@@ -85,12 +88,7 @@ async def log_residency() -> None:
 
 
 def log_chat_turn(data: dict) -> None:
-    """
-    Log one chat turn's cold/warm status and speeds, then snapshot residency in
-    the background. gap_since_last_chat vs keep_alive tells expiry apart from
-    eviction: a cold load with a gap shorter than keep_alive means something
-    evicted the model.
-    """
+    """Log the turn's cold/warm status and schedule a non-blocking residency snapshot."""
     global _last_chat_done_at
     m = summarize_metrics(data)
     now = time.time()

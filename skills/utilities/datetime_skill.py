@@ -1,7 +1,17 @@
-"""skills/utilities/datetime_skill.py"""
+"""skills/utilities/datetime_skill.py
+
+Lightweight time/date helper for Maya's utility skill set.
+
+This module responds to simple time and date requests by inspecting the local
+system clock and returning a short, user-facing sentence. It does not maintain
+state or rely on any external service; it only distinguishes whether the request
+is about the current time, the current date, the weekday, or a general clock
+summary.
+"""
 import datetime
 
 async def execute(intent: dict, text: str) -> str:
+    """Return a friendly time or date response based on the user's request text."""
     now = datetime.datetime.now()
     t = text.lower()
     if "time" in t:

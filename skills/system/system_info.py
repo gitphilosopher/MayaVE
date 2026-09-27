@@ -1,11 +1,18 @@
 """
 skills/system/system_info.py
+System-status and screenshot skill for Maya.
 
-Event-loop rule: psutil.cpu_percent(interval=1) sleeps for a full second
-and pyautogui.screenshot() does a synchronous screen grab + PNG write, so
-all reply building runs in the default executor. mood_manager is loop-owned
-state, so the worker only *describes* a mood event (kwargs dict); execute()
-reports it back on the loop after the executor call returns.
+This module answers user requests about battery, CPU, RAM, disk, and optional
+screenshots. It is deliberately written as a thin assistant skill: the public
+`execute()` method dispatches the request into a blocking worker, then the worker
+returns a user-facing reply plus an optional mood-event payload. The event is
+reported back on the async loop afterward so the loop-owned mood manager remains
+thread-safe.
+
+The heavy work is intentionally kept off the event loop because it involves
+blocking system calls such as `psutil.cpu_percent(interval=1)` and
+`pyautogui.screenshot()`. That keeps the async runtime responsive while still
+making the final announcement and mood updates happen in the correct thread.
 """
 import asyncio
 import logging
@@ -23,6 +30,7 @@ _DISK_RE       = re.compile(r"\bdisks?\b")
 _SCREENSHOT_RE = re.compile(r"\bscreen\s?shots?\b")
 
 async def execute(intent: dict, text: str) -> str:
+    """Run the blocking system-status work in the default executor and report any mood event on the loop."""
     loop = asyncio.get_running_loop()
     reply, event = await loop.run_in_executor(
         None, _build_reply, text, intent.get("intent", "")
@@ -33,7 +41,7 @@ async def execute(intent: dict, text: str) -> str:
 
 
 def _build_reply(text: str, intent_name: str = "") -> tuple[str, dict | None]:
-    """Blocking. Returns (reply, mood_event_kwargs_or_None)."""
+    """Build the spoken reply and optional mood event for a system-status or screenshot request."""
     try:
         import psutil
     except ImportError:

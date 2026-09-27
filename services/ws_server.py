@@ -1,63 +1,28 @@
 """
 services/ws_server.py
-=====================
-WebSocket server — bridges Maya's audio pipeline to the browser avatar.
+WebSocket bridge between Maya's runtime and the browser avatar.
 
-Origin check:
-  websockets.serve(origins=...) is given config.ws_allowed_origins — by
-  default the Vite dev server (http://localhost:5173 / 127.0.0.1:5173) the
-  Electron window loads, plus None (clients that send no Origin header, i.e.
-  non-browser tools). A browser page from any OTHER origin is rejected during
-  the handshake (HTTP 403), so an arbitrary web page can't connect and send
-  {"type": "interrupt"} / {"type": "audio_done"}. If Vite ends up on another
-  port, add that origin to config.ws_allowed_origins — a mismatch shows up as
-  the avatar staying on 💤 with a 403 in the browser console. Setting the
-  config value to None disables the check (accept any origin).
-  The connection type is annotated as Any: websockets' server-connection
-  class differs between its legacy and asyncio implementations, so this
-  module no longer imports it.
+This module starts the server used by the frontend to receive avatar state,
+transcript updates, behavior packets, animation commands, and audio chunks, while
+also handling the browser-to-runtime interrupt path. The singleton `ws_server`
+keeps a set of live client connections and remembers the most recent state so a
+newly connected frontend immediately receives the current avatar status.
 
-Interrupt handling (barge-in):
-  Two directions now exist:
-    client → server : browser sends {"type": "interrupt"} (e.g. a future
-                       manual "stop talking" button). Routed to an
-                       injectable handler registered via
-                       set_interrupt_handler() — main.py wires this to
-                       core.state.interrupt().
-    server → client : broadcast_stop_audio() tells the browser to halt
-                       whatever it's currently playing immediately. This
-                       is the registered core.state stop callback's
-                       browser-side half — see main.py's
-                       _hard_stop_audio(). It also releases any pending
-                       wait_for_audio_done(), since a stopped clip never
-                       sends audio_done. A stop that lands after
-                       broadcast_audio() but before wait_for_audio_done() is
-                       entered is caught via _stop_gen (see below).
+Key responsibilities:
+- validate browser origins against `config.ws_allowed_origins` during the
+  websocket handshake
+- broadcast audio, transcript, state, behavior, and animation events to the
+  connected browser client
+- accept client interrupt requests (`{"type": "interrupt"}`) and invoke an
+  injectable async handler, usually `core.state.interrupt()`
+- grant barge-in safety by sending `stop_audio` and unblocking any pending
+  `wait_for_audio_done()` call when playback is cut off early
+- persist the last state even when no clients are connected so a reconnect does
+  not leave the frontend in an uninitialized state
 
-Behavioral Engine integration (core/behavior_engine.py):
-  broadcast_behavior() sends a composed communicative-intent packet
-  ({"type": "behavior", ...}) instead of the old flat
-  {"type": "expression", "name": ...}. broadcast_expression() is kept
-  for backward compatibility but is no longer called anywhere in this
-  codebase — every prior call site now goes through
-  behavior_engine.compose() + broadcast_behavior() instead, at the exact
-  same point in the pipeline.
-
-State replay:
-  broadcast_state() remembers the last state (even with no clients
-  connected) and _handler() sends it to each new client, so the
-  frontend's idle-fidget gate isn't stuck on null after connect.
-
-Voice-sleep state (Batch 4 — "Avatar never visually sleeps"):
-  broadcast_state() takes any string value as before — no functional
-  change here. main.py's on_speech() now sets the FSM to SLEEPING before
-  the go-to-sleep goodbye line, and core/speaker.py's Speaker.speak()
-  broadcasts state "sleeping" (instead of "idle") once that line finishes
-  playing, alongside the existing "listening"/"processing"/"speaking"/
-  "idle" values. frontend/js/websocket.js's handleState() is what actually
-  reacts to it (closing the avatar's eyes independent of the WebSocket
-  connection, which stays open the whole time) — this module only carries
-  the value through like any other state broadcast.
+The server stays transport-focused: it does not decide speech logic itself. It
+carries the runtime events and interruption signals between Maya's core system and
+its browser frontend.
 """
 
 import asyncio
@@ -80,6 +45,8 @@ WSConnection = Any
 
 
 class MayaWebSocketServer:
+    """Small stateful websocket server for avatar audio and UI events."""
+
     def __init__(self, host: str = "localhost", port: int = 8765,
                  origins: Optional[Sequence[Optional[str]]] = None):
         self._host    = host
@@ -114,6 +81,7 @@ class MayaWebSocketServer:
             await asyncio.Future()
 
     async def _handler(self, ws: WSConnection) -> None:
+        """Serve one websocket client and forward its incoming messages to the server logic."""
         self._clients.add(ws)
         addr = ws.remote_address
         logger.info(f"Avatar connected: {addr}  (clients={len(self._clients)})")
@@ -132,6 +100,7 @@ class MayaWebSocketServer:
             logger.info(f"Avatar disconnected: {addr}  (clients={len(self._clients)})")
 
     async def _on_message(self, ws: WSConnection, message: str) -> None:
+        """Handle browser events such as interrupts and audio completion notifications."""
         try:
             data = json.loads(message)
             if data.get("type") == "interrupt":
@@ -149,17 +118,13 @@ class MayaWebSocketServer:
     # ── Interrupt wiring ──────────────────────────────────────────────
 
     def set_interrupt_handler(self, handler: InterruptHandler) -> None:
-        """
-        Register the async callback fired when the browser sends
-        {"type": "interrupt"}. Wired in main.py to core.state.interrupt()
-        so a client-initiated interrupt behaves exactly like a
-        listener-detected barge-in.
-        """
+        """Register the async callback invoked by browser-side interrupt events."""
         self._interrupt_handler = handler
 
     # ── Broadcast helpers ─────────────────────────────────────────────
 
     async def broadcast_audio(self, wav_bytes: bytes) -> None:
+        """Send one WAV payload to the browser; tracks generation order for stop handling."""
         self._audio_sent_gen = self._stop_gen   # snapshot before any await
         if not self._clients:
             return
@@ -167,46 +132,30 @@ class MayaWebSocketServer:
         await self._broadcast(json.dumps({"type": "audio", "data": b64}))
 
     async def broadcast_stop_audio(self) -> None:
-        """
-        Tell the browser to immediately stop any audio currently playing
-        (and its lip-sync) — the client-side half of a barge-in. Safe to
-        call even if nothing is playing.
-        """
+        """Tell the browser to stop current playback and release any pending audio wait."""
         self._stop_gen += 1
         if not self._clients:
             return
         logger.debug("Broadcasting stop_audio (barge-in)")
         await self._broadcast(json.dumps({"type": "stop_audio"}))
-        # A stopped clip never sends audio_done — release any pending wait
-        # (e.g. an uncancellable Speaker.speak) instead of stalling 30 s.
         self._audio_done_event.set()
 
     async def broadcast_state(self, state_value: str) -> None:
-        """
-        state_value: "listening" | "processing" | "speaking" | "idle" |
-        "sleeping" (Batch 4 — see module docstring). Any string is
-        accepted and carried through as-is; the frontend decides what
-        each value means.
-        """
-        self._last_state = state_value   # recorded even with no clients
+        """Persist and emit a new avatar state value to connected clients."""
+        self._last_state = state_value
         if not self._clients:
             return
         await self._broadcast(json.dumps({"type": "state", "value": state_value}))
 
     async def broadcast_expression(self, expression: str) -> None:
-        """Set a specific VRM expression on the avatar, independent of state.
-        Kept for backward compatibility — no longer called anywhere in this
-        codebase; see broadcast_behavior() below."""
+        """Broadcast a legacy flat expression payload for compatibility."""
         if not self._clients:
             return
         logger.debug(f"Broadcasting expression: '{expression}'")
         await self._broadcast(json.dumps({"type": "expression", "name": expression}))
 
     async def broadcast_behavior(self, intent: dict) -> None:
-        """Broadcast a composed communicative-intent packet (see
-        core/behavior_engine.py's BehaviorEngine.compose()) for the
-        frontend Expression Composer to render as blended VRM weights +
-        gaze. Replaces the old flat broadcast_expression() call sites."""
+        """Send a composed behavior packet for the frontend expression composer."""
         if not self._clients:
             return
         logger.debug(f"Broadcasting behavior: {intent}")
@@ -224,12 +173,10 @@ class MayaWebSocketServer:
         await self._broadcast(json.dumps({"type": "animation", "name": animation}))
 
     async def wait_for_audio_done(self, timeout: float = 30.0) -> bool:
-        # No client → broadcast_audio sent nothing, so no audio_done will come.
+        """Wait for the browser to report that the current audio clip finished, unless it was stopped."""
         if not self._clients:
             return False
         self._audio_done_event.clear()
-        # A stop landed after this audio was sent (possibly before the clear
-        # above wiped its set()) — the clip won't send audio_done.
         if self._stop_gen != self._audio_sent_gen:
             return False
         try:

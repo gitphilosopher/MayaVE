@@ -1,21 +1,17 @@
 """
 skills/utilities/timer.py
-Countdown timers with expression tags.
+Countdown and reminder utility for Maya.
 
-Expired timers are announced through the Speaker injected by Router
-(set_speaker), run under state.run_interruptible so a barge-in can cut
-the alert. The alert is queued on the command worker (queue_manager.put_job)
-so it never overlaps a turn and commands spoken during it wait behind it.
+This skill handles both simple countdown timers and reminder timers that are
+triggered after a user-specified duration. It recognizes the merged `set_timer`
+intent, supports reminder wording such as "remind me to ... in 5 minutes", and
+remembers a pending reminder until the next utterance supplies the duration.
 
-"remind me to X" with no duration asks for one and keeps X pending; Router
-calls resolve_pending() first so the next utterance supplies the duration.
-
-Intent merge: datasets/intents.json now declares a single 'set_timer' intent
-covering both a bare countdown and a timer carrying a reminder message
-(the former separate 'set_reminder' no longer exists). execute() used to
-tell them apart by intent id to decide whether to skip the cancel/status
-word checks below; it now checks the wording itself (_REMINDER_RE) instead
-— see the comment at that check.
+The timer lifecycle is intentionally integrated with the runtime's command queue:
+when a timer expires, its alert is queued through `queue_manager` and spoken via
+the injected speaker under `state.run_interruptible()`, so the alert is serialized
+behind active turns and remains interruptible by barge-in without overlapping a
+live response.
 """
 
 import asyncio
@@ -64,6 +60,7 @@ _ALL_RE    = re.compile(r"\ball\b")
 
 @dataclass
 class Timer:
+    """A single countdown timer with an optional reminder message and background task."""
     name:    str
     seconds: int
     message: str = ""
@@ -77,13 +74,13 @@ _pending_reminder: tuple[str, float] | None = None   # (message, expiry on time.
 
 
 def set_speaker(speaker) -> None:
-    """Called once by Router so alerts can speak through the shared Speaker."""
+    """Register the speaker used for timer expiration alerts."""
     global _speaker
     _speaker = speaker
 
 
 def _words_to_digits(text: str) -> str:
-    """'one hour' -> '1 hour' — only number words directly before a time unit."""
+    """Convert spelled-out number words directly before a time unit into digits."""
     def repl(m: re.Match) -> str:
         if m.group(1):
             units = _NUM_WORDS[m.group(2).lower()] if m.group(2) else 0
@@ -93,16 +90,11 @@ def _words_to_digits(text: str) -> str:
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Parse a timer request, reminder, or control command and return the resulting spoken status."""
     global _pending_reminder
     text = _words_to_digits(text)
     t = text.lower()
 
-    # A reminder's own wording ("remind me to stop by...") must not hit
-    # the cancel/status word checks — e.g. "remind me to cancel the
-    # subscription in 2 days" is a new reminder, not a cancel request.
-    # Previously gated on the intent id (set_reminder vs. set_timer); both
-    # now share the single 'set_timer' intent (see datasets/intents.json),
-    # so this checks the reminder wording itself instead.
     if not _REMINDER_RE.search(t):
         if _CANCEL_RE.search(t):
             return _cancel(t)
@@ -121,12 +113,7 @@ async def execute(intent: dict, text: str) -> str:
 
 
 async def resolve_pending(text: str) -> str | None:
-    """
-    Called by Router.dispatch before intent routing. One-shot: the next
-    utterance always consumes a pending reminder. Returns the spoken reply
-    if it supplied a duration; None if nothing was pending, it expired, or
-    the utterance had no duration (then it routes normally, reminder dropped).
-    """
+    """Consume the next utterance as the duration for a pending reminder when it includes a valid duration."""
     global _pending_reminder
     if _pending_reminder is None:
         return None
@@ -141,6 +128,7 @@ async def resolve_pending(text: str) -> str | None:
 
 
 async def _set(seconds: int, label: str, message: str = "") -> str:
+    """Create or replace a timer record and start its countdown task."""
     global _timer_counter
     _timer_counter += 1
     name = label or f"timer {_timer_counter}"
@@ -158,6 +146,7 @@ async def _set(seconds: int, label: str, message: str = "") -> str:
 
 
 def _cancel(text: str) -> str:
+    """Cancel the most recent or all active timers depending on the user's wording."""
     if not _timers:
         return f"[neutral] No active timers, {_U}."
 
@@ -176,6 +165,7 @@ def _cancel(text: str) -> str:
 
 
 def _status() -> str:
+    """Report the active timer names and their current state."""
     active = {n: t for n, t in _timers.items() if not t.task.done()}
     if not active:
         return f"[neutral] No active timers, {_U}."
@@ -184,7 +174,7 @@ def _status() -> str:
 
 
 def _forget(timer: Timer) -> None:
-    """Remove this timer from the registry — never a newer one with the same name."""
+    """Remove the timer from the registry only if it is still the current instance for that name."""
     if _timers.get(timer.name) is timer:
         del _timers[timer.name]
 
@@ -202,7 +192,7 @@ async def _countdown(timer: Timer) -> None:
 
 
 async def _alert(timer: Timer) -> None:
-    """Queue the alert on the command worker so it never overlaps a turn."""
+    """Schedule the timer-expiration alert to be spoken in the command queue, behind active turns."""
     if _speaker is None:
         logger.warning("Timer alert skipped — no speaker registered.")
         return
@@ -220,7 +210,7 @@ async def _alert(timer: Timer) -> None:
 
 
 def _extract_reminder(text: str) -> str:
-    """'remind me to X in 5 minutes' -> 'X'. Empty if there's no reminder wording."""
+    """Extract the reminder text from a request while dropping the duration portion."""
     m = _REMINDER_RE.search(text)
     if not m:
         return ""
@@ -230,12 +220,11 @@ def _extract_reminder(text: str) -> str:
 
 
 def _parse_duration(text: str) -> tuple[int | None, str]:
+    """Parse a duration string and return total seconds plus an optional timer label."""
     text = text.lower()
     total = 0
     found = False
 
-    # One pattern per unit — separate long/short-form patterns used to both
-    # match "5 minutes" and double-count it.
     patterns = [
         (r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b',      3600),
         (r'(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b',   60),

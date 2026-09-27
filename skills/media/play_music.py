@@ -1,4 +1,14 @@
-"""skills/media/play_music.py — media key control"""
+"""skills/media/play_music.py — media key control
+
+Media-control skill that translates Maya intents into standard OS media-key
+shortcuts.
+
+This module is intentionally thin: it maps a small set of assistant intents to
+media actions supported by the `keyboard` package, emits the matching key press,
+and returns a short spoken confirmation string for the caller. The skill does not
+inspect the active player or OS audio state; it simply sends the requested key
+combination and lets the host media application handle the result.
+"""
 import logging
 logger = logging.getLogger(__name__)
 
@@ -19,6 +29,7 @@ _KEY_MAP = {
 }
 
 async def execute(intent: dict, text: str) -> str:
+    """Send a mapped media shortcut and return a short assistant-facing confirmation."""
     if not _KB:
         return "[sad] Install the 'keyboard' library for media control."
     key = _KEY_MAP.get(intent.get("intent", ""), "play/pause media")

@@ -1,7 +1,21 @@
 """
 skills/web/weather.py
-Fetches current weather + today's forecast from Open-Meteo (free, no API key).
-Uses ip-api.com to auto-detect location if user doesn't specify one.
+Weather intent handler for the Maya.
+
+This module resolves a weather request to a specific location, fetches the current
+conditions and the day's temperature range from Open-Meteo, and returns a short,
+speech-ready string tagged with avatar expressions for downstream playback. If the
+user does not provide a place name, it falls back to IP-based geolocation. The
+skill is designed to work with the assistant's executor-based async skill model,
+where blocking network I/O is deferred away from the event loop and the response is
+returned as a plain string.
+
+The implementation keeps the runtime contract simple: it accepts the standard skill
+shape (intent, text), extracts the requested locale when present, and formats the
+result with a friendly summary that includes temperature, conditions, wind,
+humidity, and today's high/low. Time phrases such as "today" or "tomorrow" are
+stripped before geocoding so the assistant can still resolve the relevant city
+without treating the temporal word as part of the location name.
 """
 
 import asyncio
@@ -46,11 +60,13 @@ _WMO_EXPRESSION = {
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Run the weather lookup on the executor thread and return a speech-ready reply."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _fetch, text)
 
 
 def _fetch(text: str) -> str:
+    """Resolve the location, fetch the current forecast, and build the final response."""
     try:
         location = _extract_location(text)
 
@@ -102,6 +118,7 @@ _TRAILING_TIME_RE = re.compile(
 )
 
 def _extract_location(text: str) -> str | None:
+    """Return the requested city or place name while stripping trailing time references."""
     m = re.search(r'\b(?:in|for|at)\s+([A-Za-z\s]+?)\s*[?.!]*$', text, re.IGNORECASE)
     if not m:
         return None
@@ -111,6 +128,7 @@ def _extract_location(text: str) -> str | None:
     return loc
 
 def _geocode(client: httpx.Client, location: str) -> tuple:
+    """Look up a place name with the Open-Meteo geocoding API and return coordinates."""
     resp = client.get(_GEO_URL, params={"name": location, "count": 1, "language": "en"})
     resp.raise_for_status()
     results = resp.json().get("results", [])
@@ -121,6 +139,7 @@ def _geocode(client: httpx.Client, location: str) -> tuple:
 
 
 def _ip_location(client: httpx.Client) -> tuple:
+    """Use the client IP to infer a nearby city and coordinates when no explicit location is given."""
     resp = client.get(_IP_URL)
     resp.raise_for_status()
     d = resp.json()

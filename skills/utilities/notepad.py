@@ -1,26 +1,23 @@
 """
 skills/utilities/notepad.py
-Voice-driven notepad with expression tags.
+Voice-driven note-taking and retrieval utility.
 
-Bug fix: note files contain [2026-06-15 12:00] timestamp lines written by
-_create() and _append(). When _read() returns file content prefixed with
-"[relaxed] Here's your note: [2026-06-15 12:00]...", the timestamp bracket
-would be parsed as an expression tag and stripped silently.
+This skill manages Maya's local note files in a user-facing, speech-driven way.
+It supports creating, appending, viewing, listing, opening, and deleting notes,
+with the intent layer merging older create/append and read/list/open variants into
+`note_write` and `note_view` while keeping `note_delete` as a dedicated flow.
 
-Fix: strip timestamp lines from note content before returning to speaker.
+The module intentionally handles the ambiguous sub-operations in the skill itself
+instead of depending on the classifier to distinguish them. A plain write request
+can become create-vs-append based on wording; a plain view request can become
+list-vs-open-vs-read based on wording. The safety behavior is also important:
+deletion is confirmation-gated and one-shot, so a stale follow-up confirmation
+cannot delete an old note.
 
-Delete confirmation: _delete() only ASKS ("Say yes to confirm") and stores
-the resolved note path; resolve_pending() — called first by Router.dispatch,
-same pattern as skills/system/power.py — confirms, declines or drops it on
-the next utterance. One-shot with a 30 s TTL, so a stale request can never
-delete a note on a late "yes". Yes/no phrases come from core/confirmation.py.
-
-Intent merge: datasets/intents.json now declares 'note_write' (merged from
-the former separate 'note_create'/'note_append') and 'note_view' (merged
-from 'note_read'/'note_list'/'note_open'); 'note_delete' is untouched.
-Since the classifier can no longer tell create-vs-append or read-vs-list-
-vs-open apart by intent id, _write()/_view() below do it from the wording
-instead — this is the one place that distinction now lives.
+Timestamp lines are stored alongside note text but stripped before returning file
+content to the speaker, because bracketed timestamps would otherwise look like
+expression tags and be interpreted by the speech pipeline as metadata rather than
+note content.
 """
 
 import asyncio
@@ -88,27 +85,23 @@ _OPEN_CUE_RE = re.compile(
 
 
 def _spoken_name(note: Path) -> str:
-    """'buy_milk_0615_1200' -> 'buy milk' (for the delete prompt/reply only)."""
+    """Turn a filename back into a human-readable note title for confirmations and replies."""
     return _STAMP_SUFFIX_RE.sub("", note.stem).replace("_", " ") or note.stem.replace("_", " ")
 
 
 def _ensure_dir() -> None:
+    """Create the notes directory if it does not already exist."""
     _NOTES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Dispatch the note operation to the correct blocking helper for the given intent and utterance."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _handle, intent, text)
 
 
 async def resolve_pending(text: str) -> str | None:
-    """
-    Called by Router.dispatch before intent routing. One-shot: the next
-    utterance always consumes a pending delete request. Returns the spoken
-    reply if it confirmed or declined; None if nothing was pending, it
-    expired, or the utterance was unrelated (then it routes normally and the
-    request is dropped).
-    """
+    """Consume the next utterance as confirmation for a pending delete request when applicable."""
     global _pending_delete
     if _pending_delete is None:
         return None
@@ -126,12 +119,11 @@ async def resolve_pending(text: str) -> str | None:
 
 
 def _handle(intent: dict, text: str) -> str:
+    """Route a note request to the correct create/view/delete helper based on intent or text cues."""
     _ensure_dir()
-    t    = text.lower()
+    t = text.lower()
     name = intent.get("intent", "")
 
-    # A specific note_* intent wins over word matching, so a note whose
-    # content contains "read"/"show"/etc. is saved instead of misrouted.
     handlers = {
         "note_write":  _write,
         "note_view":   _view,
@@ -140,9 +132,6 @@ def _handle(intent: dict, text: str) -> str:
     if name in handlers:
         return handlers[name](text)
 
-    # Fallback word matching — same cues the merged intents themselves
-    # rely on, used only if this was ever reached without one of the
-    # three note_* ids above (e.g. manual testing).
     if any(w in t for w in ("delete note", "remove note")):
         return _delete(text)
     if _APPEND_CUE_RE.search(t):
@@ -158,18 +147,14 @@ def _handle(intent: dict, text: str) -> str:
 
 
 def _write(text: str) -> str:
-    """note_write: decides create vs. append from the wording (merged from
-    the former separate note_create/note_append intents)."""
+    """Create a new note or append to the latest note based on the wording of the request."""
     if _APPEND_CUE_RE.search(text.lower()):
         return _append(text)
     return _create(text)
 
 
 def _view(text: str) -> str:
-    """note_view: decides list vs. open-in-editor vs. read-aloud from the
-    wording (merged from the former separate note_read/note_list/note_open
-    intents) — read-aloud is the default when neither cue matches, so a
-    plain "read my notes" still reads the latest note instead of listing."""
+    """List notes, open a note in an editor, or read the most relevant note aloud based on the wording."""
     t = text.lower()
     if _LIST_CUE_RE.search(t):
         return _list()
@@ -225,8 +210,6 @@ def _read(text: str) -> str:
 
     raw = note.read_text(encoding="utf-8").strip()
 
-    # Strip timestamp lines so they aren't spoken and don't collide with
-    # expression tag parsing (e.g. [2026-06-15 12:00] looks like a tag)
     content = _TIMESTAMP_RE.sub("", raw).strip()
 
     if len(content) > 300:
@@ -243,7 +226,7 @@ def _list() -> str:
 
 
 def _delete(text: str) -> str:
-    """Only asks — the note is removed by resolve_pending() on a spoken yes."""
+    """Ask for confirmation before deleting the selected note; the actual removal happens on a later yes."""
     global _pending_delete
     notes = _get_notes()
     if not notes:
@@ -267,7 +250,7 @@ def _delete(text: str) -> str:
 
 
 def _run_delete(note: Path) -> str:
-    """Blocking — called in an executor after a spoken yes."""
+    """Delete the selected note after it has been confirmed by a later utterance."""
     label = _spoken_name(note)
     try:
         note.unlink()

@@ -1,4 +1,17 @@
-"""skills/system/power.py — shutdown / restart with spoken confirmation."""
+"""skills/system/power.py — shutdown / restart with spoken confirmation.
+
+Two-step power-control skill for Windows.
+
+This module is responsible for the confirmation-gated shutdown and restart flow.
+When the router sees a power intent, `execute()` asks for explicit confirmation
+instead of acting immediately. If the next utterance confirms within the TTL, the
+request is executed with `shutdown /s /t <delay>` or `shutdown /r /t <delay>`;
+if it is denied or unrelated, the pending request is discarded without acting.
+
+The design is intentionally one-shot and short-lived: a stale confirmation request
+expires after a fixed timeout, so a late "yes" cannot trigger a power action in
+error.
+"""
 import asyncio
 import logging
 import platform
@@ -11,21 +24,19 @@ from core.confirmation import is_confirm, is_deny
 logger = logging.getLogger(__name__)
 _U = config.user_name
 
-_DELAY_S       = 10   # OS countdown, so the goodbye line can play first
-_CONFIRM_TTL_S = 30   # a stale request expires; a late "yes" does nothing
+_DELAY_S = 10
+_CONFIRM_TTL_S = 30
 
-# intent -> (shutdown.exe flag, spoken verb)
 _ACTIONS = {
     "shutdown": ("/s", "shut down"),
     "restart":  ("/r", "restart"),
 }
 
-# (intent name, expiry on time.monotonic()) while awaiting confirmation.
 _pending: tuple[str, float] | None = None
 
 
 async def execute(intent: dict, text: str) -> str:
-    """Routed for the shutdown/restart intents — asks, never acts."""
+    """Ask for confirmation before scheduling a Windows shutdown or restart."""
     global _pending
     name = intent.get("intent", "")
     _, verb = _ACTIONS[name]
@@ -37,12 +48,7 @@ async def execute(intent: dict, text: str) -> str:
 
 
 async def resolve_pending(text: str) -> str | None:
-    """
-    Called by Router.dispatch before intent routing. One-shot: the next
-    utterance always consumes a pending request. Returns the spoken reply
-    if it confirmed or declined; None if nothing was pending, it expired,
-    or the utterance was unrelated (then it routes normally, request dropped).
-    """
+    """Consume a pending power request if the next utterance confirms, denies, or expires it."""
     global _pending
     if _pending is None:
         return None
@@ -60,6 +66,7 @@ async def resolve_pending(text: str) -> str | None:
 
 
 def _run(name: str) -> str:
+    """Schedule the OS-level shutdown or restart with a short delay for the goodbye line to finish."""
     flag, verb = _ACTIONS[name]
     try:
         subprocess.run(["shutdown", flag, "/t", str(_DELAY_S)], check=True, capture_output=True)

@@ -1,10 +1,18 @@
 """
 skills/system/clipboard.py
-Read from and write to the system clipboard.
+Clipboard access helper for Maya's system-skill layer.
 
-pyperclip is imported defensively (same pattern as skills/media/play_music.py):
-a missing package only disables clipboard commands with a spoken hint instead
-of crashing startup through the Router import.
+This module exposes a tiny, dependency-light clipboard interface for the router.
+It imports `pyperclip` defensively so a missing package only disables the
+clipboard actions with a spoken fallback message instead of crashing startup
+through import-time routing.
+
+The public entry point is `execute(intent, text)`, which routes intent-driven
+commands such as read/write/clear and also falls back to text-based detection
+when the router sends a generic action. The helpers themselves keep the behavior
+small and predictable: they read the clipboard, strip command boilerplate from a
+user sentence before copying, and report a user-facing confirmation or failure
+message without raising exceptions to the caller.
 """
 
 import logging
@@ -24,6 +32,7 @@ _U = config.user_name
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Route clipboard actions from intent metadata or free-form text to the correct helper."""
     if not _PC:
         return f"[sad] Install the 'pyperclip' library for clipboard control, {_U}."
 
@@ -46,6 +55,7 @@ async def execute(intent: dict, text: str) -> str:
 
 
 def _read() -> str:
+    """Read the system clipboard and return a short preview or an empty-state message."""
     try:
         content = pyperclip.paste()
         if not content or not content.strip():
@@ -60,6 +70,7 @@ def _read() -> str:
 
 
 def _write(text: str) -> str:
+    """Extract the user-provided content and copy it to the system clipboard."""
     content = re.sub(r'(?i)(copy|write|put|save|add|set)\s+', '', text, count=1).strip()
     content = re.sub(r'(?i)\s*(to|in(to)?|on)\s*(the\s+)?clipboard\s*$', '', content).strip()
 
@@ -74,6 +85,7 @@ def _write(text: str) -> str:
 
 
 def _clear() -> str:
+    """Clear the system clipboard and report success or failure to the caller."""
     try:
         pyperclip.copy("")
         return f"[relaxed] Clipboard cleared, {_U}."

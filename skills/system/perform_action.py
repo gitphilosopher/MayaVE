@@ -1,21 +1,16 @@
 """
 skills/system/perform_action.py
-Direct, on-demand playback of one of Maya's action animations —
-nod / giggle / sigh / shrug / wink — the same fixed vocabulary Ollama
-uses via *action* tags (see services/llm/llm_service.py's ACTION TAGS
-prompt section and _ACTION_VOCABULARY), but triggered deterministically
-here from an explicit request like "Maya can you giggle a bit?" instead
-of depending on the LLM choosing to include one.
+Trigger a specific avatar animation from a user request.
 
-Routing: brain/intent_engine.py has a dedicated guard (_ACTION_WORD_RE)
-that classifies any utterance containing one of these action words as
-the "perform_action" intent BEFORE the ML models even run, so this isn't
-at the mercy of ML confidence on a phrasing it's never been trained on.
+This skill handles direct action requests such as "giggle", "nod", "sigh",
+"shrug", or "wink". It is intentionally narrow and deterministic: the intent
+router classifies action words before any ML model runs, so the request is not
+left to generative ambiguity or a low-confidence classification.
 
-This skill only figures out WHICH action was requested and stores it on
-the intent dict (intent["action"]) — core/processor.py is what actually
-fires ws_server.broadcast_animation(), timed to when the confirmation
-line's audio starts (same pattern as the "greet" -> wave animation).
+The skill resolves the requested action from the user text, stores it on the
+`intent` dict as `intent["action"]`, and returns the spoken confirmation. The
+actual animation dispatch happens later in the processor pipeline, where the
+browser-side animation is synchronized to the relevant playback point.
 """
 
 import logging
@@ -47,6 +42,7 @@ _RESPONSES: dict[str, str] = {
 
 
 def _resolve(text: str) -> str | None:
+    """Find the first supported animation keyword in the user text and map it to Maya's action name."""
     t = text.lower()
     for word, action in _ACTION_WORDS.items():
         if word in t:
@@ -55,6 +51,7 @@ def _resolve(text: str) -> str | None:
 
 
 async def execute(intent: dict, text: str) -> str:
+    """Resolve the action request, attach it to the intent, and return the spoken confirmation."""
     action = _resolve(text)
 
     if not action:
