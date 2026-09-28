@@ -1,7 +1,7 @@
 {
   "$schema_version": 1,
   "meta": {
-    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. Each operation's 'seeds' list holds its semantic prototypes: one stored vector per seed, aggregated per domain.operation at retrieval time. Add prototypes here, never in routing code; the same seed may not appear under two operations. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed."
+    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. Each operation's 'seeds' list holds its semantic prototypes: one stored vector per seed, aggregated per domain.operation at retrieval time. Add prototypes here, never in routing code; the same seed may not appear under two operations. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed. Seed-writing rules: a seed must express the OPERATION (verb + object), not merely mention a shared noun (time/timer/clipboard/google/volume); contrastive pairs (create/status, read/copy/clear, mute/pause, up/down, previous/next, date/time, search/open) must not share verbs or cue words that would make one seed plausible for both."
   },
   "domains": {
     "datetime": {
@@ -19,7 +19,12 @@
             "current time",
             "what's the time now",
             "what time is it right now",
-            "got the time"
+            "got the time",
+            "how late is it",
+            "current clock time",
+            "could you tell me what time it is",
+            "what's the current time",
+            "what time are we at"
           ]
         },
         "date": {
@@ -37,8 +42,12 @@
             "what year is it",
             "which year is this",
             "today's date",
+            "current day",
+            "what is the current year",
+            "what day of the week is it",
             "the current month and year",
-            "what is the date and time right now"
+            "what day of the month is it",
+            "what's today on the calendar"
           ]
         }
       }
@@ -72,9 +81,13 @@
             "make the timer go off in an hour",
             "remind me in twenty minutes",
             "count down for ten minutes",
-            "start a countdown",
             "begin a timer for three minutes",
-            "give me a ninety second timer"
+            "give me a ninety second timer",
+            "ping me in forty minutes",
+            "alert me in thirty minutes",
+            "set a countdown for five minutes",
+            "timer for three hours",
+            "ping me in an hour to fold the laundry"
           ]
         },
         "cancel": {
@@ -97,7 +110,6 @@
           "entities": {},
           "target_mode": "raw",
           "seeds": [
-            "how much time is left",
             "what timers are active",
             "timer status",
             "how long until the timer goes off",
@@ -105,7 +117,15 @@
             "how long is left on the timer",
             "is my timer still running",
             "what is the timer status",
-            "how many minutes are left on my timer"
+            "how many minutes are left on my timer",
+            "what timer is running",
+            "what timers are set",
+            "show my active timers",
+            "how much time is left on my countdown",
+            "what timers are running",
+            "what countdowns are set",
+            "do i have any timers running",
+            "what timer is active"
           ]
         }
       }
@@ -132,7 +152,14 @@
             "take a note",
             "write this down",
             "save this in my notes",
-            "remember this as a note"
+            "note down that the meeting moved to friday",
+            "record a new note about my project idea",
+            "jot down a quick thought",
+            "make a note of this",
+            "save this as a note",
+            "append this to the note",
+            "append some content to my note",
+            "record this in my notes"
           ]
         },
         "view": {
@@ -148,7 +175,12 @@
             "show me the saved notes",
             "what are my notes",
             "list my notes",
-            "read my saved notes"
+            "read my saved notes",
+            "read my latest note",
+            "what did i write down",
+            "what did i note earlier",
+            "show the note i saved yesterday",
+            "read my most recent note"
           ]
         },
         "delete": {
@@ -161,7 +193,14 @@
             "delete the note about groceries",
             "remove this note",
             "erase the note",
-            "delete my saved note"
+            "delete my saved note",
+            "get rid of that note",
+            "discard my last note",
+            "i don't need that note anymore",
+            "delete that note",
+            "remove my latest note",
+            "discard that note",
+            "trash this note"
           ]
         }
       }
@@ -189,7 +228,16 @@
             "open github",
             "launch visual studio code",
             "open the website",
-            "take me to gmail"
+            "take me to gmail",
+            "go to google",
+            "open google's website",
+            "go to microsoft support",
+            "take me to youtube",
+            "open calculator",
+            "launch the calculator app",
+            "open the app store",
+            "open up the task manager",
+            "launch the microsoft store"
           ]
         }
       }
@@ -216,7 +264,25 @@
             "look up the price of ethereum",
             "google the latest headlines",
             "search for iphone specs",
-            "search online for news about space"
+            "search online for news about space",
+            "google best laptops for students",
+            "google what this phrase means",
+            "search for hotels in paris",
+            "look up the bitcoin price",
+            "google how to bake sourdough bread",
+            "google what's the weather like in madrid",
+            "search the web for the weather in rome",
+            "look up the weather in tokyo online",
+            "google cheap flights to lisbon",
+            "google the population of canada",
+            "search smartphones under five hundred dollars",
+            "search for electric car reviews",
+            "google the best budget headphones",
+            "look up the meaning of serendipity",
+            "google what causes inflation",
+            "google tips for saving money on rent",
+            "look up the current exchange rate for the euro",
+            "search for tutorials on excel formulas"
           ]
         }
       }
@@ -238,13 +304,15 @@
             "weather in london",
             "how cold is it outside",
             "do i need an umbrella today",
-            "look up the weather in tokyo",
+            "what's the forecast for tokyo",
             "what's the weather",
             "check the weather",
             "weather in paris",
             "weather forecast",
             "temperature outside",
-            "how hot is it outside"
+            "how hot is it outside",
+            "what's the temperature in madrid",
+            "what is the temperature at the moment"
           ]
         }
       }
@@ -263,7 +331,18 @@
           "seeds": [
             "copy this to the clipboard",
             "put this text on my clipboard",
-            "save this to clipboard"
+            "copy that",
+            "copy the selected text",
+            "copy it to the clipboard",
+            "get that copied",
+            "copy this text so i can paste it later",
+            "save this to my clipboard",
+            "save that text to the clipboard",
+            "store this on the clipboard",
+            "put this on the clipboard",
+            "copy this text",
+            "transfer this to my clipboard",
+            "save it to the clipboard right now"
           ]
         },
         "read": {
@@ -273,7 +352,15 @@
           "seeds": [
             "what's on my clipboard",
             "read my clipboard",
-            "show me what i copied"
+            "show me what i copied",
+            "show the clipboard contents",
+            "what did i copy earlier",
+            "check my clipboard",
+            "tell me what's in the clipboard",
+            "clipboard contents",
+            "what's copied to the clipboard",
+            "what is currently on the clipboard",
+            "what did i copy"
           ]
         },
         "clear": {
@@ -283,7 +370,16 @@
           "seeds": [
             "clear my clipboard",
             "empty the clipboard",
-            "wipe the clipboard"
+            "wipe the clipboard",
+            "erase the clipboard",
+            "delete the clipboard contents",
+            "get rid of whatever is on the clipboard",
+            "remove everything from the clipboard",
+            "clear the clipboard",
+            "empty my clipboard",
+            "erase what's on the clipboard",
+            "get rid of clipboard contents",
+            "clear everything on my clipboard"
           ]
         }
       }
@@ -297,7 +393,13 @@
           "seeds": [
             "play some music",
             "play a song",
-            "start the music"
+            "start the music",
+            "start playback",
+            "play something",
+            "resume playback",
+            "play audio",
+            "put on some background music",
+            "resume the music"
           ]
         },
         "pause": {
@@ -306,10 +408,14 @@
           "target_mode": "raw",
           "seeds": [
             "pause the music",
-            "stop the song",
+            "pause this song",
             "pause playback",
             "pause the audio",
-            "stop playback temporarily"
+            "pause what is playing",
+            "pause the current media",
+            "pause the song",
+            "temporarily stop playback",
+            "stop this song for a moment"
           ]
         },
         "next": {
@@ -319,7 +425,12 @@
           "seeds": [
             "next song",
             "skip this track",
-            "play the next one"
+            "play the next one",
+            "next track",
+            "go to next",
+            "next item",
+            "skip to the next one",
+            "move to the next track"
           ]
         },
         "previous": {
@@ -328,8 +439,15 @@
           "target_mode": "raw",
           "seeds": [
             "previous song",
-            "go back a track",
-            "play the last song again"
+            "play the last song again",
+            "previous track",
+            "go to previous",
+            "play the previous one",
+            "previous item",
+            "take me back to the last song",
+            "go back one track",
+            "play the last track",
+            "go to the previous song"
           ]
         },
         "volume_up": {
@@ -339,7 +457,16 @@
           "seeds": [
             "turn the volume up",
             "louder please",
-            "increase the volume"
+            "increase the volume",
+            "make it louder",
+            "make the audio louder",
+            "increase the sound",
+            "make it more audible",
+            "raise the volume",
+            "turn it up",
+            "one notch louder",
+            "a little louder please",
+            "bring it up a bit"
           ]
         },
         "volume_down": {
@@ -351,7 +478,14 @@
             "quieter please",
             "lower the volume",
             "make it quieter",
-            "decrease volume"
+            "decrease volume",
+            "reduce the sound",
+            "make the audio softer",
+            "turn it down",
+            "one notch quieter",
+            "a little lower please",
+            "bring it down a bit",
+            "turn it down a notch"
           ]
         },
         "mute": {
@@ -366,7 +500,16 @@
             "turn off the sound",
             "be quiet",
             "silence the audio",
-            "no sound"
+            "no sound",
+            "silence the sound",
+            "turn sound off",
+            "be silent please",
+            "make it silent",
+            "stop the sound",
+            "cut the sound",
+            "silence please",
+            "mute everything",
+            "shut off the audio"
           ]
         }
       }
@@ -383,7 +526,12 @@
             "how much ram am i using",
             "how much disk space is left",
             "how is my computer performing",
-            "how much memory is being used"
+            "how much memory is being used",
+            "what are my computer specs",
+            "show my system information",
+            "tell me about this pc",
+            "system information",
+            "what hardware does this computer have"
           ]
         },
         "screenshot": {
@@ -428,7 +576,11 @@
             "reboot my pc",
             "restart my pc",
             "reboot the computer",
-            "restart the machine"
+            "restart the machine",
+            "restart windows",
+            "reboot the system",
+            "turn it off and back on again",
+            "power cycle my pc"
           ]
         }
       }
