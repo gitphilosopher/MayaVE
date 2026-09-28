@@ -1,7 +1,10 @@
 {
   "$schema_version": 1,
   "meta": {
-    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. Each operation's 'seeds' list holds its semantic prototypes: one stored vector per seed, aggregated per domain.operation at retrieval time. Add prototypes here, never in routing code; the same seed may not appear under two operations. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed. Seed-writing rules: a seed must express the OPERATION (verb + object), not merely mention a shared noun (time/timer/clipboard/google/volume); contrastive pairs (create/status, read/copy/clear, mute/pause, up/down, previous/next, date/time, search/open) must not share verbs or cue words that would make one seed plausible for both."
+    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. The legacy 'mute' intent is likewise NOT projected here: there is no media.mute operation, and a bare mute/silence utterance falls through to the LLM fallback / legacy engine. Each operation's 'seeds' list holds its semantic prototypes: one stored vector per seed, aggregated per domain.operation at retrieval time. Add prototypes here, never in routing code; the same seed may not appear under two operations. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed. Seed-writing rules: a seed must express the OPERATION (verb + object), not merely mention a shared noun (time/timer/clipboard/google/volume); contrastive pairs (create/status, read/copy/clear, pause/play, up/down, previous/next, date/time, search/open) must not share verbs or cue words that would make one seed plausible for both. A search-engine or site name used as a VERB before a topic ('google <topic>') is web.search; app_or_web.open holds only navigation to the site/app itself ('open google', 'go to google'). 'start'/'run'/'launch' only imply app_or_web.open when the object is an application, program, utility or destination. Playback-status questions ('what's playing') have no operation and must not be seeded under media.play.",
+    "removed_operations": [
+      "media.mute"
+    ]
   },
   "domains": {
     "datetime": {
@@ -87,7 +90,14 @@
             "alert me in thirty minutes",
             "set a countdown for five minutes",
             "timer for three hours",
-            "ping me in an hour to fold the laundry"
+            "ping me in an hour to fold the laundry",
+            "remind me in an hour",
+            "remind me to check the mail in ten minutes",
+            "remind me to call the dentist in two hours",
+            "notify me after twenty minutes",
+            "let me know in forty five minutes",
+            "give me a heads up in fifteen minutes so i can leave",
+            "ping me in ninety minutes to stretch"
           ]
         },
         "cancel": {
@@ -159,7 +169,14 @@
             "save this as a note",
             "append this to the note",
             "append some content to my note",
-            "record this in my notes"
+            "record this in my notes",
+            "make a new note",
+            "create a note",
+            "start a new note",
+            "add a note",
+            "write a note for later",
+            "make a note for later",
+            "create a new note about the trip"
           ]
         },
         "view": {
@@ -237,7 +254,36 @@
             "launch the calculator app",
             "open the app store",
             "open up the task manager",
-            "launch the microsoft store"
+            "launch the microsoft store",
+            "start the calculator",
+            "launch the calendar app",
+            "open the windows calendar application",
+            "open the camera app",
+            "launch the webcam application",
+            "open a terminal window",
+            "start the terminal application",
+            "launch the command line",
+            "run powershell",
+            "launch task manager",
+            "launch teamviewer",
+            "start the teamviewer application",
+            "run the java application",
+            "run my python program",
+            "run the setup program",
+            "start whatsapp",
+            "launch whatsapp desktop",
+            "let's launch spotify",
+            "open microsoft word",
+            "start the paint application",
+            "launch the snipping tool",
+            "run the disk cleanup utility",
+            "open the windows settings",
+            "visit a website",
+            "visit the website",
+            "visit the site",
+            "navigate to the website",
+            "take me to the site",
+            "go to the website"
           ]
         }
       }
@@ -282,7 +328,30 @@
             "google what causes inflation",
             "google tips for saving money on rent",
             "look up the current exchange rate for the euro",
-            "search for tutorials on excel formulas"
+            "search for tutorials on excel formulas",
+            "google the newest tesla model",
+            "google machine learning basics",
+            "google how to write a cover letter",
+            "google the price of gold",
+            "google who invented the telephone",
+            "google reviews for the new macbook",
+            "google what is quantum computing",
+            "google the release date of the next playstation",
+            "google how to remove a coffee stain",
+            "search for neural network tutorials",
+            "search for the history of the roman empire",
+            "search for research papers on climate change",
+            "search the web for how to learn spanish",
+            "look up who won the world cup in 2014",
+            "look up how photosynthesis works",
+            "look up the symptoms of the flu",
+            "look up the tallest building in the world",
+            "search for a python list comprehension tutorial",
+            "find out who directed inception online",
+            "google the weather in berlin",
+            "search for the weather in vienna",
+            "look up the weather in dublin",
+            "search for the best photo editing apps"
           ]
         }
       }
@@ -312,7 +381,12 @@
             "temperature outside",
             "how hot is it outside",
             "what's the temperature in madrid",
-            "what is the temperature at the moment"
+            "what is the temperature at the moment",
+            "how's the weather today",
+            "will it rain in seattle tomorrow",
+            "tell me the weather in chicago",
+            "what's tomorrow's weather like",
+            "will it be warm this weekend"
           ]
         }
       }
@@ -342,7 +416,11 @@
             "put this on the clipboard",
             "copy this text",
             "transfer this to my clipboard",
-            "save it to the clipboard right now"
+            "save it to the clipboard right now",
+            "put this on my clipboard",
+            "get this copied",
+            "store this text on my clipboard",
+            "copy this to my clipboard please"
           ]
         },
         "read": {
@@ -360,7 +438,15 @@
             "clipboard contents",
             "what's copied to the clipboard",
             "what is currently on the clipboard",
-            "what did i copy"
+            "what did i copy",
+            "what is on my clipboard right now",
+            "what's saved on my clipboard",
+            "what did i put on the clipboard",
+            "show me what is currently on the clipboard",
+            "what content is in my clipboard",
+            "what text is stored on the clipboard",
+            "tell me what i have saved on the clipboard",
+            "show my clipboard"
           ]
         },
         "clear": {
@@ -399,7 +485,12 @@
             "resume playback",
             "play audio",
             "put on some background music",
-            "resume the music"
+            "resume the music",
+            "let's listen to some music",
+            "put some music on",
+            "turn the music on",
+            "start some music",
+            "music please"
           ]
         },
         "pause": {
@@ -411,11 +502,15 @@
             "pause this song",
             "pause playback",
             "pause the audio",
-            "pause what is playing",
+            "pause the current track",
             "pause the current media",
             "pause the song",
             "temporarily stop playback",
-            "stop this song for a moment"
+            "stop this song for a moment",
+            "stop playing",
+            "stop playing the song",
+            "stop the music",
+            "stop the current song"
           ]
         },
         "next": {
@@ -430,7 +525,14 @@
             "go to next",
             "next item",
             "skip to the next one",
-            "move to the next track"
+            "move to the next track",
+            "skip this song",
+            "skip to the next song",
+            "skip the current track",
+            "move forward one track",
+            "go to the next track",
+            "play the next song",
+            "skip the current song"
           ]
         },
         "previous": {
@@ -439,15 +541,18 @@
           "target_mode": "raw",
           "seeds": [
             "previous song",
-            "play the last song again",
             "previous track",
             "go to previous",
             "play the previous one",
             "previous item",
-            "take me back to the last song",
             "go back one track",
-            "play the last track",
-            "go to the previous song"
+            "go to the previous song",
+            "go back one song",
+            "go back to the previous track",
+            "return to the last track",
+            "play the song before this one",
+            "play the previous song",
+            "take me back to the previous song"
           ]
         },
         "volume_up": {
@@ -486,30 +591,6 @@
             "a little lower please",
             "bring it down a bit",
             "turn it down a notch"
-          ]
-        },
-        "mute": {
-          "legacy_intent": "mute",
-          "entities": {},
-          "target_mode": "raw",
-          "seeds": [
-            "mute the audio",
-            "silence it",
-            "mute",
-            "mute the sound",
-            "turn off the sound",
-            "be quiet",
-            "silence the audio",
-            "no sound",
-            "silence the sound",
-            "turn sound off",
-            "be silent please",
-            "make it silent",
-            "stop the sound",
-            "cut the sound",
-            "silence please",
-            "mute everything",
-            "shut off the audio"
           ]
         }
       }
@@ -564,7 +645,9 @@
             "turn off my pc",
             "power off",
             "shut down my pc",
-            "power down the computer"
+            "power down the computer",
+            "turn off the computer",
+            "turn the computer off"
           ]
         },
         "restart": {
@@ -579,8 +662,9 @@
             "restart the machine",
             "restart windows",
             "reboot the system",
-            "turn it off and back on again",
-            "power cycle my pc"
+            "turn the computer off and back on",
+            "power cycle my pc",
+            "turn it off and back on again"
           ]
         }
       }
