@@ -24,6 +24,15 @@ Important behavior:
 - the success and error tails both go through `turn_lifecycle.rest()`, which re-
   checks the current state and avoids waking Maya back up if a concurrent sleep
   request has already won.
+- on a successful turn (never on exception/interruption), the resolved intent
+  name is queued to MayaNode as a `mayave.turn_completed` event via
+  `services/node/events.py::record_event()`. This never blocks or raises: it
+  just drops the event into the local outbox (see that module's docstring),
+  which is delivered whenever `NodeSyncManager` next syncs — or sits there
+  harmlessly forever if MayaNode integration is disabled/unreachable. No
+  conversation text, intent target, or confidence is sent — only the intent
+  id itself, matching the narrow `mayave.turn_completed` schema MayaNode and
+  MayaVE both register (see services/node/protocol.py).
 """
 
 import asyncio
@@ -38,6 +47,7 @@ from brain.conversation import ConversationManager, context_manager
 from brain.router import Router
 from services.llm.llm_service import ALREADY_SPOKEN
 from services.ws_server import ws_server
+from services.node.events import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +134,13 @@ class Processor:
             # Re-check the live state so a concurrent sleep command wins over a
             # normal idle return.
             await turn_rest()
+
+            # Best-effort MayaNode sync hand-off — queues into the local outbox
+            # and returns immediately regardless of whether MayaNode integration
+            # is enabled or reachable (see services/node/events.py). Only the
+            # resolved intent id is sent; never raw text, target, or confidence.
+            record_event("mayave.turn_completed", {"intent": intent.get("intent", "unknown")})
+
             logger.info(f"[TIMING] handle() total: {time.perf_counter()-t0:.3f}s")
 
         except Exception as e:

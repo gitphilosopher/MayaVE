@@ -24,6 +24,21 @@ The main runtime flow is:
 The module is designed to degrade gracefully: missing embeddings, broken vector
 storage, or retrieval failures fall back to recent-context-only behavior and do
 not block normal conversation handling.
+
+MayaNode sync (Step 4): this module is also the single integration point
+between Maya's semantic memory and MayaNode's persistence/sync layer.
+- Outgoing: `_persist_memory()` mirrors only explicitly user-stated durable
+  facts/preferences (never auto-compaction summaries, never raw transcripts,
+  never embeddings) to MayaNode via `services/node/memory_producer.py`, keyed
+  `semantic_memory:<local_row_id>`. This is best-effort and non-blocking — see
+  `_sync_memory_to_node()`.
+- Incoming: `apply_remote_memory_changes()` is called by
+  `services/node/sync_manager.py` after each successful `/sync` round with
+  whatever memory changes MayaNode delivered. Only keys matching our own
+  `semantic_memory:*` export format are recognized; the content is re-embedded
+  locally and merged into the existing `SQLiteVectorStore` (with the existing
+  dedup check), so MayaNode never needs to know about embeddings and MayaVE
+  remains the sole owner of semantic-memory intelligence.
 """
 
 import asyncio
@@ -37,6 +52,7 @@ from brain.memory import memory, MemoryEntry
 from brain.embeddings import OllamaEmbedder
 from brain.vector_store import SQLiteVectorStore, MemoryRecord, VALID_MEM_TYPES
 from config.settings import config
+from services.node.memory_producer import record_memory
 
 logger = logging.getLogger(__name__)
 
@@ -691,6 +707,7 @@ class ContextManager:
                 threshold=config.context.dedup_threshold,
             ),
         )
+        record_id: int | None
         if existing and existing.id is not None:
             # Prefer the newer statement over a stale duplicate rather than
             # accumulating near-identical or contradictory entries.
@@ -698,9 +715,126 @@ class ContextManager:
                 None, self._store.update, existing.id, candidate.content, embedding, candidate.timestamp,
             )
             logger.debug(f"Semantic memory updated (id={existing.id}): '{candidate.content[:50]}'")
+            record_id = existing.id
         else:
-            new_id = await loop.run_in_executor(None, self._store.add, candidate)
-            logger.debug(f"Semantic memory stored (id={new_id}, type={candidate.mem_type}): '{candidate.content[:50]}'")
+            record_id = await loop.run_in_executor(None, self._store.add, candidate)
+            logger.debug(f"Semantic memory stored (id={record_id}, type={candidate.mem_type}): '{candidate.content[:50]}'")
+
+        self._sync_memory_to_node(record_id, candidate)
+
+    def _sync_memory_to_node(self, record_id: int | None, candidate: MemoryRecord) -> None:
+        """
+        Mirror an explicitly user-stated durable memory (fact/preference)
+        to MayaNode's per-device key/value store so any other MayaVE
+        install sharing the same MayaNode instance can eventually see it.
+
+        Only content/mem_type/topic/importance are sent — never the
+        embedding vector — so MayaNode remains pure persistence/sync
+        infrastructure and MayaVE stays the sole owner of semantic-memory
+        intelligence (retrieval ranking, similarity, embeddings). This is
+        also why auto-compaction summaries (source="auto_compaction", see
+        `_flush_evicted_buffer`) are deliberately excluded here: only a
+        genuinely user-asserted fact/preference is worth syncing across
+        devices, not an internal gist of an evicted context window.
+
+        Best-effort and non-blocking: `record_memory()` just queues into
+        the local outbox (services/node/outbox.py) and returns
+        immediately, whether or not MayaNode integration is enabled or
+        reachable (see services/node/memory_producer.py's docstring).
+        """
+        if record_id is None or candidate.source != "user_stated":
+            return
+        try:
+            record_memory(
+                key=f"semantic_memory:{record_id}",
+                value={
+                    "content": candidate.content,
+                    "mem_type": candidate.mem_type,
+                    "topic": candidate.topic,
+                    "importance": candidate.importance,
+                },
+            )
+        except Exception as e:
+            logger.debug(f"Node memory sync skipped (non-fatal): {e}")
+
+    # ── Incoming MayaNode changes (Step 4) ──────────────────────────────────
+
+    async def apply_remote_memory_changes(self, changes: list[dict]) -> None:
+        """
+        Called by services/node/sync_manager.py after each successful
+        `/sync` round with whatever `changes["memory"]` MayaNode
+        delivered. Applies them through the EXISTING semantic-memory
+        system (this class + SQLiteVectorStore) rather than a parallel
+        store — MayaNode stays a plain persistence/sync hub; MayaVE
+        decides what a memory *means* and how it's retrieved.
+
+        Only keys matching our own `semantic_memory:*` export format
+        (see `_sync_memory_to_node`) are recognized; anything else —
+        another client's differently-shaped memory keys, unrelated
+        application state — is silently ignored rather than guessed at.
+        Best-effort throughout: embedding failures, store errors, or a
+        malformed value just skip that one item; nothing here raises out
+        to the sync manager, and a skipped item is not retried once the
+        cursor has advanced past it (accepted as a rare, non-fatal loss,
+        consistent with this module's existing "degrade gracefully"
+        design elsewhere).
+        """
+        if self._store is None or not changes:
+            return
+        for item in changes:
+            try:
+                await self._apply_one_remote_memory(item)
+            except Exception as e:
+                logger.debug(f"Skipping remote memory change (non-fatal): {e}")
+
+    async def _apply_one_remote_memory(self, item: dict) -> None:
+        if not isinstance(item, dict):
+            return
+        key = item.get("key") or ""
+        if not key.startswith("semantic_memory:"):
+            return   # not one of ours — another client's key shape, ignore
+
+        value = item.get("value")
+        if not isinstance(value, dict):
+            return
+
+        content = (value.get("content") or "").strip()
+        mem_type = value.get("mem_type")
+        if not content or mem_type not in VALID_MEM_TYPES:
+            return
+
+        topic = value.get("topic") or ""
+        try:
+            importance = float(value.get("importance", 0.5))
+        except (TypeError, ValueError):
+            importance = 0.5
+
+        embedding = await self._embedder.embed(content)
+        if embedding is None:
+            # Can't verify/store without an embedding this round — skip
+            # rather than block or crash; this is a best-effort merge.
+            logger.debug(f"Remote memory '{key}' skipped — embedding unavailable.")
+            return
+
+        loop = asyncio.get_running_loop()
+        existing = await loop.run_in_executor(
+            None,
+            functools.partial(
+                self._store.find_similar, embedding, mem_type, topic,
+                threshold=config.context.dedup_threshold,
+            ),
+        )
+        if existing is not None:
+            # Already have an equivalent memory locally (very likely this
+            # is the echo of our own earlier push) — nothing to do.
+            return
+
+        record = MemoryRecord(
+            content=content, mem_type=mem_type, topic=topic,
+            importance=importance, source="mayanode_sync", embedding=embedding,
+        )
+        new_id = await loop.run_in_executor(None, self._store.add, record)
+        logger.info(f"Semantic memory merged from MayaNode (id={new_id}, key='{key}'): '{content[:50]}'")
 
     # ── Long-conversation compaction ───────────────────────────────────────
 

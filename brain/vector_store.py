@@ -147,6 +147,16 @@ class SQLiteVectorStore(VectorStore):
         except Exception as e:
             logger.error(f"Vector store update failed: {e}", exc_info=True)
 
+    def clear(self) -> None:
+        """Remove every stored record without replacing the SQLite file."""
+        try:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM memories")
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Vector store clear failed: {e}", exc_info=True)
+            raise
+
     def has_records(self) -> bool:
         """Return whether the database contains a searchable record; fail open on errors."""
         try:

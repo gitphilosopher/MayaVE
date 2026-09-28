@@ -11,8 +11,8 @@ and a durable cursor.
 Step 2 added: the versioned protocol layer (services/node/protocol.py)
 — envelope validation, protocol_version negotiation.
 
-Step 3 (this file) connects real MayaVE data to that pipeline: each
-sync round now pulls pending events/memory writes from the local outbox
+Step 3 connected real MayaVE data to that pipeline: each sync round
+pulls pending events/memory writes from the local outbox
 (services/node/outbox.py) — populated by application code through
 services/node/events.py's record_event() and
 services/node/memory_producer.py's record_memory(), never by a direct
@@ -20,8 +20,19 @@ services/node/memory_producer.py's record_memory(), never by a direct
 against the response: only the items the server actually settled this
 round (accepted/duplicate/rejected for events; accepted/noop/conflict
 for memory) are removed, so a batch-size cap or a mid-round crash never
-loses anything. `changes` pulled back from MayaNode still isn't applied
-to any MayaVE state — a future step.
+loses anything.
+
+Step 4 (this file) closes the loop on the READ side: `changes` pulled
+back from MayaNode are now handed to `brain.conversation.context_manager`
+so genuinely durable memory (facts/preferences another MayaVE instance
+pushed) gets merged into this device's own semantic-memory store through
+the existing system, rather than sitting unused. See
+`_apply_incoming_changes()` below and
+`ContextManager.apply_remote_memory_changes()`'s docstring for exactly
+what is and isn't applied. `changes["events"]` (e.g. other devices'
+`mayave.turn_completed` records) are intentionally NOT replayed into any
+local state — there is no MayaVE-side state a cross-device turn-completed
+log should mutate; they exist purely as MayaNode-side history.
 
 Never raises out of run(): every failure (Node not found, connection
 refused, timeout, malformed response) is caught, logged, and backed off
@@ -30,7 +41,10 @@ config.node.max_backoff_s), so this can run as a background task for the
 whole process lifetime — alongside main.py's listener/queue-worker —
 without a Node outage ever affecting Maya's voice pipeline. Recording
 events/memory (events.py / memory_producer.py) never depends on this
-manager running at all — see their own docstrings.
+manager running at all — see their own docstrings. Applying incoming
+changes is equally best-effort: a failure there is logged and swallowed,
+never allowed to affect the sync loop's own cursor/outbox bookkeeping,
+which has already completed successfully by the time changes are applied.
 """
 import asyncio
 import logging
@@ -166,6 +180,12 @@ class NodeSyncManager:
         response. A connection/version/shape failure (result is None)
         touches neither the cursor nor the outbox — everything queued
         stays queued for the next attempt.
+
+        Once the cursor/outbox bookkeeping has succeeded, whatever
+        MayaNode delivered in `changes` is handed off for best-effort
+        local application (Step 4) — this happens strictly AFTER the
+        sync round's own state is committed, so a failure while applying
+        changes can never roll back or duplicate the cursor advance.
         """
         max_events = getattr(self._cfg, "max_events_per_sync", _DEFAULT_MAX_EVENTS)
         max_memory = getattr(self._cfg, "max_memory_per_sync", _DEFAULT_MAX_MEMORY)
@@ -189,6 +209,8 @@ class NodeSyncManager:
 
         await self._state.advance(result.cursor)
         self._reconcile_outbox(sent_events, sent_memory, result)
+
+        await self._apply_incoming_changes(result.changes)
 
         logger.debug(
             f"Node sync ok — cursor now {result.cursor} (has_more={result.has_more}) "
@@ -233,6 +255,47 @@ class NodeSyncManager:
                 self._outbox.remove_memory(pairs)
         except Exception as e:
             logger.warning(f"Node sync outbox reconciliation failed (non-fatal): {e}")
+
+    async def _apply_incoming_changes(self, changes: dict) -> None:
+        """
+        Step 4 — best-effort hand-off of MayaNode-originated changes into
+        MayaVE's own runtime state, through the EXISTING system that owns
+        that state rather than a new parallel path:
+
+          - changes["memory"]: handed to
+            brain.conversation.context_manager.apply_remote_memory_changes(),
+            which recognizes only its own `semantic_memory:*` key shape
+            (see brain/conversation.py's ContextManager) and merges
+            matching entries into the local SQLiteVectorStore — the same
+            store Maya's own memory policy writes to. Anything else is
+            ignored there, not here, so the recognition logic has exactly
+            one home.
+
+          - changes["events"]: deliberately NOT applied anywhere. A
+            `mayave.turn_completed` record from another device has no
+            MayaVE-side state to mutate — it's cross-device history that
+            lives on MayaNode, not application state this process needs
+            to react to. If a future event type needs local application,
+            it gets its own explicit handler here rather than a blanket
+            replay.
+
+        `brain.conversation` is imported lazily (not at module load) so
+        this module — whose own docstring promises isolation from voice
+        I/O and a lightweight import footprint — never pays the cost of
+        importing the full context/embedding/vector-store stack unless a
+        sync round actually has memory changes to apply. Never raises:
+        any failure here is logged and swallowed, well after this round's
+        own cursor/outbox bookkeeping has already succeeded.
+        """
+        memory_changes = (changes or {}).get("memory") or []
+        if not memory_changes:
+            return
+        try:
+            from brain.conversation import context_manager
+            await context_manager.apply_remote_memory_changes(memory_changes)
+        except Exception as e:
+            logger.debug(f"Applying incoming MayaNode changes failed (non-fatal): {e}")
+
 
 # Singleton — matches the existing project pattern (mood_manager,
 # queue_manager, ws_server, context_manager).

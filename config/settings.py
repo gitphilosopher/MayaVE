@@ -13,6 +13,8 @@ The settings are organized into a nested structure:
 - LLM settings point the app at the local Ollama endpoint.
 - Context settings tune memory and recent-turn retrieval.
 - Node settings support optional MayaNode discovery/sync integration.
+- Router settings control the optional hybrid semantic command router
+  (brain/router/); default backend is "legacy" so behavior is unchanged.
 - MayaConfig wires all of the above into the singleton `config` object imported
   across the project.
 
@@ -75,6 +77,20 @@ class ContextConfig:
 
 
 @dataclass
+class RouterConfig:
+    """Hybrid semantic command router (brain/router/). Rollback is
+    `backend = "legacy"` and nothing else."""
+    backend: str = "legacy"                    # "legacy" | "hybrid"
+    hybrid_domains: list[str] = field(default_factory=list)   # empty = all domains when backend == "hybrid"
+    shadow_mode: bool = False                  # log hybrid-vs-legacy comparison; never dispatches hybrid
+    command_vector_db_path: str | None = None  # default ~/Maya/Router/command_vectors.sqlite3
+    # Placeholders pending brain/router/eval_router.py measurements on the real dataset.
+    min_similarity: float = 0.80
+    min_margin: float = 0.08
+    low_similarity_floor: float = 0.55
+
+
+@dataclass
 class NodeConfig:
     """Optional MayaNode discovery and sync settings for infrastructure-level coordination."""
     enabled: bool = False
@@ -110,6 +126,7 @@ class MayaConfig:
     tts: TTSConfig = field(default_factory=TTSConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     context: ContextConfig = field(default_factory=ContextConfig)
+    router: RouterConfig = field(default_factory=RouterConfig)
     node: NodeConfig = field(default_factory=NodeConfig)
     ws_host: str = "localhost"
     ws_port: int = 8765
