@@ -10,7 +10,7 @@ __pycache__/
 tests/
 temp.py
 edge-automation-profile
-test_*.py
+# test_*.py
 review_candidates.py
 datasets/training/candidates_rejected.jsonl
 datasets/training/audit_report.json

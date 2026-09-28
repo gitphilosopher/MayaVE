@@ -1,0 +1,8 @@
+{"text":"set a timer for ten minutes","category":"in_distribution","expect":{"status":"ready","key":"timer.create","entities":{"duration":600}}}
+{"text":"set a timer","category":"clarification","expect":{"status":"needs_clarification","key":"timer.create"}}
+{"text":"set a timer","category":"context","history":[],"expect":{"status":"needs_clarification","key":"timer.create"}}
+{"text":"actually make it 30","category":"context","history":["set a timer for 20 minutes"],"expect":{"status":"ready","key":"timer.create","entities":{"duration":1800}}}
+{"text":"what's the weather in london","category":"entity","expect":{"status":"ready","key":"weather.current","entities":{"location":"london"}}}
+{"text":"shut down the computer","category":"in_distribution","expect":{"status":"ready","key":"system.shutdown"}}
+{"text":"the sky looks orange today","category":"oos","expect":{"status":"unknown"}}
+{"text":"can you set my alarm clock radio to jazz","category":"adversarial","expect":{"status":"unknown"}}
