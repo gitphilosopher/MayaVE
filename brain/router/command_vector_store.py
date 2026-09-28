@@ -15,6 +15,15 @@ the VALID_MEM_TYPES check lives in brain/conversation.py's own
 _persist_memory(), not in the store — so this module is free to use
 mem_type="command" without touching vector_store.py at all.
 
+One vector per prototype: every prototype (seed) of an operation in
+config/command_domains.json becomes one row whose metadata carries
+`domain`, `operation`, `legacy_intent` and `prototype`, and whose `topic`
+is the `domain.operation` key. search() reads every command vector,
+aggregates them per logical command (see schemas.aggregate_by_command)
+and returns a command-level ranking — the top-k cut happens AFTER
+aggregation, never before, so a command with many prototypes can no
+longer crowd other commands out of the candidate list.
+
 Fingerprinting: a companion `<db>.fingerprint.json` file (same
 atomic-write pattern as services/node/sync_state.py) records the hash
 of config/command_domains.json that produced the current seed set. A
@@ -27,12 +36,19 @@ import json
 import logging
 from pathlib import Path
 
-from brain.router.schemas import CommandSpec, CommandCandidate, RetrievalResult
+from brain.router.schemas import (
+    CommandSpec, RetrievalResult, aggregate_by_command,
+)
 from brain.vector_store import SQLiteVectorStore, MemoryRecord
 
 logger = logging.getLogger(__name__)
 
 _MEM_TYPE = "command"
+
+# Upper bound on vectors read per search. The store is brute-force, so the
+# whole command corpus is scanned regardless; this only keeps the top-k cut
+# from truncating the corpus before per-command aggregation.
+_SCAN_ALL = 1_000_000
 
 
 def _default_db_path() -> Path:
@@ -52,6 +68,25 @@ def corpus_fingerprint(specs: list[CommandSpec]) -> str:
         sort_keys=True, ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _prototype_record(spec: CommandSpec, prototype: str, embedding: list[float]) -> MemoryRecord:
+    """The single place a prototype becomes a stored row, so every vector
+    carries the metadata aggregation needs (domain/operation/prototype)."""
+    return MemoryRecord(
+        content=prototype,
+        mem_type=_MEM_TYPE,
+        topic=spec.key,
+        importance=1.0,
+        source="router_seed",
+        metadata={
+            "domain": spec.domain,
+            "operation": spec.operation,
+            "legacy_intent": spec.legacy_intent,
+            "prototype": prototype,
+        },
+        embedding=embedding,
+    )
 
 
 class CommandVectorStore:
@@ -81,65 +116,78 @@ class CommandVectorStore:
     def is_stale(self, specs: list[CommandSpec]) -> bool:
         return self.stored_fingerprint() != corpus_fingerprint(specs)
 
-    def reseed(self, specs: list[CommandSpec], embed_fn) -> int:
-        """
-        Rebuild the command index from scratch. `embed_fn` is a sync
-        callable str -> list[float] | None (the caller runs the actual
-        async OllamaEmbedder.embed() and adapts it — kept sync here so
-        this module has no asyncio dependency of its own).
-
-        Clears the underlying SQLite table first so a stale/renamed domain
-        never leaves orphaned rows behind. Returns the number of seed vectors
-        written.
-        """
+    def _reset_index(self) -> None:
+        """Empty the table through the store (never by deleting the open
+        SQLite file) so the store keeps owning its own lifecycle."""
         self._store.clear()
         self._store = SQLiteVectorStore(db_path=self._db_path)
 
+    def _finish_reseed(self, specs: list[CommandSpec], written: int) -> int:
+        self._write_fingerprint(corpus_fingerprint(specs))
+        logger.info(
+            f"Command vector store reseeded — {written} prototype vector(s) "
+            f"across {len(specs)} operation(s)."
+        )
+        return written
+
+    def reseed(self, specs: list[CommandSpec], embed_fn) -> int:
+        """
+        Rebuild the command index from scratch. `embed_fn` is a sync
+        callable str -> list[float] | None (kept sync here so this module
+        has no asyncio dependency of its own; see areseed() for the async
+        embedder used at runtime).
+
+        Clears the underlying SQLite table first so a stale/renamed domain
+        never leaves orphaned rows behind. Returns the number of prototype
+        vectors written.
+        """
+        self._reset_index()
         written = 0
         for spec in specs:
-            for seed in spec.seeds:
-                embedding = embed_fn(seed)
+            for prototype in spec.seeds:
+                embedding = embed_fn(prototype)
                 if embedding is None:
-                    logger.warning(f"Skipping unembeddable seed for {spec.key}: '{seed}'")
+                    logger.warning(f"Skipping unembeddable prototype for {spec.key}: '{prototype}'")
                     continue
-                record = MemoryRecord(
-                    content=seed,
-                    mem_type=_MEM_TYPE,
-                    topic=spec.key,
-                    importance=1.0,
-                    source="router_seed",
-                    metadata={
-                        "domain": spec.domain,
-                        "operation": spec.operation,
-                        "legacy_intent": spec.legacy_intent,
-                    },
-                    embedding=embedding,
-                )
-                if self._store.add(record) is not None:
+                if self._store.add(_prototype_record(spec, prototype, embedding)) is not None:
                     written += 1
+        return self._finish_reseed(specs, written)
 
-        self._write_fingerprint(corpus_fingerprint(specs))
-        logger.info(f"Command vector store reseeded — {written} seed vector(s) across {len(specs)} operation(s).")
-        return written
+    async def areseed(self, specs: list[CommandSpec], embed_fn) -> int:
+        """Async twin of reseed() — `embed_fn` is an async callable
+        (e.g. OllamaEmbedder.embed). Same ordering, same records."""
+        self._reset_index()
+        written = 0
+        for spec in specs:
+            for prototype in spec.seeds:
+                embedding = await embed_fn(prototype)
+                if embedding is None:
+                    logger.warning(f"Skipping unembeddable prototype for {spec.key}: '{prototype}'")
+                    continue
+                if self._store.add(_prototype_record(spec, prototype, embedding)) is not None:
+                    written += 1
+        return self._finish_reseed(specs, written)
 
     # ── Search ───────────────────────────────────────────────────────────
 
     def search(self, embedding: list[float], specs_by_key: dict[str, CommandSpec],
                top_k: int = 5) -> RetrievalResult:
-        """Top-k command matches, deduplicated to the single best-scoring
-        seed per domain.operation (multiple seeds for the same operation
-        must not crowd out a different operation from the top-k)."""
-        raw = self._store.search(embedding, top_k=top_k * 3, mem_type=_MEM_TYPE, min_similarity=0.0)
+        """Top-k DISTINCT commands. Every prototype vector is scored, then
+        reduced to one score per domain.operation (its best prototype);
+        only then is the top-k cut applied. Multiple prototypes of the same
+        command therefore never appear as competing candidates."""
+        raw = self._store.search(embedding, top_k=_SCAN_ALL, mem_type=_MEM_TYPE, min_similarity=0.0)
 
-        best_per_key: dict[str, CommandCandidate] = {}
+        scored = []
         for record, sim in raw:
-            key = record.topic
+            meta = record.metadata or {}
+            if meta.get("domain") and meta.get("operation"):
+                key = f"{meta['domain']}.{meta['operation']}"
+            else:
+                key = record.topic
             spec = specs_by_key.get(key)
             if spec is None:
                 continue   # stale row from a since-removed operation
-            existing = best_per_key.get(key)
-            if existing is None or sim > existing.similarity:
-                best_per_key[key] = CommandCandidate(spec=spec, similarity=sim, seed_text=record.content)
+            scored.append((spec, sim, meta.get("prototype") or record.content))
 
-        ranked = sorted(best_per_key.values(), key=lambda c: c.similarity, reverse=True)[:top_k]
-        return RetrievalResult(candidates=ranked)
+        return aggregate_by_command(scored, top_k=top_k)

@@ -24,11 +24,18 @@ Two entry points, by design:
       stages) — NOT part of this migration's acceptance criteria, which
       requires zero behavior change until router.backend is flipped.
 
+Semantic stage: embedding -> per-prototype vector scores -> reduced to one
+score per domain.operation -> distinct commands ranked -> command-level
+margin (best minus second-best DISTINCT command) -> confidence gate. The
+retrieval diagnostics (winning/second command, scores, margin) are logged
+and attached to the result's additive `_command["retrieval"]` block.
+
 Per-domain allowlisting: even with backend == "hybrid", only domains
 listed in config.router.hybrid_domains are actually routed through the
 new pipeline; every other domain's utterances still fall through to the
-wrapped legacy engine. This lets Stage 5 enable e.g. just "datetime" and
-"clipboard" while everything else stays on the proven path.
+wrapped legacy engine. The allowlist is applied to the WINNING command:
+an out-of-allowlist winner falls back to legacy, and an out-of-allowlist
+runner-up still counts toward the margin (it is real competition).
 """
 
 from __future__ import annotations
@@ -82,36 +89,9 @@ class HybridIntentEngine:
         """Rebuild the command vector index from the current registry.
         Call this explicitly (e.g. from a startup task or a maintenance
         script) — never happens implicitly on a stale corpus, since that
-        would mean silently blocking on N embedding calls mid-request."""
-        specs = self._registry.specs
-        written = 0
-        # Reimplemented inline (rather than CommandVectorStore.reseed's sync
-        # embed_fn) so the embed awaits happen on this loop.
-        from brain.router.command_vector_store import corpus_fingerprint
-        from brain.vector_store import SQLiteVectorStore, MemoryRecord
-
-        self._store._store.clear()
-        self._store._store = SQLiteVectorStore(db_path=self._store._db_path)
-
-        for spec in specs:
-            for seed in spec.seeds:
-                embedding = await self._embedder.embed(seed)
-                if embedding is None:
-                    logger.warning(f"Skipping unembeddable seed for {spec.key}: '{seed}'")
-                    continue
-                record = MemoryRecord(
-                    content=seed, mem_type="command", topic=spec.key, importance=1.0,
-                    source="router_seed",
-                    metadata={"domain": spec.domain, "operation": spec.operation,
-                              "legacy_intent": spec.legacy_intent},
-                    embedding=embedding,
-                )
-                if self._store._store.add(record) is not None:
-                    written += 1
-
-        self._store._write_fingerprint(corpus_fingerprint(specs))
-        logger.info(f"Command vector store reseeded — {written} seed vector(s).")
-        return written
+        would mean silently blocking on N embedding calls mid-request.
+        The record layout lives in CommandVectorStore, not here."""
+        return await self._store.areseed(self._registry.specs, self._embedder.embed)
 
     # ── Sync entry point (drop-in for IntentEngine.classify) ────────────
 
@@ -174,39 +154,38 @@ class HybridIntentEngine:
         retrieval = await self._semantic.retrieve(normalized)
         t_embed1 = time.perf_counter()
 
-        candidates_in_scope = [
-            c for c in retrieval.candidates
-            if not allowed_domains or c.spec.domain in allowed_domains
-        ]
-        if not candidates_in_scope:
+        top = retrieval.top1
+        if top is None or (allowed_domains and top.spec.domain not in allowed_domains):
             logger.info(
                 f"[router] source=legacy_fallback reason=no_in_scope_candidate "
-                f"latency={time.perf_counter()-t0:.3f}s"
+                f"winner={top.spec.key if top else None} latency={time.perf_counter()-t0:.3f}s"
             )
             return self._legacy.classify(text)
 
-        from brain.router.schemas import RetrievalResult
-        scoped = RetrievalResult(candidates=candidates_in_scope)
-        decision = evaluate(scoped, self._thresholds)
+        # Confidence is judged on the FULL command-level ranking: an
+        # out-of-allowlist runner-up is still genuine ambiguity.
+        diag = retrieval.diagnostics()
+        decision = evaluate(retrieval, self._thresholds)
 
         if decision == Decision.CONFIDENT:
-            top = scoped.top1
             command = Command(domain=top.spec.domain, operation=top.spec.operation,
                                entities={}, confidence=top.similarity)
             v = validate.validate(command, self._registry)
             if v.ok:
                 logger.info(
-                    f"[router] source=semantic domain={top.spec.domain} operation={top.spec.operation} "
-                    f"top1={scoped.top1_similarity:.3f} top2={scoped.top2_similarity:.3f} "
-                    f"margin={scoped.margin:.3f} embed_search={t_embed1-t_embed0:.3f}s "
-                    f"latency={time.perf_counter()-t0:.3f}s"
+                    f"[router] source=semantic winner={diag['winning_command']} "
+                    f"score={diag['winning_score']:.3f} second={diag['second_command']} "
+                    f"second_score={diag['second_score']:.3f} margin={diag['margin']:.3f} "
+                    f"embed_search={t_embed1-t_embed0:.3f}s latency={time.perf_counter()-t0:.3f}s"
                 )
-                return to_legacy_intent(command, v.spec, text,
-                                         confidence=top.similarity, model_source="semantic_retrieval")
+                intent = to_legacy_intent(command, v.spec, text,
+                                           confidence=top.similarity, model_source="semantic_retrieval")
+                intent["_command"]["retrieval"] = diag
+                return intent
             logger.warning(f"[router] semantic candidate failed validation ({v.error}) — falling to LLM.")
 
         # AMBIGUOUS, LOW, or a confident-but-invalid semantic match: ask the LLM.
-        top_candidate_keys = [c.spec.key for c in scoped.candidates[:3]]
+        top_candidate_keys = [c.spec.key for c in retrieval.candidates[:3]]
         operations_by_domain = {d: self._registry.operations_for(d) for d in self._registry.domains()}
         t_llm0 = time.perf_counter()
         raw = await llm_route(text, self._registry.domains(), operations_by_domain, top_candidate_keys)
@@ -215,7 +194,7 @@ class HybridIntentEngine:
         if raw is None:
             logger.info(
                 f"[router] source=legacy_fallback reason=llm_unavailable decision={decision.value} "
-                f"latency={time.perf_counter()-t0:.3f}s"
+                f"retrieval={diag} latency={time.perf_counter()-t0:.3f}s"
             )
             return self._legacy.classify(text)
 
@@ -233,12 +212,18 @@ class HybridIntentEngine:
             )
             return self._legacy.classify(text)
 
+        if allowed_domains and parsed.domain not in allowed_domains:
+            logger.info(f"[router] source=legacy_fallback reason=llm_domain_not_allowlisted domain={parsed.domain}")
+            return self._legacy.classify(text)
+
         logger.info(
             f"[router] source=llm_fallback domain={parsed.domain} operation={parsed.operation} "
-            f"decision={decision.value} llm_latency={t_llm1-t_llm0:.3f}s "
+            f"decision={decision.value} retrieval={diag} llm_latency={t_llm1-t_llm0:.3f}s "
             f"latency={time.perf_counter()-t0:.3f}s"
         )
-        return to_legacy_intent(parsed, v.spec, text, confidence=0.7, model_source="llm_fallback")
+        intent = to_legacy_intent(parsed, v.spec, text, confidence=0.7, model_source="llm_fallback")
+        intent["_command"]["retrieval"] = diag
+        return intent
 
     # ── Shadow mode ──────────────────────────────────────────────────────
 

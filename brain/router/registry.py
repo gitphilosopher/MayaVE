@@ -4,6 +4,14 @@ Loads config/command_domains.json into CommandSpec objects and exposes
 the domain/operation registry used by validate.py and the LLM fallback
 prompt (validate.py trusts only what's registered here — never anything
 the LLM returns).
+
+Semantic prototypes live in each operation's `seeds` list (this is the
+repository's existing convention — there is no second prototype file).
+Adding a prototype is a JSON-only change; no routing code is involved.
+Seeds are validated and de-duplicated here so the corpus stays
+deterministic, and the same seed text under two different operations is
+rejected — it would make the two commands indistinguishable by
+construction.
 """
 
 import json
@@ -19,6 +27,10 @@ _DEFAULT_PATH = Path(__file__).parent.parent.parent / "config" / "command_domain
 
 class CommandRegistryError(ValueError):
     """Raised for a malformed config/command_domains.json."""
+
+
+def _normalize_seed(seed: str) -> str:
+    return " ".join(seed.lower().split())
 
 
 def load_specs(path: Path = _DEFAULT_PATH) -> list[CommandSpec]:
@@ -38,24 +50,42 @@ def load_specs(path: Path = _DEFAULT_PATH) -> list[CommandSpec]:
         raise CommandRegistryError(f"{path}: 'domains' must be a non-empty object.")
 
     specs: list[CommandSpec] = []
+    seed_owner: dict[str, str] = {}   # normalized seed -> owning domain.operation
     for domain, dspec in domains.items():
         operations = dspec.get("operations") if isinstance(dspec, dict) else None
         if not isinstance(operations, dict) or not operations:
             raise CommandRegistryError(f"{path}: domain '{domain}' has no operations.")
         for operation, ospec in operations.items():
+            key = f"{domain}.{operation}"
             if not isinstance(ospec, dict):
-                raise CommandRegistryError(f"{path}: {domain}.{operation} must be an object.")
+                raise CommandRegistryError(f"{path}: {key} must be an object.")
             legacy_intent = ospec.get("legacy_intent")
             if not isinstance(legacy_intent, str) or not legacy_intent:
-                raise CommandRegistryError(f"{path}: {domain}.{operation} missing 'legacy_intent'.")
+                raise CommandRegistryError(f"{path}: {key} missing 'legacy_intent'.")
             entities = ospec.get("entities", {})
             if not isinstance(entities, dict):
-                raise CommandRegistryError(f"{path}: {domain}.{operation}.entities must be an object.")
+                raise CommandRegistryError(f"{path}: {key}.entities must be an object.")
             target_mode = ospec.get("target_mode", "raw")
-            seeds = tuple(ospec.get("seeds", []))
+
+            raw_seeds = ospec.get("seeds", [])
+            if not isinstance(raw_seeds, list) or not all(isinstance(s, str) and s.strip() for s in raw_seeds):
+                raise CommandRegistryError(f"{path}: {key}.seeds must be a list of non-empty strings.")
+            seeds: list[str] = []
+            for s in raw_seeds:
+                norm = _normalize_seed(s)
+                owner = seed_owner.get(norm)
+                if owner == key:
+                    continue   # exact repeat within one operation — dropped, order preserved
+                if owner is not None:
+                    raise CommandRegistryError(
+                        f"{path}: seed '{s}' appears under both {owner} and {key}."
+                    )
+                seed_owner[norm] = key
+                seeds.append(s.strip())
+
             specs.append(CommandSpec(
                 domain=domain, operation=operation, legacy_intent=legacy_intent,
-                entities=entities, target_mode=target_mode, seeds=seeds,
+                entities=entities, target_mode=target_mode, seeds=tuple(seeds),
             ))
 
     logger.info(f"Command domain registry loaded — {len(specs)} operation(s) across {len(domains)} domain(s).")

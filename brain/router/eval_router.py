@@ -12,6 +12,10 @@ legacy_intent), top-1/top-2/margin percentiles, and a sweep of
 LLM-fallback rate. Utterances whose labeled intent is not a command
 (smalltalk, general_query, ...) are reported separately as "out-of-scope":
 a confident match on one of those is a false positive.
+
+top2/margin are COMMAND-level: the runner-up is the best DISTINCT command,
+never another prototype of the winning command (see schemas.py). Each MISS
+line prints the winning and runner-up command with their scores.
 """
 import argparse
 import asyncio
@@ -46,10 +50,7 @@ async def main() -> None:
     embedder = OllamaEmbedder()
 
     if args.seed or store.is_stale(registry.specs):
-        from brain.router.hybrid_engine import HybridIntentEngine  # reuse reseed logic
-        eng = HybridIntentEngine.__new__(HybridIntentEngine)
-        eng._registry, eng._store, eng._embedder = registry, store, embedder
-        print("seeded", await eng.reseed_corpus(), "vectors")
+        print("seeded", await store.areseed(registry.specs, embedder.embed), "vectors")
         if args.seed:
             return
 
@@ -86,7 +87,10 @@ async def main() -> None:
                 print(f"{s:.2f} {m:.2f}   | {100*len(conf)/n:6.1f}%  {ok/len(conf) if conf else 0:8.3f}  {fp:6d}  {100*(1-len(conf)/n):8.1f}%")
         bad = [(r, res) for r, res in inscope if res.top1 and res.top1.spec.key != intent_to_key[r['intent']]][:15]
         for r, res in bad:
-            print(f"  MISS '{r['text']}' want={intent_to_key[r['intent']]} got={res.top1.spec.key} ({res.top1_similarity:.2f})")
+            d = res.diagnostics()
+            print(f"  MISS '{r['text']}' want={intent_to_key[r['intent']]} "
+                  f"got={d['winning_command']} ({d['winning_score']:.2f}) "
+                  f"second={d['second_command']} ({d['second_score']:.2f}) margin={d['margin']:.2f}")
 
 
 if __name__ == "__main__":

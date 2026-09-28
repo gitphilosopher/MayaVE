@@ -1,7 +1,7 @@
 {
   "$schema_version": 1,
   "meta": {
-    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed."
+    "description": "Normalized domain.operation view of datasets/intents.json for brain/router (hybrid semantic router). This file does NOT replace datasets/intents.json — it is a deliberate projection of a subset of it (only intents whose response_mode is 'skill' AND that are not already handled by a deterministic guard in brain/intent_engine.py). Conversational intents (smalltalk, identity, joke, motivate, opinion, followup, general_query, unknown) and guard-handled intents (dismissal, greet, farewell, thanks, help, perform_action) are intentionally excluded — they keep using their existing paths. Each operation's 'seeds' list holds its semantic prototypes: one stored vector per seed, aggregated per domain.operation at retrieval time. Add prototypes here, never in routing code; the same seed may not appear under two operations. If datasets/intents.json's keyword_rules_order, an intent id, or an intent's response_mode changes, this file must be reviewed for drift; brain/router/command_vector_store.py fingerprints this file (not datasets/intents.json) to decide when to reseed."
   },
   "domains": {
     "datetime": {
@@ -15,7 +15,11 @@
             "current time please",
             "do you know the time",
             "tell me the time",
-            "what's the clock say"
+            "what's the clock say",
+            "current time",
+            "what's the time now",
+            "what time is it right now",
+            "got the time"
           ]
         },
         "date": {
@@ -26,7 +30,15 @@
             "what's today's date",
             "what day is it",
             "what's the date today",
-            "what month is it"
+            "what month is it",
+            "what is today's date",
+            "what date is it",
+            "what day is today",
+            "what year is it",
+            "which year is this",
+            "today's date",
+            "the current month and year",
+            "what is the date and time right now"
           ]
         }
       }
@@ -35,7 +47,16 @@
       "operations": {
         "create": {
           "legacy_intent": "set_timer",
-          "entities": {"duration": {"type": "string", "required": false}, "message": {"type": "string", "required": false}},
+          "entities": {
+            "duration": {
+              "type": "string",
+              "required": false
+            },
+            "message": {
+              "type": "string",
+              "required": false
+            }
+          },
           "target_mode": "raw",
           "seeds": [
             "set a timer for ten minutes",
@@ -43,7 +64,17 @@
             "remind me to drink water in fifteen minutes",
             "start a countdown for one hour",
             "wake me up in twenty minutes",
-            "timer for thirty seconds"
+            "timer for thirty seconds",
+            "start a timer for me",
+            "set a timer",
+            "set a timer for five minutes",
+            "timer for two minutes",
+            "make the timer go off in an hour",
+            "remind me in twenty minutes",
+            "count down for ten minutes",
+            "start a countdown",
+            "begin a timer for three minutes",
+            "give me a ninety second timer"
           ]
         },
         "cancel": {
@@ -54,7 +85,11 @@
             "cancel the timer",
             "stop the timer",
             "cancel all timers",
-            "clear my timer"
+            "clear my timer",
+            "delete my timer",
+            "cancel my countdown",
+            "turn off the timer",
+            "get rid of the timer"
           ]
         },
         "status": {
@@ -65,7 +100,12 @@
             "how much time is left",
             "what timers are active",
             "timer status",
-            "how long until the timer goes off"
+            "how long until the timer goes off",
+            "check my timer",
+            "how long is left on the timer",
+            "is my timer still running",
+            "what is the timer status",
+            "how many minutes are left on my timer"
           ]
         }
       }
@@ -74,14 +114,25 @@
       "operations": {
         "create": {
           "legacy_intent": "note_write",
-          "entities": {"content": {"type": "string", "required": false}},
+          "entities": {
+            "content": {
+              "type": "string",
+              "required": false
+            }
+          },
           "target_mode": "raw",
           "seeds": [
             "take a note buy milk",
             "write a note about the meeting",
             "add to my note remember to call mom",
             "jot this down",
-            "save a note"
+            "save a note",
+            "add this to my notes",
+            "note this",
+            "take a note",
+            "write this down",
+            "save this in my notes",
+            "remember this as a note"
           ]
         },
         "view": {
@@ -93,7 +144,11 @@
             "list all my notes",
             "what's in my note",
             "open my note in notepad",
-            "show my notes"
+            "show my notes",
+            "show me the saved notes",
+            "what are my notes",
+            "list my notes",
+            "read my saved notes"
           ]
         },
         "delete": {
@@ -103,7 +158,10 @@
           "seeds": [
             "delete my note",
             "remove that note",
-            "delete the note about groceries"
+            "delete the note about groceries",
+            "remove this note",
+            "erase the note",
+            "delete my saved note"
           ]
         }
       }
@@ -112,7 +170,12 @@
       "operations": {
         "open": {
           "legacy_intent": "open_target",
-          "entities": {"target": {"type": "string", "required": true}},
+          "entities": {
+            "target": {
+              "type": "string",
+              "required": true
+            }
+          },
           "target_mode": "entity:target",
           "seeds": [
             "open youtube",
@@ -121,7 +184,12 @@
             "open chrome",
             "start discord",
             "open the file explorer",
-            "navigate to reddit dot com"
+            "navigate to reddit dot com",
+            "open google",
+            "open github",
+            "launch visual studio code",
+            "open the website",
+            "take me to gmail"
           ]
         }
       }
@@ -130,13 +198,25 @@
       "operations": {
         "search": {
           "legacy_intent": "search_web",
-          "entities": {"query": {"type": "string", "required": true}},
+          "entities": {
+            "query": {
+              "type": "string",
+              "required": true
+            }
+          },
           "target_mode": "entity:query",
           "seeds": [
             "search for the best pizza in town",
             "google how to fix a flat tire",
-            "look up the weather in tokyo",
-            "find information about black holes"
+            "find information about black holes",
+            "search the web for recipes",
+            "search for python tutorials",
+            "search for flights to europe",
+            "look up iphone release date",
+            "look up the price of ethereum",
+            "google the latest headlines",
+            "search for iphone specs",
+            "search online for news about space"
           ]
         }
       }
@@ -145,14 +225,26 @@
       "operations": {
         "current": {
           "legacy_intent": "get_weather",
-          "entities": {"location": {"type": "string", "required": false}},
+          "entities": {
+            "location": {
+              "type": "string",
+              "required": false
+            }
+          },
           "target_mode": "raw",
           "seeds": [
             "what's the weather like",
             "is it going to rain today",
             "weather in london",
             "how cold is it outside",
-            "do i need an umbrella today"
+            "do i need an umbrella today",
+            "look up the weather in tokyo",
+            "what's the weather",
+            "check the weather",
+            "weather in paris",
+            "weather forecast",
+            "temperature outside",
+            "how hot is it outside"
           ]
         }
       }
@@ -161,7 +253,12 @@
       "operations": {
         "copy": {
           "legacy_intent": "clipboard_write",
-          "entities": {"content": {"type": "string", "required": false}},
+          "entities": {
+            "content": {
+              "type": "string",
+              "required": false
+            }
+          },
           "target_mode": "raw",
           "seeds": [
             "copy this to the clipboard",
@@ -193,34 +290,147 @@
     },
     "media": {
       "operations": {
-        "play": {"legacy_intent": "play_music", "entities": {}, "target_mode": "raw",
-          "seeds": ["play some music", "play a song", "start the music"]},
-        "pause": {"legacy_intent": "pause_music", "entities": {}, "target_mode": "raw",
-          "seeds": ["pause the music", "stop the song", "pause playback"]},
-        "next": {"legacy_intent": "next_track", "entities": {}, "target_mode": "raw",
-          "seeds": ["next song", "skip this track", "play the next one"]},
-        "previous": {"legacy_intent": "prev_track", "entities": {}, "target_mode": "raw",
-          "seeds": ["previous song", "go back a track", "play the last song again"]},
-        "volume_up": {"legacy_intent": "volume_up", "entities": {}, "target_mode": "raw",
-          "seeds": ["turn the volume up", "louder please", "increase the volume"]},
-        "volume_down": {"legacy_intent": "volume_down", "entities": {}, "target_mode": "raw",
-          "seeds": ["turn the volume down", "quieter please", "lower the volume"]},
-        "mute": {"legacy_intent": "mute", "entities": {}, "target_mode": "raw",
-          "seeds": ["mute the audio", "silence it", "mute"]}
+        "play": {
+          "legacy_intent": "play_music",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "play some music",
+            "play a song",
+            "start the music"
+          ]
+        },
+        "pause": {
+          "legacy_intent": "pause_music",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "pause the music",
+            "stop the song",
+            "pause playback",
+            "pause the audio",
+            "stop playback temporarily"
+          ]
+        },
+        "next": {
+          "legacy_intent": "next_track",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "next song",
+            "skip this track",
+            "play the next one"
+          ]
+        },
+        "previous": {
+          "legacy_intent": "prev_track",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "previous song",
+            "go back a track",
+            "play the last song again"
+          ]
+        },
+        "volume_up": {
+          "legacy_intent": "volume_up",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "turn the volume up",
+            "louder please",
+            "increase the volume"
+          ]
+        },
+        "volume_down": {
+          "legacy_intent": "volume_down",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "turn the volume down",
+            "quieter please",
+            "lower the volume",
+            "make it quieter",
+            "decrease volume"
+          ]
+        },
+        "mute": {
+          "legacy_intent": "mute",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "mute the audio",
+            "silence it",
+            "mute",
+            "mute the sound",
+            "turn off the sound",
+            "be quiet",
+            "silence the audio",
+            "no sound"
+          ]
+        }
       }
     },
     "system": {
       "operations": {
-        "info": {"legacy_intent": "system_info", "entities": {}, "target_mode": "raw",
-          "seeds": ["what's my battery level", "check cpu usage", "how much ram am i using", "how much disk space is left"]},
-        "screenshot": {"legacy_intent": "screenshot", "entities": {}, "target_mode": "raw",
-          "seeds": ["take a screenshot", "capture my screen"]},
-        "lock": {"legacy_intent": "lock_screen", "entities": {}, "target_mode": "raw",
-          "seeds": ["lock my screen", "lock the computer", "lock my pc"]},
-        "shutdown": {"legacy_intent": "shutdown", "entities": {}, "target_mode": "raw",
-          "seeds": ["shut down the computer", "turn off my pc", "power off"]},
-        "restart": {"legacy_intent": "restart", "entities": {}, "target_mode": "raw",
-          "seeds": ["restart the computer", "reboot my pc"]}
+        "info": {
+          "legacy_intent": "system_info",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "what's my battery level",
+            "check cpu usage",
+            "how much ram am i using",
+            "how much disk space is left",
+            "how is my computer performing",
+            "how much memory is being used"
+          ]
+        },
+        "screenshot": {
+          "legacy_intent": "screenshot",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "take a screenshot",
+            "capture my screen"
+          ]
+        },
+        "lock": {
+          "legacy_intent": "lock_screen",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "lock my screen",
+            "lock the computer",
+            "lock my pc",
+            "lock the screen",
+            "lock the workstation"
+          ]
+        },
+        "shutdown": {
+          "legacy_intent": "shutdown",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "shut down the computer",
+            "turn off my pc",
+            "power off",
+            "shut down my pc",
+            "power down the computer"
+          ]
+        },
+        "restart": {
+          "legacy_intent": "restart",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "restart the computer",
+            "reboot my pc",
+            "restart my pc",
+            "reboot the computer",
+            "restart the machine"
+          ]
+        }
       }
     }
   }

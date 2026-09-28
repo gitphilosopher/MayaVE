@@ -5,9 +5,24 @@ Shared data shapes passed between the hybrid router's stages.
 Kept dependency-free (stdlib dataclasses only) so every other module in
 this package — including the offline evaluator and the test suite — can
 import from here without pulling in embeddings/Ollama/sqlite.
+
+Command-level retrieval
+-----------------------
+The command corpus holds MANY prototype vectors per logical command
+(`domain.operation`). Retrieval therefore works at the COMMAND level, not
+the vector level:
+
+    command_score = max similarity over every vector of that command
+    ranking       = distinct commands ordered by command_score
+    margin        = best command_score - second-best DISTINCT command_score
+
+Two prototypes of the same command never compete with each other.
+`aggregate_by_command()` is the single place that rule is implemented;
+the vector store calls it and the confidence layer only reads its result.
 """
 
 from dataclasses import dataclass, field
+from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -27,15 +42,23 @@ class CommandSpec:
 
 @dataclass(frozen=True)
 class CommandCandidate:
-    """One scored match from semantic retrieval."""
+    """One DISTINCT command's best match from semantic retrieval.
+
+    `similarity` is the command score (max over the command's prototype
+    vectors); `seed_text` is the prototype that produced it."""
     spec: CommandSpec
     similarity: float
     seed_text: str
 
+    @property
+    def command_score(self) -> float:
+        return self.similarity
+
 
 @dataclass(frozen=True)
 class RetrievalResult:
-    """Top-k semantic retrieval outcome for one utterance."""
+    """Ranked, command-level retrieval outcome for one utterance.
+    `candidates` holds at most one entry per domain.operation, best first."""
     candidates: list[CommandCandidate]
 
     @property
@@ -56,7 +79,42 @@ class RetrievalResult:
 
     @property
     def margin(self) -> float:
+        """Command-level margin: best command score minus the second-best
+        DISTINCT command's score."""
         return self.top1_similarity - self.top2_similarity
+
+    def diagnostics(self) -> dict:
+        """Internal metadata for logging/evaluation; not part of the
+        legacy intent contract."""
+        return {
+            "winning_command": self.top1.spec.key if self.top1 else None,
+            "winning_score": round(self.top1_similarity, 4),
+            "winning_prototype": self.top1.seed_text if self.top1 else None,
+            "second_command": self.top2.spec.key if self.top2 else None,
+            "second_score": round(self.top2_similarity, 4),
+            "margin": round(self.margin, 4),
+        }
+
+
+def aggregate_by_command(
+    scored: Iterable[tuple[CommandSpec, float, str]],
+    top_k: int | None = None,
+) -> RetrievalResult:
+    """Collapse per-vector scores into a command-level ranking.
+
+    `scored` yields (spec, similarity, prototype_text), one item per
+    stored vector. Every vector of the same domain.operation is reduced
+    to its maximum. Ties are broken by command key so results are
+    deterministic."""
+    best: dict[str, CommandCandidate] = {}
+    for spec, sim, prototype in scored:
+        cur = best.get(spec.key)
+        if cur is None or sim > cur.similarity:
+            best[spec.key] = CommandCandidate(spec=spec, similarity=sim, seed_text=prototype)
+    ranked = sorted(best.values(), key=lambda c: (-c.similarity, c.spec.key))
+    if top_k is not None:
+        ranked = ranked[:top_k]
+    return RetrievalResult(candidates=ranked)
 
 
 @dataclass(frozen=True)
