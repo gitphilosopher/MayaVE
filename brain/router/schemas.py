@@ -2,6 +2,16 @@
 brain/router/schemas.py
 Shared data shapes passed between the hybrid router's stages.
 
+PATCH (stabilization pass): CommandSpec gained `requires_confirmation`
+(default False). understand.py's `_from_spec` and test_ir.py's
+`test_confirmation_flag_carried` both reference it; registry.py's
+load_specs() does not set it yet (config/command_domains.json has no
+"requires_confirmation" key for any operation today), so every spec
+loaded from JSON defaults to False until a domain actually needs it
+(e.g. system.shutdown/system.restart, which already require confirmation
+on the legacy skill side — see skills/system/power.py). Adding the JSON
+key is a follow-up, not part of this stabilization pass.
+
 Kept dependency-free (stdlib dataclasses only) so every other module in
 this package — including the offline evaluator and the test suite — can
 import from here without pulling in embeddings/Ollama/sqlite.
@@ -34,6 +44,7 @@ class CommandSpec:
     entities: dict          # name -> {"type": "string", "required": bool}
     target_mode: str        # "raw" | "entity:<name>"
     seeds: tuple[str, ...] = field(default_factory=tuple)
+    requires_confirmation: bool = False   # PATCH — see module docstring
 
     @property
     def key(self) -> str:

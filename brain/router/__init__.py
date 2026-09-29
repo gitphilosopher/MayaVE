@@ -1,25 +1,41 @@
 """
 brain/router/
 ==============
-Hybrid semantic command router — an optional, drop-in-compatible
-replacement for brain/intent_engine.py::IntentEngine.classify().
+Package containing BOTH routers:
 
-See docs/CONTRIBUTING.md and this package's module docstrings for the
-migration rationale. The single public entry point most callers need is
-HybridIntentEngine (brain/router/hybrid_engine.py), which:
+  dispatch.py         — the legacy intent -> skill dispatcher (`Router`),
+                        formerly the module brain/router.py. Moved here to
+                        resolve the module/package name collision: with a
+                        package `brain/router/` present, Python resolves
+                        `brain.router` to the package and the old module was
+                        unreachable.
+  hybrid_engine.py    — HybridIntentEngine (semantic + LLM fallback wrapper).
+  understand.py       — CommandUnderstander -> CommandIR (guards -> classifier
+                        gate -> semantic -> LLM fallback -> validation).
 
-  - wraps a real IntentEngine instance (never replaces it — guards and
-    the conversational/LLM path are delegated to it unchanged),
-  - is a no-op unless config.router.backend == "hybrid" (or "shadow"),
-  - returns the exact same dict shape IntentEngine.classify() returns,
-    plus an additive "_command" key.
+Public names are exported LAZILY (PEP 562) so that importing a light
+submodule (validate, entities, context, understand, ir) — e.g. in unit
+tests — never drags in kokoro/sounddevice/torch via dispatch.py. Existing
+imports keep working:
 
-Nothing in this package is imported by core/processor.py or
-brain/router.py today — wiring HybridIntentEngine in as a replacement
-for IntentEngine() in core/processor.py is a deliberate later step, not
-part of this migration's Stage 1-4 scaffolding.
+    from brain.router import Router                 # legacy dispatcher
+    from brain.router import HybridIntentEngine
 """
 
-from brain.router.hybrid_engine import HybridIntentEngine
+_LAZY = {
+    "Router": ("brain.router.dispatch", "Router"),
+    "HybridIntentEngine": ("brain.router.hybrid_engine", "HybridIntentEngine"),
+    "CommandUnderstander": ("brain.router.understand", "CommandUnderstander"),
+}
 
-__all__ = ["HybridIntentEngine"]
+__all__ = sorted(_LAZY)
+
+
+def __getattr__(name: str):
+    target = _LAZY.get(name)
+    if target is None:
+        # Must raise AttributeError so `from brain.router import <submodule>`
+        # falls back to importing the submodule.
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+    return getattr(importlib.import_module(target[0]), target[1])

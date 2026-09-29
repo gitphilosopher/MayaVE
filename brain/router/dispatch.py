@@ -1,23 +1,18 @@
 """
-brain/router.py
+brain/router/dispatch.py   (moved from brain/router.py — `git mv`)
 Intent-to-skill dispatch for Maya's turn pipeline.
 
-This module is the central routing layer between a parsed intent dictionary and
-its concrete implementation. It sits after the intent classifier and before the
-actual skill execution, deciding whether a turn should be handled by a direct
-system action, a small built-in conversational response, or a fallback LLM call.
+Central routing layer between a parsed intent dictionary and its concrete
+implementation. Resolves in-flight confirmations first (power, reminder
+duration, note delete), then routes to a skill, a built-in reply, or the LLM.
 
-The router is intentionally thin and centralized:
-- `Router.__init__()` registers all supported intents to their handlers.
-- `Router.dispatch()` resolves any in-flight confirmation before normal routing,
-  so single-shot confirmations such as shutdown, reminder duration, or note
-  deletion consume the next utterance before ordinary chat is processed.
-- Unknown or conversational intents fall back to the LLM rather than failing the
-  turn.
-- Skill-level exceptions are caught here so the system can return a graceful
-  apology without crashing the conversation loop.
-
-Most callers interact with this module through `Router.dispatch(intent, raw_text)`.
+Changes vs. the old brain/router.py (additive; legacy intents unaffected):
+- "clarify" route: a CommandIR that needs clarification is turned into a
+  spoken question (intent["_ir"].prompt) instead of falling through to the LLM.
+- When the intent carries a CommandIR (`_ir`), skills receive the IR's
+  effective_text (after context rewriting, e.g. "actually make it 30" ->
+  "set a timer for 30 minutes"). Pending-confirmation resolvers and the LLM
+  still receive the user's original words.
 """
 
 import logging
@@ -90,6 +85,7 @@ class Router:
             "farewell": self._farewell,
             "thanks": self._thanks,
             "help": self._help,
+            "clarify": self._clarify,
             "confirm": llm_query,
             "dismissal": llm_query,
             "smalltalk": llm_query,
@@ -123,12 +119,25 @@ class Router:
             logger.warning(f"No route for intent '{intent_name}' — falling back to LLM.")
             return await llm_query(intent, raw_text)
 
+        # Skills re-parse text themselves, so give them the context-rewritten
+        # command when a CommandIR produced one; the LLM keeps the user's words.
+        text = raw_text
+        ir = intent.get("_ir")
+        if ir is not None and handler is not llm_query:
+            text = getattr(ir, "effective_text", "") or raw_text
+
         try:
-            return await handler(intent, raw_text)
+            return await handler(intent, text)
         except Exception as e:
             logger.error(f"Skill error ({intent_name}): {e}", exc_info=True)
             intent["_no_history"] = True
             return f"[sad] Sorry {_U}, I ran into a problem with that."
+
+    async def _clarify(self, intent: dict, text: str) -> str:
+        """Speak the CommandIR's clarification question."""
+        ir = intent.get("_ir")
+        prompt = (getattr(ir, "prompt", "") or "What did you have in mind").rstrip("?. ")
+        return f"[surprised] {prompt}, {_U}?"
 
     async def _greet(self, intent: dict, text: str) -> str:
         """Return a short built-in greeting tailored to the configured user name."""

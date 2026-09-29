@@ -22,11 +22,45 @@ restart or manual retrain.
 
 The public contract is ``IntentEngine.classify(text)`` returning
 ``intent``, ``target``, ``confidence``, ``raw``, ``model``, and
-``response_mode`` fields. The router consumes the result to select a skill or
-the LLM; target extraction removes command phrases for intents such as
-``open_target``, ``search_web``, and ``set_timer``. Dataset validation is
-strict so malformed taxonomy or training records fail at startup instead of
-silently changing classification behavior.
+``response_mode`` fields, PLUS (see PATCH below) ``second_intent``,
+``second_confidence``, and ``margin``. The router consumes the result to
+select a skill or the LLM; target extraction removes command phrases for
+intents such as ``open_target``, ``search_web``, and ``set_timer``. Dataset
+validation is strict so malformed taxonomy or training records fail at
+startup instead of silently changing classification behavior.
+
+PATCH (brain/router hybrid-router stabilization pass): the hybrid router's
+CommandUnderstander needs a top-2/margin signal to decide whether the
+classifier's own result is trustworthy enough to dispatch without escalating
+to semantic retrieval or the LLM fallback. Before this patch, classify()'s
+return dict had no such field at all — only intent/target/confidence/raw/
+model/response_mode — so the understander's `res.get("margin")` always read
+None and every ML-sourced result was judged by the stricter no-margin rule.
+
+This patch is purely additive:
+  - `_predict()` (return shape, precedence order: dismissal/presence/action
+    guards -> deterministic keyword match on a short input -> ensemble ->
+    keyword fallback below threshold -> low-confidence floor -> unknown) is
+    UNCHANGED and still the single source of truth `classify()` calls.
+  - A new `_predict_detailed()` wraps `_predict()`'s exact logic (same
+    branches, same precedence, same guard/keyword short-circuits) but also
+    captures the second-best class and its probability from the SAME
+    averaged ensemble output (`avg_probs`) `_predict()` already computes
+    internally when the ensemble path is actually reached. For any result
+    that comes from a guard, a keyword rule, or a keyword-fallback path
+    (i.e. the ensemble was never consulted, or its output was overridden by
+    a stronger deterministic signal), `second_intent`/`second_confidence`/
+    `margin` are `None` — there is no meaningful "second place" for a
+    guard/keyword decision, and reporting a fabricated one would be worse
+    than reporting nothing.
+  - `classify()` now calls `_predict_detailed()` instead of `_predict()`
+    and adds the three new keys to its returned dict. Every existing key,
+    every existing caller reading the pre-patch keys (services/llm/
+    llm_service.py, core/processor.py, brain/router/adapter.py, brain/
+    router/guards.py, brain/router/hybrid_engine.py's `_legacy_shaped`) is
+    unaffected — they simply ignore the three new keys.
+  - The PyTorch BiLSTM and TensorFlow CNN model architectures, training
+    loop, and saved-artifact format are completely untouched.
 """
 
 from __future__ import annotations
@@ -215,8 +249,8 @@ def build_response_modes(cfg: dict) -> dict[str, str]:
     """
     id -> "skill" | "llm", straight from the validated config. This is
     the ONLY place response_mode is derived — callers (IntentEngine.
-    classify(), and ultimately brain/router.py's dispatch) must read it
-    from here rather than hardcoding a skill-vs-LLM intent-name list.
+    classify(), and ultimately brain/router/dispatch.py's dispatch) must read
+    it from here rather than hardcoding a skill-vs-LLM intent-name list.
     """
     return {e["id"]: e["response_mode"] for e in cfg["intents"]}
 
@@ -467,7 +501,8 @@ class IntentEngine:
         result = engine.classify("open youtube")
         # → {"intent": "open_target", "target": "youtube",
         #    "confidence": 0.93, "raw": "open youtube",
-        #    "model": "ensemble"}
+        #    "model": "ensemble", "response_mode": "skill",
+        #    "second_intent": ..., "second_confidence": ..., "margin": ...}
     """
 
     def __init__(self):
@@ -509,7 +544,8 @@ class IntentEngine:
     def classify(self, text: str) -> dict:
         """Classify one utterance and return the router-facing result record."""
         text = text.strip()
-        intent, confidence, source = self._predict(text)
+        detail = self._predict_detailed(text)
+        intent, confidence, source = detail["intent"], detail["confidence"], detail["source"]
         target = self._extract_target(text.lower(), intent)
 
         result = {
@@ -523,10 +559,19 @@ class IntentEngine:
             # actually reachable from _predict() is validated to have one
             # in load_intent_config().
             "response_mode": self._response_modes.get(intent, "llm"),
+            # Additive — see module docstring's PATCH note. None when the
+            # decision came from a guard/keyword path with no meaningful
+            # "second place" (the ensemble was never consulted, or was
+            # overridden by stronger deterministic evidence).
+            "second_intent":     detail["second_intent"],
+            "second_confidence": None if detail["second_confidence"] is None
+                                  else round(float(detail["second_confidence"]), 3),
+            "margin":            None if detail["margin"] is None
+                                  else round(float(detail["margin"]), 3),
         }
         logger.debug(
             f"Intent '{intent}' ({confidence:.2f} via {source}, "
-            f"response_mode={result['response_mode']}): '{text}'"
+            f"response_mode={result['response_mode']}, margin={result['margin']}): '{text}'"
         )
         if confidence < _CONF_THRESH:
             log_classification_failure(text, intent, confidence)
@@ -694,27 +739,50 @@ class IntentEngine:
                          "pros and cons", "better than", "or hdd", "or ssd")
 
     def _predict(self, text: str) -> tuple[str, float, str]:
-        """Returns (intent, confidence, source_label)."""
+        """Returns (intent, confidence, source_label). UNCHANGED — see
+        module docstring's PATCH note; _predict_detailed() below wraps
+        this exact logic without altering any branch or precedence."""
+        detail = self._predict_detailed(text)
+        return detail["intent"], detail["confidence"], detail["source"]
+
+    def _predict_detailed(self, text: str) -> dict:
+        """
+        Same branches/precedence as the original _predict(), plus, ONLY
+        when the ensemble path is actually reached and produces the final
+        label, the second-best class and probability from that same
+        averaged distribution. Returns:
+            {"intent", "confidence", "source",
+             "second_intent", "second_confidence", "margin"}
+        The three "second_*"/"margin" fields are None whenever the
+        decision came from a guard, a keyword rule, or a keyword-fallback
+        override — those paths never consult the ensemble at all, or
+        consult it only to discard its label, so there is no genuine
+        "runner-up" to report.
+        """
+        _none = {"second_intent": None, "second_confidence": None, "margin": None}
+
         if not self._ready or self._vocab is None:
             kw_intent, kw_conf, _ = self._keyword_fallback(text)
-            return (kw_intent, kw_conf, "keyword") if kw_conf > 0 else ("unknown", 0.0, "keyword")
+            if kw_conf > 0:
+                return {"intent": kw_intent, "confidence": kw_conf, "source": "keyword", **_none}
+            return {"intent": "unknown", "confidence": 0.0, "source": "keyword", **_none}
 
         t = text.lower().strip()
         tokens = re.findall(r"[a-z0-9]+", t)
 
         # ── Negation / dismissal guard ────────────────────────────────────────
         if self._is_dismissal(t):
-            return "dismissal", 1.0, "negation_guard"
+            return {"intent": "dismissal", "confidence": 1.0, "source": "negation_guard", **_none}
 
         # ── Presence / arrival guard ──────────────────────────────────────────
         if self._PRESENCE_RE.search(t):
             logger.debug(f"Presence guard fired for '{text}' → smalltalk")
-            return "smalltalk", 1.0, "presence_guard"
+            return {"intent": "smalltalk", "confidence": 1.0, "source": "presence_guard", **_none}
 
         # ── Action-request guard ──────────────────────────────────────────────
         if self._ACTION_WORD_RE.search(t) and not self._ACTION_QUESTION_RE.search(t):
             logger.debug(f"Action-request guard fired for '{text}' → perform_action")
-            return "perform_action", 1.0, "action_guard"
+            return {"intent": "perform_action", "confidence": 1.0, "source": "action_guard", **_none}
 
         # ── Deterministic keyword check ─────────────────────────────────────
         # Computed once and reused by both the short-input path and the
@@ -726,7 +794,7 @@ class IntentEngine:
         is_short = not is_comparison and len(tokens) <= 3
 
         if is_short and kw_conf > 0:
-            return kw_intent, kw_conf, "keyword_short_input"
+            return {"intent": kw_intent, "confidence": kw_conf, "source": "keyword_short_input", **_none}
 
         enc = self._vocab.encode(text, _MAX_LEN)
         probs_list = []
@@ -751,33 +819,48 @@ class IntentEngine:
             # Neither model is available/loaded — the only remaining
             # signal is the keyword check already computed above.
             if kw_conf > 0:
-                return kw_intent, kw_conf, "keyword_fallback"
-            return "unknown", 0.0, "keyword_fallback"
+                return {"intent": kw_intent, "confidence": kw_conf, "source": "keyword_fallback", **_none}
+            return {"intent": "unknown", "confidence": 0.0, "source": "keyword_fallback", **_none}
 
         avg_probs = np.mean([p for _, p in probs_list], axis=0)
-        idx       = int(np.argmax(avg_probs))
+        order     = np.argsort(avg_probs)[::-1]   # best..worst class indices
+        idx       = int(order[0])
         conf      = float(avg_probs[idx])
         intent    = self._labels[idx]
         source    = "+".join(name for name, _ in probs_list)
 
+        second_intent = second_conf = margin = None
+        if len(order) > 1:
+            sidx = int(order[1])
+            second_intent = self._labels[sidx]
+            second_conf = float(avg_probs[sidx])
+            margin = conf - second_conf
+        second_fields = {"second_intent": second_intent, "second_confidence": second_conf, "margin": margin}
+
         if conf >= _CONF_THRESH:
-            return intent, conf, source
+            return {"intent": intent, "confidence": conf, "source": source, **second_fields}
 
         # A deterministic keyword match still wins below the high-confidence
         # bar because it is stronger evidence than the ensemble estimate.
+        # The ensemble's own top-2/margin is no longer what's being acted
+        # on here, so it is NOT reported — the keyword decision has no
+        # genuine "second place" of its own.
         if kw_conf > 0:
             logger.debug(
                 f"ML confidence {conf:.2f} < threshold; "
                 f"using keyword fallback → '{kw_intent}'"
             )
-            return kw_intent, kw_conf, "keyword_fallback"
+            return {"intent": kw_intent, "confidence": kw_conf, "source": "keyword_fallback", **_none}
 
         # Without keyword corroboration, retain an ensemble label only when
         # its probability is meaningfully above chance for this taxonomy.
+        # This IS still the ensemble's own decision, so its margin is real
+        # and worth reporting (a caller may want to distinguish a trusted
+        # low-confidence label from a totally unknown one by margin too).
         if conf >= self._low_conf_floor():
-            return intent, conf, "low_confidence_trusted"
+            return {"intent": intent, "confidence": conf, "source": "low_confidence_trusted", **second_fields}
 
-        return "unknown", conf, "low_confidence_fallback"
+        return {"intent": "unknown", "confidence": conf, "source": "low_confidence_fallback", **second_fields}
 
     def _keyword_fallback(self, text: str) -> tuple[str, float, str]:
         """Return the first matching configured keyword rule, if any."""
