@@ -3,46 +3,27 @@ brain/router/understand.py
 CommandUnderstander — progressive-cost understanding that produces a CommandIR.
 It never executes anything and never imports a skill.
 
-  L0  guards (existing IntentEngine guards, reused via guards.check)
-  L1  CNN/BiLSTM ensemble via the existing IntentEngine, gated on
-      confidence AND margin; semantic retrieval only when L1 is not trusted
-  L2  deterministic entity extraction (entities.py) -> ready / needs_clarification
-  L3  local Ollama fallback (llm_fallback.route) -> validated before use
+  Context -> L0 guards -> L1 CNN/BiLSTM (confidence + margin gate)
+          -> semantic retrieval (normalized text) -> LLM fallback
+          -> entity extraction -> CommandIR -> validation
 
 A low-confidence COMMAND is never forced into an intent: it ends as UNKNOWN.
 Low-confidence *conversational* labels are harmless and go to the chat LLM.
 
-PATCH (stabilization pass):
-- `res.get("margin")` was always None — IntentEngine.classify() never
-  returned that key (verified against brain/intent_engine.py's real
-  return dict: intent/target/confidence/raw/model/response_mode). This
-  silently forced every ML-sourced result through the stricter
-  MIN_CONF_NO_MARGIN branch. IntentEngine.classify() has been extended
-  (additively — see that module) to also return second_intent/
-  second_confidence/margin, computed from the SAME averaged ensemble
-  probabilities `_predict` already produces internally; nothing about the
-  PyTorch/TensorFlow models themselves changed.
-- An LLM result with needs_clarification=True on a spec with NO required
-  entities previously still became READY at confidence 0.3 (validate.py's
-  ValidationResult(ok=False, error="needs_clarification") was read as
-  "ok enough to dispatch at low confidence"). It is now UNKNOWN —
-  clarification without any entity to ask for is not actionable.
-- A validated LLM Command is no longer trusted regardless of its own
-  confidence: LLM_MIN_CONF gates it (placeholder, like every other
-  threshold here — see confidence.py's docstring on "measure before
-  tuning"). Below the gate the turn falls through to UNKNOWN, matching
-  the same "an uncertain result must not silently become an executable
-  command" rule applied to the classifier and to semantic retrieval.
-- `semantic_thresholds=None` (the default when no `semantic` callable is
-  wired) previously crashed `evaluate()` on first use inside `_escalate`.
-  It now defaults to ConfidenceThresholds() so a caller that wires
-  `semantic=` without also wiring `semantic_thresholds=` doesn't crash.
-- `self.stats` counts guard/classifier/semantic/llm hits and semantic/LLM
-  exceptions, read by eval_ir.py for the real LLM-fallback-rate metric
-  (source-string sniffing undercounts an "LLM was consulted but returned
-  None/invalid" turn).
-- semantic()/llm() calls are now wrapped so an unexpected exception from
-  either degrades to UNKNOWN instead of propagating out of understand().
+Stabilization + BATCH 1 fixes:
+- classifier margin now real (IntentEngine.classify returns it).
+- LLM: needs_clarification with nothing missing -> UNKNOWN; validated command
+  below LLM_MIN_CONF -> UNKNOWN. BATCH 1: both UNKNOWNs now carry
+  legacy_intent="unknown" (they carried the SPEC's skill intent, which
+  Router.dispatch would have executed by name; ir.to_legacy_intent also
+  enforces this).
+- BATCH 1: semantic retrieval now receives normalize(text) (previously raw);
+  the LLM still receives the user's own words.
+- BATCH 1: understand() cannot raise because a stage failed — an unexpected
+  exception from the guard/classifier/anything downstream degrades to an
+  UNKNOWN IR (reason "internal_error") and is logged with traceback.
+- semantic_thresholds=None defaults to ConfidenceThresholds().
+- self.stats counts stage hits/errors for eval_ir.py.
 """
 from __future__ import annotations
 
@@ -54,6 +35,7 @@ from brain.router.confidence import ConfidenceThresholds
 from brain.router.context import ContextResolver, ConversationContext
 from brain.router.entities import extract_entities
 from brain.router.ir import CommandIR, Status
+from brain.router.normalize import normalize
 
 logger = logging.getLogger(__name__)
 
@@ -74,18 +56,29 @@ class CommandUnderstander:
         self._min_conf, self._min_margin = min_conf, min_margin
         self.ctx = ctx or ConversationContext()
         self._resolver = ContextResolver()
-        # Real counters for eval_ir.py's LLM-fallback-rate metric — a
-        # source-string sniff can't distinguish "LLM was asked and said no"
-        # from "LLM was never reached".
         self.stats = {"guard": 0, "classifier": 0, "semantic": 0, "llm": 0,
-                      "semantic_errors": 0, "llm_errors": 0}
+                      "semantic_errors": 0, "llm_errors": 0, "internal_errors": 0}
 
     # ── public ────────────────────────────────────────────────────────────
     async def understand(self, text: str) -> CommandIR:
-        raw = text.strip()
-        resolved = self._resolver.resolve(raw, self.ctx)
-        ir = await self._route(resolved.text, raw, resolved.source)
-        self.ctx.observe(ir)
+        raw = (text or "").strip()
+        try:
+            resolved = self._resolver.resolve(raw, self.ctx)
+            effective, tag = resolved.text, resolved.source
+        except Exception:
+            logger.warning("Context resolution failed (non-fatal) — using raw text.", exc_info=True)
+            effective, tag = raw, ""
+        try:
+            ir = await self._route(effective, raw, tag)
+        except Exception:
+            self.stats["internal_errors"] += 1
+            logger.error("Router stage failed — degrading to UNKNOWN.", exc_info=True)
+            ir = CommandIR(Status.UNKNOWN, reason="internal_error", legacy_intent="unknown",
+                           raw_text=raw, effective_text=effective)
+        try:
+            self.ctx.observe(ir)
+        except Exception:
+            logger.debug("Context observe failed (non-fatal).", exc_info=True)
         return ir
 
     # ── routing ───────────────────────────────────────────────────────────
@@ -102,12 +95,11 @@ class CommandUnderstander:
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, self._legacy.classify, text)
         intent, conf = res["intent"], float(res["confidence"])
-        margin = res.get("margin")   # None for keyword/guard-sourced results — see intent_engine.py
+        margin = res.get("margin")   # None for keyword/guard-sourced results
         src = f"context+{res['model']}" if tag else res["model"]
         mode, target = res.get("response_mode", "llm"), res.get("target", "")
-        trusted = self._trusted(res["model"], conf, margin)
 
-        if trusted:
+        if self._trusted(res["model"], conf, margin):
             return self._from_intent_name(intent, conf, margin, src, target, **base)
 
         # not trusted -> escalate, unless it is a plausible conversational label
@@ -157,7 +149,7 @@ class CommandUnderstander:
         if self._semantic:
             from brain.router.confidence import Decision, evaluate
             try:
-                r = await self._semantic(text)
+                r = await self._semantic(normalize(text))   # embeddings get normalized text
                 self.stats["semantic"] += 1
             except Exception as e:
                 self.stats["semantic_errors"] += 1
@@ -187,10 +179,8 @@ class CommandUnderstander:
         if v.ok:
             eff_conf = min(parsed.confidence, 0.7)
             if eff_conf < LLM_MIN_CONF:
-                # Validated shape, but the model itself wasn't confident enough
-                # to trust as an executable command — never force it.
                 return CommandIR(Status.UNKNOWN, source="llm", confidence=eff_conf,
-                                 reason="llm_low_confidence", legacy_intent=v.spec.legacy_intent, **base)
+                                 reason="llm_low_confidence", legacy_intent="unknown", **base)
             return self._from_spec(v.spec, eff_conf, None, "llm", target,
                                    llm_entities=parsed.entities, **base)
         if v.error == "not_a_command":
@@ -199,15 +189,11 @@ class CommandUnderstander:
         if v.error == "needs_clarification" and spec:
             ents, missing = extract_entities(spec, base["effective_text"], target, parsed.entities)
             if not missing:
-                # The LLM asked for clarification but every required entity
-                # is already present/derivable — nothing left to clarify,
-                # and forcing READY here would be trusting an uncertain
-                # signal as if it were confirmed. Treat as UNKNOWN rather
-                # than silently executing OR silently asking a pointless
-                # question.
+                # Nothing left to ask; forcing READY would trust an uncertain
+                # signal. UNKNOWN, and NOT under the spec's skill intent.
                 return CommandIR(Status.UNKNOWN, source="llm", confidence=min(parsed.confidence, 0.3),
                                  reason="llm_clarification_but_nothing_missing",
-                                 legacy_intent=spec.legacy_intent, **base)
+                                 legacy_intent="unknown", **base)
             q = spec.entities[missing[0]].get("prompt") or f"What {missing[0].replace('_', ' ')} did you have in mind"
             return CommandIR(Status.NEEDS_CLARIFICATION, domain=spec.domain, operation=spec.operation,
                              entities=ents, confidence=min(parsed.confidence, 0.3), source="llm",

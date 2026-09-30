@@ -5,13 +5,15 @@ the domain/operation registry used by validate.py and the LLM fallback
 prompt (validate.py trusts only what's registered here — never anything
 the LLM returns).
 
-Semantic prototypes live in each operation's `seeds` list (this is the
-repository's existing convention — there is no second prototype file).
-Adding a prototype is a JSON-only change; no routing code is involved.
-Seeds are validated and de-duplicated here so the corpus stays
-deterministic, and the same seed text under two different operations is
-rejected — it would make the two commands indistinguishable by
-construction.
+Semantic prototypes live in each operation's `seeds` list. Seeds are
+validated and de-duplicated here; the same seed text under two different
+operations is rejected — it would make the two commands indistinguishable.
+
+BATCH 1: each operation may declare `"requires_confirmation": true`
+(bool, default false). Previously the key was never read, so every spec —
+including system.shutdown/restart — loaded as False. It is metadata for
+the IR; the confirmation itself is still enforced by the skills
+(skills/system/power.py, skills/utilities/notepad.py).
 """
 
 import json
@@ -36,8 +38,7 @@ def _normalize_seed(seed: str) -> str:
 def load_specs(path: Path = _DEFAULT_PATH) -> list[CommandSpec]:
     """Load and structurally validate the command-domain registry.
     Raises CommandRegistryError on malformed input rather than degrading
-    silently — a broken taxonomy must fail loudly at startup, matching
-    brain/intent_engine.py's load_intent_config() convention."""
+    silently — a broken taxonomy must fail loudly at startup."""
     if not path.exists():
         raise CommandRegistryError(f"{path} does not exist.")
     try:
@@ -66,6 +67,9 @@ def load_specs(path: Path = _DEFAULT_PATH) -> list[CommandSpec]:
             if not isinstance(entities, dict):
                 raise CommandRegistryError(f"{path}: {key}.entities must be an object.")
             target_mode = ospec.get("target_mode", "raw")
+            requires_confirmation = ospec.get("requires_confirmation", False)
+            if not isinstance(requires_confirmation, bool):
+                raise CommandRegistryError(f"{path}: {key}.requires_confirmation must be a boolean.")
 
             raw_seeds = ospec.get("seeds", [])
             if not isinstance(raw_seeds, list) or not all(isinstance(s, str) and s.strip() for s in raw_seeds):
@@ -86,6 +90,7 @@ def load_specs(path: Path = _DEFAULT_PATH) -> list[CommandSpec]:
             specs.append(CommandSpec(
                 domain=domain, operation=operation, legacy_intent=legacy_intent,
                 entities=entities, target_mode=target_mode, seeds=tuple(seeds),
+                requires_confirmation=requires_confirmation,
             ))
 
     logger.info(f"Command domain registry loaded — {len(specs)} operation(s) across {len(domains)} domain(s).")

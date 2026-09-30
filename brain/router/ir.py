@@ -8,6 +8,14 @@ The router only ever *produces* a CommandIR; it never runs a skill. Every
 outcome is explicit: ready / needs_clarification / unknown / rejected.
 `to_legacy_intent()` is the compatibility bridge to the existing
 Router.dispatch(intent, text) contract, so no skill has to change.
+
+BATCH 1 FIX: a non-READY IR could carry a *skill* legacy_intent (the LLM
+fallback set legacy_intent=spec.legacy_intent on its low-confidence /
+clarification-with-nothing-missing UNKNOWN results). to_legacy_intent()
+copied that into intent["intent"], and Router.dispatch routes by intent
+name — so an UNKNOWN IR would have executed the skill anyway. Non-READY
+IRs now only keep their legacy_intent when reason == "conversational"
+(an LLM-mode intent such as smalltalk/general_query); otherwise "unknown".
 """
 from __future__ import annotations
 
@@ -48,6 +56,13 @@ class CommandIR:
     def requires_clarification(self) -> bool:
         return self.status is Status.NEEDS_CLARIFICATION
 
+    @property
+    def executable(self) -> bool:
+        """The single gate for running a skill: READY, nothing missing, and a
+        legacy_intent to route by. UNKNOWN / REJECTED / NEEDS_CLARIFICATION and
+        a READY IR that still lacks required entities are all NOT executable."""
+        return self.status is Status.READY and not self.missing_entities and bool(self.legacy_intent)
+
     def to_dict(self) -> dict:
         return {
             "status": self.status.value, "domain": self.domain, "operation": self.operation,
@@ -65,8 +80,12 @@ def to_legacy_intent(ir: CommandIR) -> dict:
         intent, mode = "clarify", "skill"
     elif ir.status is Status.READY:
         intent, mode = ir.legacy_intent, "skill"
-    else:  # UNKNOWN / REJECTED never become an action; conversational ones reach the LLM
-        intent, mode = (ir.legacy_intent or "unknown"), "llm"
+    else:
+        # UNKNOWN / REJECTED never become an action. Only a conversational
+        # (LLM-mode) label may keep its name; anything else collapses to
+        # "unknown" so dispatch can never route it to a skill.
+        keep = ir.status is Status.UNKNOWN and ir.reason == "conversational" and ir.legacy_intent
+        intent, mode = (ir.legacy_intent if keep else "unknown"), "llm"
     return {
         "intent": intent, "target": ir.target, "confidence": round(ir.confidence, 3),
         "raw": ir.effective_text or ir.raw_text, "model": ir.source, "response_mode": mode,

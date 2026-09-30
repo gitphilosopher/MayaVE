@@ -5,46 +5,39 @@ NAME (as declared in config/command_domains.json), so a new skill with a new
 entity adds an extractor here or declares none (entity then stays optional or
 is filled by the LLM fallback) — router core is untouched.
 
-PATCH (stabilization pass) — these extractors must accept exactly what the
-downstream skill can itself parse, no more:
+Extractors must accept exactly what the downstream skill can itself parse:
 
-- extract_duration: dropped "an hour"/"half an hour" bare-word support.
-  skills/utilities/timer.py::_parse_duration only matches
-  `<number> (hours?|hrs?|minutes?|mins?|seconds?|secs?)` — it has no bare
-  "an hour"/"half an hour" case. Accepting those here would let the IR
-  mark a request READY with duration=3600 while the skill itself, given
-  the same rewritten text, could re-derive a different (or no) duration —
-  a silent mismatch between what the router promises and what the skill
-  actually does. Word-number conversion ("twenty five minutes") IS kept,
-  because timer.py's own `_words_to_digits` does the same conversion
-  before parsing.
-- _message: now mirrors timer.py::_extract_reminder exactly — duration
-  phrases and trailing "and/please/thanks" are stripped the same way, so
-  the router's entity and the skill's own re-derived message never
-  disagree after a context rewrite hands the skill different text.
-- _location: now mirrors weather.py::_extract_location — the same
-  trailing-time-word strip and the same "the"/"a"-only rejection, so
-  "weather for today" resolves to auto-locate (None) here exactly as it
-  does inside the skill, instead of the router extracting the literal
-  word "today" as a location.
-
-No speculative extractors were added beyond what config/command_domains.json
-declares (duration, message, location, target, query).
+- extract_duration mirrors skills/utilities/timer.py::_parse_duration: the
+  FIRST `<number> (hours?|hrs?|minutes?|mins?|seconds?|secs?)` match per unit,
+  summed; number words (one..nineteen, tens up to sixty) as in its
+  _words_to_digits. BATCH 1 FIX: it previously summed EVERY match
+  (finditer) where the skill uses the first per unit, and accepted "zero"
+  which the skill does not convert. A zero total is now "no duration".
+  Bare "an hour"/"half an hour" remain unsupported (skill cannot parse them).
+- _message mirrors timer.py::_extract_reminder.
+- _location mirrors weather.py::_extract_location.
+- "target"/"query" come only from the classifier's own extracted target.
 """
 from __future__ import annotations
 
 import re
 from typing import Callable
 
+# timer.py: _NUM_WORDS = one..nineteen; _TENS_WORDS = twenty..sixty; tens+one..nine.
 _WORDS = {w: i for i, w in enumerate(
-    "zero one two three four five six seven eight nine ten eleven twelve thirteen "
-    "fourteen fifteen sixteen seventeen eighteen nineteen".split())}
+    "one two three four five six seven eight nine ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen".split(), start=1)}
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60}
 _WORD_RE = re.compile(
-    rf"\b(?:({'|'.join(_TENS)})(?:[\s-]({'|'.join(list(_WORDS)[1:10])}))?|({'|'.join(_WORDS)}))\b"
+    rf"\b(?:({'|'.join(_TENS)})(?:[\s-]({'|'.join(list(_WORDS)[:9])}))?|({'|'.join(_WORDS)}))\b"
     r"(?=\s*(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)", re.I)
-_DUR_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b", re.I)
-_UNIT = {"h": 3600, "m": 60, "s": 1}
+
+# Same three patterns, same order, same single re.search each, as timer._parse_duration.
+_DUR_PATTERNS = (
+    (re.compile(r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b'), 3600),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b'), 60),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*(?:seconds?|secs?)\b'), 1),
+)
 
 
 def words_to_digits(text: str) -> str:
@@ -56,24 +49,21 @@ def words_to_digits(text: str) -> str:
 
 
 def extract_duration(text: str) -> int | None:
-    """Seconds, or None. Word-number conversion only ("twenty five minutes")
-    — see module docstring for why bare "an hour"/"half an hour" support
-    was deliberately removed; skills/utilities/timer.py can't parse those
-    either, so a router-side extraction here would promise something the
-    skill can't independently reproduce."""
+    """Seconds, or None (also None for a zero total)."""
     t = words_to_digits(text.lower())
     total, found = 0.0, False
-    for m in _DUR_RE.finditer(t):
-        total += float(m.group(1)) * _UNIT[m.group(2)[0].lower()]
-        found = True
-    if not found:
+    for pattern, mult in _DUR_PATTERNS:
+        m = pattern.search(t)
+        if m:
+            total += float(m.group(1)) * mult
+            found = True
+    if not found or int(total) <= 0:
         return None
     return int(total)
 
 
 # Mirrors skills/utilities/timer.py::_REMINDER_RE / _DURATION_RE / _TRAILING_RE
-# / _extract_reminder exactly, so the router's "message" entity and the
-# skill's own re-derived message never disagree.
+# / _extract_reminder exactly.
 _REMINDER_RE = re.compile(r"\bremind(?:er)?\b.*?\b(?:to|about|that)\s+(.+)", re.I)
 _MESSAGE_DURATION_RE = re.compile(
     r"\s*\b(?:(?:in|after|for)\s+)?\d+(?:\.\d+)?\s*"
@@ -108,7 +98,7 @@ def _location(text: str, target: str):
         return None
     loc = _TRAILING_TIME_RE.sub("", m.group(1)).strip()
     if not loc or loc.lower() in ("the", "a"):
-        return None   # e.g. "weather for today" -> auto-locate, same as the skill
+        return None   # "weather for today" -> auto-locate, same as the skill
     return loc
 
 

@@ -2,17 +2,24 @@
 brain/router/dispatch.py   (moved from brain/router.py — `git mv`)
 Intent-to-skill dispatch for Maya's turn pipeline.
 
-Central routing layer between a parsed intent dictionary and its concrete
-implementation. Resolves in-flight confirmations first (power, reminder
-duration, note delete), then routes to a skill, a built-in reply, or the LLM.
+Resolves in-flight confirmations first (power, reminder duration, note
+delete), then routes to a skill, a built-in reply, or the LLM.
 
-Changes vs. the old brain/router.py (additive; legacy intents unaffected):
 - "clarify" route: a CommandIR that needs clarification is turned into a
   spoken question (intent["_ir"].prompt) instead of falling through to the LLM.
-- When the intent carries a CommandIR (`_ir`), skills receive the IR's
-  effective_text (after context rewriting, e.g. "actually make it 30" ->
-  "set a timer for 30 minutes"). Pending-confirmation resolvers and the LLM
-  still receive the user's original words.
+- When the intent carries a CommandIR (`_ir`), skills receive its
+  effective_text (after context rewriting). Pending-confirmation resolvers
+  and the LLM still receive the user's original words.
+- BATCH 1: IR safety net. If the intent carries an IR whose status is not
+  READY, dispatch will not run a skill regardless of intent name: a
+  NEEDS_CLARIFICATION IR always goes to _clarify, UNKNOWN/REJECTED always go
+  to the LLM. (ir.to_legacy_intent already avoids skill names for these;
+  this is defense in depth.)
+- BATCH 2: READY-with-missing-entities is also non-executable
+  (CommandIR.executable). requires_confirmation is DECLARED on the spec/IR and
+  ENFORCED by the skill (power.py, notepad.py delete); dispatch fails closed if
+  a flagged IR would reach a handler that does not self-confirm.
+- Router._routes is the single intent -> handler map (see skills/base.py).
 """
 
 import logging
@@ -20,6 +27,7 @@ import logging
 from config.settings import config
 from core.speaker import Speaker
 
+from brain.router.ir import Status
 from services.llm.llm_service import query as llm_query
 from skills.media.play_music import execute as play_music
 from skills.system.clipboard import execute as clipboard
@@ -53,6 +61,10 @@ class Router:
         """Register the route map and set the shared speaker used by timer-derived skills."""
         self._speaker = speaker
         set_timer_speaker(speaker)
+        # Handlers that enforce their own spoken confirmation (declared via
+        # CommandSpec.requires_confirmation, enforced HERE by the skill):
+        # power.py asks before shutdown/restart; notepad.py asks before delete.
+        self._self_confirming = (power_action, notepad)
         self._routes: dict = {
             "open_target": open_target,
             "system_info": system_info,
@@ -115,6 +127,26 @@ class Router:
         intent_name = intent.get("intent", "unknown")
         handler = self._routes.get(intent_name)
 
+        ir = intent.get("_ir")
+        if ir is not None:
+            if ir.status is Status.NEEDS_CLARIFICATION:
+                handler = self._clarify
+            elif not ir.executable and handler is not llm_query:
+                # UNKNOWN / REJECTED / READY-with-missing-entities: never a skill.
+                logger.warning(
+                    f"Non-executable IR ({ir.status.value}) carried intent "
+                    f"'{intent_name}' — routing to LLM, not a skill."
+                )
+                handler = llm_query
+            elif ir.executable and ir.requires_confirmation and handler not in self._self_confirming:
+                # Declaration without enforcement: fail closed.
+                logger.error(
+                    f"IR for '{intent_name}' requires confirmation but its handler does "
+                    f"not enforce one — refusing to run it."
+                )
+                intent["_no_history"] = True
+                return f"[sad] Sorry {_U}, I can't run that safely without a confirmation step."
+
         if handler is None:
             logger.warning(f"No route for intent '{intent_name}' — falling back to LLM.")
             return await llm_query(intent, raw_text)
@@ -122,7 +154,6 @@ class Router:
         # Skills re-parse text themselves, so give them the context-rewritten
         # command when a CommandIR produced one; the LLM keeps the user's words.
         text = raw_text
-        ir = intent.get("_ir")
         if ir is not None and handler is not llm_query:
             text = getattr(ir, "effective_text", "") or raw_text
 
