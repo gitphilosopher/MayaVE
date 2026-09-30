@@ -27,7 +27,8 @@
             "current clock time",
             "could you tell me what time it is",
             "what's the current time",
-            "what time are we at"
+            "what time are we at",
+            "could you tell me the time"
           ]
         },
         "date": {
@@ -87,6 +88,8 @@
             "count down for ten minutes",
             "begin a timer for three minutes",
             "give me a ninety second timer",
+            "set a timer for ten minutes and thirty seconds",
+            "remind me to call mom in an hour",
             "ping me in forty minutes",
             "alert me in thirty minutes",
             "set a countdown for five minutes",
@@ -94,7 +97,6 @@
             "ping me in an hour to fold the laundry",
             "remind me in an hour",
             "remind me to check the mail in ten minutes",
-            "remind me to call the dentist in two hours",
             "notify me after twenty minutes",
             "let me know in forty five minutes",
             "give me a heads up in fifteen minutes so i can leave",
@@ -231,7 +233,8 @@
           "entities": {
             "target": {
               "type": "string",
-              "required": true
+              "required": true,
+              "prompt": "What would you like me to open"
             }
           },
           "target_mode": "entity:target",
@@ -297,7 +300,8 @@
           "entities": {
             "query": {
               "type": "string",
-              "required": true
+              "required": true,
+              "prompt": "What would you like me to search for"
             }
           },
           "target_mode": "entity:query",
@@ -384,6 +388,7 @@
             "how hot is it outside",
             "what's the temperature in madrid",
             "what is the temperature at the moment",
+            "what's the weather in new york",
             "how's the weather today",
             "will it rain in seattle tomorrow",
             "tell me the weather in chicago",

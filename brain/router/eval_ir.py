@@ -43,6 +43,7 @@ DEFAULT = Path(__file__).parent.parent.parent / "datasets" / "router_eval" / "ca
 _MIN_MEANINGFUL_N = 30
 _COUNTERS = ("guard", "classifier", "semantic", "llm", "semantic_errors", "llm_errors", "internal_errors")
 
+confirm_errors = 0
 
 def load_cases(path: Path = DEFAULT) -> list[dict]:
     return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -63,7 +64,7 @@ def _flag(n: int) -> dict:
     return {"n": n, "low_sample": n < _MIN_MEANINGFUL_N}
 
 
-async def run_eval(make_understander, cases: list[dict], wired: dict | None = None) -> dict:
+async def run_eval(make_understander, cases: list[dict], wired: dict | None = None, verbose=False) -> dict:
     n = correct = 0
     wrong_exec = oos_false_exec = wrong_entity_exec = 0
     oos_tp = oos_fp = oos_fn = 0
@@ -94,6 +95,9 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
 
         got_ready = ir.status.value == "ready"
         want_ready = want_status == "ready"
+
+        if "requires_confirmation" in exp and ir.requires_confirmation != exp["requires_confirmation"]:
+            confirm_errors += 1
 
         if got_ready and want_key is not None and ir.key != want_key:
             wrong_exec += 1
@@ -127,6 +131,12 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         if ir.source == "llm":
             llm_source_hits += 1
         after = getattr(u, "stats", None)
+        if verbose:
+            d = {k: after.get(k, 0) - before.get(k, 0) for k in _COUNTERS} if isinstance(after, dict) else {}
+            print(f"[{'OK ' if ok else 'MISS'}] {c['text']!r} want={want_status}/{want_key} "
+                  f"got={ir.status.value}/{ir.key} src={ir.source} reason={ir.reason!r} "
+                  f"conf={ir.confidence:.2f} margin={ir.margin} {lat[-1]:.2f}s "
+                  f"calls={ {k: v for k, v in d.items() if v} }", file=sys.stderr)
         if isinstance(after, dict):
             have_real_stats = True
             for k in call_totals:
@@ -159,11 +169,12 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
     }
 
 
-async def _main(path: Path, use_semantic: bool, use_llm: bool) -> None:
+async def _main(path: Path, use_semantic: bool, use_llm: bool, verbose: bool = False) -> None:
     from brain.intent_engine import IntentEngine
     from brain.router import guards
     from brain.router.registry import CommandRegistry, load_specs
     from brain.router.understand import CommandUnderstander
+    import logging
 
     legacy, reg = IntentEngine(), CommandRegistry(load_specs())
     semantic = llm = None
@@ -180,7 +191,12 @@ async def _main(path: Path, use_semantic: bool, use_llm: bool) -> None:
     if use_llm:
         from brain.router.llm_fallback import route as llm
     make = lambda: CommandUnderstander(legacy, reg, guard_fn=guards.check, semantic=semantic, llm_route=llm)
-    result = await run_eval(make, load_cases(path), wired={"semantic": use_semantic, "llm": use_llm})
+    result = await run_eval(
+        make,
+        load_cases(path),
+        wired={"semantic": use_semantic, "llm": use_llm},
+        verbose=verbose,
+    )
     print(json.dumps(result, indent=2))
     if result["cases"] < _MIN_MEANINGFUL_N:
         print(
@@ -189,6 +205,7 @@ async def _main(path: Path, use_semantic: bool, use_llm: bool) -> None:
             f"do not tune thresholds from this run.",
             file=sys.stderr,
         )
+    logging.basicConfig(level=logging.INFO)
 
 
 if __name__ == "__main__":
@@ -196,5 +213,6 @@ if __name__ == "__main__":
     ap.add_argument("path", nargs="?", default=str(DEFAULT))
     ap.add_argument("--semantic", action="store_true", help="wire semantic retrieval (needs Ollama + seeded corpus)")
     ap.add_argument("--llm", action="store_true", help="wire the LLM fallback (needs Ollama)")
+    ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args()
-    asyncio.run(_main(Path(a.path), a.semantic, a.llm))
+    asyncio.run(_main(Path(a.path), a.semantic, a.llm, verbose=a.verbose))

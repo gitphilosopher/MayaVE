@@ -147,11 +147,23 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 `Router.__init__` builds a static `dict[intent → coroutine]`; every labelled intent is routed and unknown/unrouted intents fall back to `llm_query`. Before intent routing, `dispatch` calls `skills.system.power.resolve_pending(raw_text)`: a pending shutdown/restart request is **consumed by the next utterance** (one-shot, 30 s TTL) — confirm phrase → OS action + spoken reply; deny phrase → "cancelled"; anything else → request dropped and the utterance routes normally. It then does the same for a reminder awaiting its duration (`timer.resolve_pending`). Skill exceptions return `"[sad] Sorry senpai, I ran into a problem with that."` (spoken but kept out of history via `_no_history`). The `farewell` intent only replies; it does not sleep.
 
 ### 4.1 Hybrid router package
-Processor → IntentEngine.classify → Router.dispatch.
-CommandUnderstander/CommandIR, HybridIntentEngine and skills/base.py exist but are not invoked by Processor.
-dispatch already honours an _ir fail-closed.
-config.router.* affects only HybridIntentEngine.
+Trace of the existing Processor.handle lifecycle. It sets PROCESSING, then classifies via IntentEngine.classify in an executor, then calls observe_user_turn, then Router.dispatch(intent, text). Router.dispatch already resolves pending confirmations first, already understands intent["_ir"], and already has a clarify route. The narrowest seam is therefore replacing the classify call with one that returns to_legacy_intent(ir). Nothing else moves.
 
+Final runtime flow (hybrid):
+
+STT and on_speech queue the text.
+Processor.handle sets PROCESSING and records the raw text via add_user.
+_classify calls CommandUnderstander.understand. It resolves context (effective_text), then runs guards, then the classifier's confidence/margin gate, then semantic retrieval, then the LLM fallback, then entity extraction. The result is a CommandIR, and to_legacy_intent turns it into an intent dict carrying _ir.
+observe_user_turn receives the raw text and the intent with a blanked whole-utterance target.
+Router.dispatch resolves power, reminder and note-delete confirmations first.
+NEEDS_CLARIFICATION goes to _clarify.
+Non-executable IRs (UNKNOWN/REJECTED) go to llm_query with the raw text.
+Executable IRs go to the skill with effective_text.
+A declared requires_confirmation fails closed unless the handler self-confirms.
+Speaker.speak or the LLM streaming pipeline speaks the reply.
+turn_rest runs and the mayave.turn_completed event is recorded.
+
+A failure in understand degrades to an UNKNOWN IR. A failure in _classify or at init falls back to the legacy classifier.
 
 **Convention:** skills implement `async execute(intent, text) -> str` and return tagged text. `perform_action` also supplies an action name for separate frontend dispatch. The LLM path speaks directly and returns `ALREADY_SPOKEN`.
 

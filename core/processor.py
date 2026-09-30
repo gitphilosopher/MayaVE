@@ -44,7 +44,8 @@ from core.state import state, MayaState
 from core.turn_lifecycle import rest as turn_rest
 from brain.intent_engine import IntentEngine
 from brain.conversation import ConversationManager, context_manager
-from brain.router import Router
+from brain.router.ir import to_legacy_intent
+from config.settings import config
 from services.llm.llm_service import ALREADY_SPOKEN
 from services.ws_server import ws_server
 from services.node.events import record_event
@@ -56,10 +57,51 @@ class Processor:
     """Handle one queued command from transcription through response and cleanup."""
 
     def __init__(self, speaker: Speaker):
-        self._speaker       = speaker
+        self.speaker = speaker
         self._intent_engine = IntentEngine()
-        self._conversation  = ConversationManager()
-        self._router        = Router(speaker)
+        self._understander  = self._build_understander(self._intent_engine)
+        logger.info("Routing: %s", "hybrid CommandUnderstander" if self._understander else "legacy IntentEngine")
+
+    async def _classify(self, text: str) -> dict:
+        """Legacy-shaped intent dict; carries intent["_ir"] on the hybrid path."""
+        if self._understander is not None:
+            try:
+                return to_legacy_intent(await self._understander.understand(text))
+            except Exception:
+                logger.error("Understander failed — falling back to legacy classifier.", exc_info=True)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._intent_engine.classify, text)
+
+    def _build_understander(engine):
+        """CommandUnderstander when config.router.backend == "hybrid", else None (legacy path)."""
+        if config.router.backend != "hybrid":
+            return None
+        try:
+            from brain.embeddings import OllamaEmbedder
+            from brain.router import guards
+            from brain.router.command_vector_store import CommandVectorStore
+            from brain.router.confidence import ConfidenceThresholds
+            from brain.router.llm_fallback import route as llm_route
+            from brain.router.registry import CommandRegistry, load_specs
+            from brain.router.semantic_router import SemanticRouter
+            from brain.router.understand import CommandUnderstander
+
+            registry = CommandRegistry(load_specs())
+            store = CommandVectorStore(config.router.command_vector_db_path)
+            if store.is_stale(registry.specs):
+                logger.warning("Command vector corpus stale/unseeded — semantic tier inert until "
+                            "`python -m brain.router.eval_router --seed` is run.")
+            thresholds = ConfidenceThresholds(
+                min_similarity=config.router.min_similarity,
+                min_margin=config.router.min_margin,
+                low_similarity_floor=config.router.low_similarity_floor,
+            )
+            semantic = SemanticRouter(OllamaEmbedder(), store, registry).retrieve
+            return CommandUnderstander(engine, registry, guard_fn=guards.check, semantic=semantic,
+                                    semantic_thresholds=thresholds, llm_route=llm_route)
+        except Exception:
+            logger.error("Hybrid router unavailable — using the legacy classifier.", exc_info=True)
+            return None
 
     async def handle(self, item: dict) -> None:
         """Process a queued command item and speak a reply when one is produced."""
@@ -85,18 +127,23 @@ class Processor:
         self._conversation.add_user(text)
 
         try:
-            loop = asyncio.get_running_loop()
-            intent = await loop.run_in_executor(None, self._intent_engine.classify, text)
+            intent = await self._classify(text)
             intent["_t_cmd_start"] = t0
             logger.info(f"[TIMING] intent_classify: {time.perf_counter()-t0:.3f}s")
             logger.info(
                 f"Intent: {intent['intent']} "
                 f"({intent['confidence']:.2f} via {intent['model']})"
             )
+            ir = intent.get("_ir")
+            if ir is not None:
+                logger.info(f"IR: status={ir.status.value} key={ir.key} source={ir.source} reason={ir.reason!r}")
             # A whole-utterance fallback is not a topic/entity, so hide it from
             # context tracking to avoid polluting the topic state.
+            # The IR's target is the un-lowercased (possibly context-rewritten) utterance for
+            # raw-target ops, so compare case-insensitively against both raw and effective text.
             ctx_intent = intent
-            if intent.get("target") == text.strip().lower():
+            whole = {text.strip().lower(), str(intent.get("raw") or "").strip().lower()}
+            if str(intent.get("target") or "").strip().lower() in whole:
                 ctx_intent = {**intent, "target": ""}
             context_manager.observe_user_turn(text, ctx_intent)
 

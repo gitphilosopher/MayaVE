@@ -81,10 +81,18 @@ def test_adapter_contract_and_entity_target():
     assert d["_command"]["source"] == "semantic_retrieval"
 
 def test_adapter_raw_for_timer():
-    cmd = Command("timer", "create", {}, 0.9)
-    spec = validate.validate(cmd, REG).spec
-    d = to_legacy_intent(cmd, spec, "set a timer for ten minutes", confidence=0.9, model_source="x")
+    cmd = Command("timer", "create", {"duration": "ten minutes"}, 0.9)
+    v = validate.validate(cmd, REG)
+    assert v.ok
+    d = to_legacy_intent(cmd, v.spec, "set a timer for ten minutes", confidence=0.9, model_source="x")
     assert d["intent"] == "set_timer" and d["target"] == "set a timer for ten minutes"
+
+def test_timer_create_duration_gate():
+    bare = Command("timer", "create", {}, 0.9)
+    r = validate.validate(bare, REG)
+    assert not r.ok and r.spec is None and "missing required entity 'duration'" in r.error
+    # identity-only validation (what the semantic path uses) still resolves the spec
+    assert validate.validate(bare, REG, enforce_required=False).spec.key == "timer.create"
 
 def test_adapter_every_spec_maps():
     for s in REG.specs:
@@ -240,3 +248,6 @@ def test_shadow_never_dispatches_hybrid(monkeypatch, tmp_path):
     r = eng.classify("what time is it")
     assert r["model"] == "legacy" and "_command" not in r
     loop.call_soon_threadsafe(loop.stop)
+
+def test_store_accepts_str_path(tmp_path): 
+    CommandVectorStore(str(tmp_path / "c.sqlite3"))

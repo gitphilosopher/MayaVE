@@ -10,6 +10,7 @@ All notable changes to MayaVE are documented here.
 - **Shutdown and restart skill** — `skills/system/power.py` now handles the `shutdown`/`restart` intents (previously answered by the LLM, nothing happened) by asking "say yes to confirm"; `Router.dispatch` calls `resolve_pending` first so a one-shot request (30 s TTL) is confirmed, declined or dropped by the next utterance, and confirm runs `shutdown /s` or `/r /t 10` (no `/f`) in the executor.
 - **Lock screen skill** — `lock_screen` intent routed to `skills/system/lock_screen.py` (`LockWorkStation` via ctypes; apology on non-Windows), immediate by design with no confirmation because it is reversible.
 - **Spoken timer reminder text** — `timer._extract_reminder` captures "remind me to X" (duration stripped, max 120 chars) and the alert speaks "Time's up, senpai! Reminder: X."
+- **Hybrid Semantic Router** — Hybrid router wired into Processor (opt-in via config.router.backend="hybrid")
 
 ### Improvements
 - **Ollama residency diagnostics** — `services/llm/ollama_lifecycle.py` logs per-turn COLD/warm status, load/prompt/generation tok/s and gap since the last chat, plus a background `/api/ps` and CUDA-memory snapshot; diagnostics only, never raises.
@@ -82,9 +83,11 @@ All notable changes to MayaVE are documented here.
 - **Stale retired intent ids in context phase inference** — `_TASK_INTENTS` uses `open_target`/`note_write`/`note_view`.
 - **Router fallback keep_alive** — `llm_fallback.route` uses `chat_keep_alive()`.
 - **Obsolete router tests and one-off patch script removed** — media.mute fixtures, duplicate margin/IR tests, `RouterDecision`, `patch_command_domains.py`; its metadata edits are applied to `command_domains.json`.
+- **LLM missing-entity clarification** — the LLM missing-entity clarification (this makes the earlier changelog claim true), the string DB path, and the processor target blanking.
+
 
 ### Issues
-- **Hybrid router not wired into Processor** — [Limitation] `CommandUnderstander`/`HybridIntentEngine` are exercised only by eval scripts and tests; runtime routing is `IntentEngine.classify` → `Router.dispatch`.
+- **Hybrid router not wired into Processor** — [Limitation] path is opt-in and its thresholds are unmeasured.
 - **Skill dispatch phase still not interruptible** — [Limitation] A skill's own blocking work *before* it starts speaking (`weather.py`'s HTTP call, `system_info.py`'s 1s CPU sample) has no registered task yet, so `can_interrupt()` is False for that window; only once it reaches its own `Speaker.speak()` call does a barge-in (or a concurrent "go to sleep") actually stop it.
 - **Stray reply after a mid-dispatch sleep command** — [Potential] If "go to sleep" lands while a skill is still in that uninterruptible dispatch phase, she'll still speak that skill's reply once dispatch finishes (ending back at SLEEPING correctly via `Speaker.speak()`'s fresh sleep check, but only after speaking one more line she probably shouldn't have).
 - **Brief state flicker on a barged-in goodbye line** — [Potential] Calling one's name during the sleep goodbye line correctly ends at LISTENING, but the intermediate broadcast can be `"idle"` rather than a clean single transition, since `interrupt()`'s own tail runs after `Speaker.speak()`'s cancelled-finally has already broadcast once.

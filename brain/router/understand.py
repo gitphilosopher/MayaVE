@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from brain.router import validate
 from brain.router.confidence import ConfidenceThresholds
@@ -99,7 +100,10 @@ class CommandUnderstander:
         src = f"context+{res['model']}" if tag else res["model"]
         mode, target = res.get("response_mode", "llm"), res.get("target", "")
 
-        if self._trusted(res["model"], conf, margin):
+        trusted = self._trusted(res["model"], conf, margin)
+        logger.info(f"[router] classifier intent={intent} conf={conf:.2f} margin={margin} "
+                    f"model={res['model']} mode={mode} trusted={trusted}")
+        if trusted:
             return self._from_intent_name(intent, conf, margin, src, target, **base)
 
         # not trusted -> escalate, unless it is a plausible conversational label
@@ -167,7 +171,12 @@ class CommandUnderstander:
                 self.stats["semantic_errors"] += 1
                 logger.warning(f"Semantic retrieval failed (non-fatal, falling through): {e}")
                 r = None
-            if r is not None and evaluate(r, self._sem_thr) is Decision.CONFIDENT:
+            dec = evaluate(r, self._sem_thr) if r is not None else None
+            if r is not None:
+                d = r.diagnostics()
+                logger.info(f"[router] semantic {dec.value} top1={d['winning_command']}({d['winning_score']:.2f}) "
+                            f"second={d['second_command']}({d['second_score']:.2f}) margin={d['margin']:.2f} text={text!r}")
+            if dec is Decision.CONFIDENT:
                 return self._from_spec(r.top1.spec, r.top1_similarity, r.margin, "semantic", target, **base)
         if self._llm:
             return await self._from_llm(text, target, **base)
@@ -175,6 +184,7 @@ class CommandUnderstander:
 
     async def _from_llm(self, text, target, **base) -> CommandIR | None:
         reg = self._registry
+        t0 = time.perf_counter()
         try:
             raw = await self._llm(text, reg.domains(), {d: reg.operations_for(d) for d in reg.domains()}, [])
             self.stats["llm"] += 1
@@ -182,12 +192,15 @@ class CommandUnderstander:
             self.stats["llm_errors"] += 1
             logger.warning(f"LLM fallback call failed (non-fatal): {e}")
             return None
+        outcome = "none(timeout/unavailable)" if raw is None else f"{raw.get('domain')}.{raw.get('operation')} conf={raw.get('confidence')}"
+        logger.info(f"[router] llm fallback -> {outcome} in {time.perf_counter()-t0:.2f}s")
         if raw is None:
             return None                                    # LLM down -> caller ends UNKNOWN
         parsed = validate.validate_raw_llm_output(raw)
         if parsed is None:
             return CommandIR(Status.REJECTED, source="llm", reason="malformed_llm_output", **base)
-        v = validate.validate(parsed, reg)
+        # Identity only; a missing required entity is turned into a clarification by _from_spec.
+        v = validate.validate(parsed, reg, enforce_required=False)
         if v.ok:
             eff_conf = min(parsed.confidence, 0.7)
             if eff_conf < LLM_MIN_CONF:

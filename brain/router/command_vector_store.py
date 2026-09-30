@@ -92,8 +92,8 @@ def _prototype_record(spec: CommandSpec, prototype: str, embedding: list[float])
 class CommandVectorStore:
     """Owns the command-vector SQLite file and its fingerprint sidecar."""
 
-    def __init__(self, db_path: Path | None = None):
-        self._db_path = db_path or _default_db_path()
+    def __init__(self, db_path: "Path | str | None" = None):
+        self._db_path = Path(db_path) if db_path else _default_db_path()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._fp_path = self._db_path.with_suffix(self._db_path.suffix + ".fingerprint.json")
         self._store = SQLiteVectorStore(db_path=self._db_path)

@@ -19,6 +19,7 @@ return a plain dict or None" — never raises out to the caller.
 
 import json
 import logging
+import time
 
 import httpx
 
@@ -78,6 +79,7 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
         "keep_alive": chat_keep_alive(),
         "options": {"temperature": 0.0, "num_predict": 200},
     }
+    t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=_ROUTE_TIMEOUT_S) as client:
             resp = await client.post(url, json=payload)
@@ -87,7 +89,8 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
         logger.warning(f"Router LLM fallback: connection error: {e}")
         return None
     except httpx.TimeoutException as e:
-        logger.warning(f"Router LLM fallback: timeout: {e}")
+        logger.warning(f"Router LLM fallback: timeout after {time.perf_counter()-t0:.1f}s "
+                       f"(limit {_ROUTE_TIMEOUT_S}s): {e!r}")
         return None
     except httpx.HTTPError as e:
         logger.warning(f"Router LLM fallback: HTTP error: {e}")
@@ -108,4 +111,10 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
     if not isinstance(parsed, dict):
         logger.warning(f"Router LLM fallback: JSON was not an object: {type(parsed).__name__}")
         return None
+    ns = 1e9
+    logger.info("[router] llm route ok %.2fs load=%.2fs prompt_tokens=%s prompt_eval=%.2fs gen_tokens=%s gen=%.2fs",
+                time.perf_counter()-t0, (data.get("load_duration") or 0)/ns, data.get("prompt_eval_count"),
+                (data.get("prompt_eval_duration") or 0)/ns, data.get("eval_count"),
+                (data.get("eval_duration") or 0)/ns)
+    
     return parsed
