@@ -1,8 +1,13 @@
 {"text":"set a timer for ten minutes","category":"in_distribution","expect":{"status":"ready","key":"timer.create","entities":{"duration":600}}}
 {"text":"set a timer","category":"clarification","expect":{"status":"needs_clarification","key":"timer.create"}}
+{"text":"remind me to call mom","category":"clarification","expect":{"status":"needs_clarification","key":"timer.create"}}
+{"text":"remind me to drink water in ten minutes","category":"entity","expect":{"status":"ready","key":"timer.create","entities":{"duration":600,"message":"drink water"}}}
 {"text":"I have 5 minutes to kill before my meeting","category":"context","history":["set a timer"],"expect":{"status":"unknown"}}
+{"text":"no 5 apples please","category":"context","history":["set a timer for 20 minutes"],"expect":{"status":"unknown"}}
 {"text":"actually make it 30","category":"context","history":["set a timer for 20 minutes"],"expect":{"status":"ready","key":"timer.create","entities":{"duration":1800}}}
 {"text":"what's the weather in london","category":"entity","expect":{"status":"ready","key":"weather.current","entities":{"location":"london"}}}
+{"text":"search for python tutorials","category":"entity","expect":{"status":"ready","key":"web.search","entities":{"query":"python tutorials"}}}
+{"text":"open youtube","category":"entity","expect":{"status":"ready","key":"app_or_web.open","entities":{"target":"youtube"}}}
 {"text":"shut down the computer","category":"in_distribution","expect":{"status":"ready","key":"system.shutdown"}}
 {"text":"the sky looks orange today","category":"oos","expect":{"status":"unknown"}}
 {"text":"can you set my alarm clock radio to jazz","category":"adversarial","expect":{"status":"unknown"}}

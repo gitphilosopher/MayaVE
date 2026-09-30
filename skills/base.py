@@ -5,52 +5,31 @@ SkillResult of FACTS (data) — not a final sentence. Legacy skills that still
 return a tagged string are wrapped by LegacySkillAdapter (result.text is set,
 generation is bypassed), so nothing existing has to change.
 
-Registering a NEW skill (one with no legacy `execute(intent, text)` handler)
-needs no router change:
+Source of truth for routing (BATCH 2)
+-------------------------------------
+brain/router/dispatch.py's Router._routes is the ONLY intent -> legacy-handler
+map. SkillRegistry keeps just native (IR-native) registrations; for legacy
+intents it holds a LIVE REFERENCE to Router._routes (bind_legacy_routes) and
+wraps the handler at lookup time. Previously bind_legacy_routes() copied and
+wrapped each handler once, so a later change to Router._routes was invisible
+to (and could contradict) the registry.
 
-    @skill_registry.register("weather.current")
-    class WeatherSkill: async def run(self, ir, ctx): ...
+Execution gate (BATCH 2)
+------------------------
+resolve(ir) returns None unless ir.executable (READY, no missing entities, has
+a legacy_intent), and LegacySkillAdapter.run() refuses non-executable IRs too.
+UNKNOWN / REJECTED / NEEDS_CLARIFICATION can never reach a skill through this
+module. A native registration shadows a legacy one inside this registry only;
+Router.dispatch does not consult the registry.
 
-PATCH (stabilization pass):
-- SkillResult gained `meta: dict`. Verified against the real legacy skill
-  contract: skills/system/perform_action.py sets `intent["action"]` for
-  Processor.handle()'s on_audio_start animation hook, and several skills
-  (llm_service.py's error paths, brain/router/dispatch.py's own exception
-  handler) set `intent["_no_history"]` so Processor.handle() doesn't store
-  the reply in conversation history. The original LegacySkillAdapter threw
-  both away after calling execute() — perform_action would resolve an
-  action but the caller could never see it, silently breaking the wave/nod/
-  giggle/sigh/shrug/wink animation sync described in docs/architecture.md
-  §9.2 and §4's routing table. LegacySkillAdapter.run() now copies both
-  known out-of-band intent keys into result.meta after calling execute(),
-  so a caller (e.g. a future ir-based Processor) can still apply them.
-- SkillRegistry gained `bind_legacy_routes(routes: dict)` and
-  `resolve(ir)`. Verified against the real registration mechanism:
-  brain/router/dispatch.py's `Router.__init__` already builds the
-  authoritative intent -> handler map (`self._routes`), including three
-  different shapes (a skill's `execute`, a bound method like `self._greet`,
-  and `llm_query`). SkillRegistry must not maintain a second, competing
-  map of the same intents — that would drift the moment dispatch.py's
-  table changes. `bind_legacy_routes()` wraps each existing handler in
-  LegacySkillAdapter (if it isn't already IR-native) and keys the result by
-  the SAME legacy intent name dispatch.py uses, so registering a new
-  IR-native skill (`skill_registry.register(key)`) can shadow one legacy
-  entry without touching dispatch.py, while every other intent keeps using
-  Router._routes verbatim through `resolve()`'s fallback.
-- Nothing existing is migrated: dispatch.py is unchanged apart from the
-  clarify route and effective_text handling (see that module's docstring),
-  and Processor.handle() still calls Router.dispatch(), not this registry.
+SkillResult.meta carries the legacy out-of-band keys a skill sets on the
+intent dict: "action" (perform_action's animation) and "_no_history".
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 
-# Out-of-band intent keys a legacy skill may set as a side effect of
-# execute() that a caller needs after the call returns. Kept as an
-# explicit, closed list rather than copying the whole intent dict, so a
-# skill can't leak router-internal state (_ir, _command, ...) into
-# SkillResult.meta by accident.
 _LEGACY_META_KEYS = ("action", "_no_history")
 
 
@@ -72,7 +51,8 @@ class SkillResult:
 
 class SkillRegistry:
     def __init__(self):
-        self._skills: dict[str, object] = {}
+        self._skills: dict[str, object] = {}          # native (IR-native) skills only
+        self._legacy_routes: dict | None = None       # live reference to Router._routes
 
     def register(self, key: str):
         def deco(obj):
@@ -81,28 +61,26 @@ class SkillRegistry:
         return deco
 
     def get(self, key: str | None):
-        return self._skills.get(key) if key else None
+        if not key:
+            return None
+        native = self._skills.get(key)
+        if native is not None:
+            return native
+        if self._legacy_routes is not None:
+            handler = self._legacy_routes.get(key)
+            if handler is not None:
+                return LegacySkillAdapter(handler)
+        return None
 
-    def bind_legacy_routes(self, routes: dict[str, object]) -> None:
-        """
-        Register every entry of an existing legacy route map (e.g.
-        brain/router/dispatch.py's Router._routes) under its own intent
-        name, wrapped in LegacySkillAdapter, UNLESS that key was already
-        registered natively via @register(). Never overwrites a native
-        registration — legacy wins only where nothing IR-native exists yet.
-        Idempotent: calling this again after Router._routes changes just
-        re-wraps whatever is new; already-bound entries are left alone so a
-        native registration made in between is never clobbered.
-        """
-        for legacy_intent, handler in routes.items():
-            if legacy_intent in self._skills:
-                continue   # a native IR skill already owns this key
-            self._skills[legacy_intent] = LegacySkillAdapter(handler)
+    def bind_legacy_routes(self, routes: dict) -> None:
+        """Bind (by reference, not copy) the legacy route map, e.g.
+        Router._routes. A native registration for the same key still wins."""
+        self._legacy_routes = routes
 
     def resolve(self, ir):
-        """Look up a skill for `ir` by its legacy_intent (the only stable
-        cross-reference an IR carries back to the existing route table —
-        see brain/router/ir.py). Returns None if nothing is bound."""
+        """Skill for `ir`, or None. Only an executable IR ever resolves."""
+        if not getattr(ir, "executable", False):
+            return None
         return self.get(getattr(ir, "legacy_intent", None))
 
 
@@ -113,6 +91,8 @@ class LegacySkillAdapter:
 
     async def run(self, ir, ctx=None) -> SkillResult:
         from brain.router.ir import to_legacy_intent
+        if not getattr(ir, "executable", False):
+            return SkillResult(ok=False, error=f"ir_not_executable:{getattr(getattr(ir, 'status', None), 'value', 'unknown')}")
         intent = to_legacy_intent(ir)
         try:
             text = await self._execute(intent, ir.effective_text or ir.raw_text)

@@ -4,10 +4,15 @@ Mandatory validation boundary between (semantic retrieval | LLM
 fallback) output and the adapter/legacy router.
 
 Every Command — regardless of source — must pass through validate()
-before it can reach adapter.py. This is the security/safety boundary
-called out in the migration spec: malformed JSON, a hallucinated
-domain/operation, or an invalid entity must degrade to a safe "unknown"
-outcome, never raise, and never reach a skill unvalidated.
+before it can reach adapter.py. Malformed JSON, a hallucinated
+domain/operation, or an invalid entity degrades to a safe outcome, never
+raises, and never reaches a skill unvalidated.
+
+BATCH 2: validate() takes `enforce_required` (default True). Semantic
+retrieval selects a command BEFORE any entity is extracted, so it validates
+the command's identity with enforce_required=False and extracts entities
+afterwards (see hybrid_engine.py). LLM output is always validated with the
+default, since the LLM is expected to supply what it claims.
 """
 
 import logging
@@ -23,8 +28,8 @@ _MAX_ENTITY_STR_LEN = 500
 def validate_raw_llm_output(data: dict) -> Command | None:
     """
     Structural-only validation of the LLM's raw JSON (before it's
-    checked against the domain registry) — confirms the shape is even
-    usable. Returns None on any structural problem rather than raising.
+    checked against the domain registry). Returns None on any structural
+    problem rather than raising.
     """
     if not isinstance(data, dict):
         return None
@@ -54,22 +59,18 @@ def validate_raw_llm_output(data: dict) -> Command | None:
     )
 
 
-def validate(command: Command, registry: CommandRegistry) -> ValidationResult:
+def validate(command: Command, registry: CommandRegistry, *, enforce_required: bool = True) -> ValidationResult:
     """
     Full validation against the real command registry:
       - domain exists
       - operation exists for that domain
       - every entity key is one the operation declares
-      - every required entity is present
+      - every required entity is present (skipped when enforce_required=False)
       - every entity value is a plain string within a sane length
-        (the only entity type this schema currently declares is
-        "string" — see config/command_domains.json; extend here first
-        if a future domain needs a richer entity type)
 
-    A domain='unknown'/operation='unknown' Command (the LLM's own
-    "not a command" signal) validates as ok=False with a distinct
-    error so the caller can route it to the conversational LLM path
-    instead of logging it as a real validation failure.
+    A domain='unknown'/operation='unknown' Command validates as ok=False
+    with error "not_a_command" so the caller can route it to the
+    conversational LLM path.
     """
     if command.domain == "unknown" or command.operation == "unknown":
         return ValidationResult(ok=False, error="not_a_command")
@@ -90,8 +91,9 @@ def validate(command: Command, registry: CommandRegistry) -> ValidationResult:
         if len(value) > _MAX_ENTITY_STR_LEN:
             return ValidationResult(ok=False, error=f"entity '{key}' exceeds {_MAX_ENTITY_STR_LEN} characters")
 
-    for name, meta in spec.entities.items():
-        if meta.get("required") and not (command.entities.get(name) or "").strip():
-            return ValidationResult(ok=False, error=f"missing required entity '{name}' for {spec.key}")
+    if enforce_required:
+        for name, meta in spec.entities.items():
+            if meta.get("required") and not (command.entities.get(name) or "").strip():
+                return ValidationResult(ok=False, error=f"missing required entity '{name}' for {spec.key}")
 
     return ValidationResult(ok=True, spec=spec)

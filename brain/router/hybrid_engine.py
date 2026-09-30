@@ -1,41 +1,33 @@
 """
 brain/router/hybrid_engine.py
-HybridIntentEngine — the single orchestration point for the migration.
+HybridIntentEngine — legacy-shaped hybrid pipeline (guards -> semantic ->
+confidence -> LLM fallback -> validate -> adapt).
 
-Two entry points, by design:
+Two entry points:
+  classify(text) -> dict   [SYNC]  legacy drop-in; always returns the legacy
+                                   engine's result (+ optional shadow compare).
+  aclassify(text) -> dict  [ASYNC] full hybrid pipeline.
 
-  classify(text) -> dict          [SYNCHRONOUS]
-      Exactly the shape core/processor.py already calls today via
-      `await loop.run_in_executor(None, self._intent_engine.classify, text)`.
-      When config.router.backend == "legacy" (the default), this method
-      does nothing but delegate to the wrapped real IntentEngine and,
-      if config.router.shadow_mode is on and a loop was registered via
-      set_shadow_loop(), schedules a non-blocking shadow comparison.
-      Guard checks (dismissal/presence/action/canned) are always applied
-      first regardless of backend, matching IntentEngine's own guard
-      precedence exactly — the guard result IS the legacy result for
-      those utterances, so this is not a behavior change.
+BATCH 2 FIX (semantic path vs required entities): a CONFIDENT semantic hit
+selects a command before any entity exists, but it was validated with
+entities={} against the full required-entity rules. Any operation with a
+required entity (timer.create -> duration, app_or_web.open -> target,
+web.search -> query) therefore failed validation and fell through to the LLM
+even though retrieval was confident. Now:
+  1. the command's identity is validated with enforce_required=False;
+  2. entities are extracted AFTER selection with the existing extractors
+     (brain/router/entities.py) and the classifier's own target extraction
+     (IntentEngine._extract_target — reused, not re-implemented);
+  3. missing required entities do not block dispatch here: this legacy-shaped
+     path has no clarification status, and adapter.py already falls back to
+     the raw utterance so the skill asks its own clarification. (The IR
+     pipeline in understand.py is the path that represents NEEDS_CLARIFICATION.)
+The LLM branch is unchanged: LLM output is validated with required-entity
+enforcement. Nothing here executes a skill.
 
-  aclassify(text) -> dict         [ASYNC — full hybrid pipeline]
-      Runs the whole guard -> semantic -> confidence -> (LLM fallback) ->
-      validate -> adapt pipeline. This is what a future wiring change in
-      core/processor.py would call instead of classify() once hybrid
-      routing is enabled for real (see docs/CONTRIBUTING.md's migration
-      stages) — NOT part of this migration's acceptance criteria, which
-      requires zero behavior change until router.backend is flipped.
-
-Semantic stage: embedding -> per-prototype vector scores -> reduced to one
-score per domain.operation -> distinct commands ranked -> command-level
-margin (best minus second-best DISTINCT command) -> confidence gate. The
-retrieval diagnostics (winning/second command, scores, margin) are logged
-and attached to the result's additive `_command["retrieval"]` block.
-
-Per-domain allowlisting: even with backend == "hybrid", only domains
-listed in config.router.hybrid_domains are actually routed through the
-new pipeline; every other domain's utterances still fall through to the
-wrapped legacy engine. The allowlist is applied to the WINNING command:
-an out-of-allowlist winner falls back to legacy, and an out-of-allowlist
-runner-up still counts toward the margin (it is real competition).
+Allowlisting: only domains in config.router.hybrid_domains are routed through
+this pipeline when backend == "hybrid"; the allowlist is applied to the
+WINNING command, and an out-of-allowlist runner-up still counts toward margin.
 """
 
 from __future__ import annotations
@@ -50,6 +42,7 @@ from brain.router import guards, validate
 from brain.router.adapter import to_legacy_intent
 from brain.router.command_vector_store import CommandVectorStore
 from brain.router.confidence import ConfidenceThresholds, Decision, evaluate
+from brain.router.entities import extract_entities
 from brain.router.llm_fallback import route as llm_route
 from brain.router.normalize import normalize
 from brain.router.registry import CommandRegistry, load_specs
@@ -86,11 +79,8 @@ class HybridIntentEngine:
     # ── Corpus management ────────────────────────────────────────────────
 
     async def reseed_corpus(self) -> int:
-        """Rebuild the command vector index from the current registry.
-        Call this explicitly (e.g. from a startup task or a maintenance
-        script) — never happens implicitly on a stale corpus, since that
-        would mean silently blocking on N embedding calls mid-request.
-        The record layout lives in CommandVectorStore, not here."""
+        """Rebuild the command vector index from the current registry. Explicit
+        only — never implicit on a stale corpus."""
         return await self._store.areseed(self._registry.specs, self._embedder.embed)
 
     # ── Sync entry point (drop-in for IntentEngine.classify) ────────────
@@ -103,11 +93,6 @@ class HybridIntentEngine:
         else:
             result = self._legacy.classify(text)
 
-        # classify() always dispatches the legacy-shaped result above,
-        # regardless of config.router.backend — enabling "hybrid" only
-        # takes effect once a caller switches to aclassify() (see this
-        # module's docstring). Shadow mode compares against that same
-        # legacy result without ever affecting what was returned here.
         if getattr(config.router, "shadow_mode", False) and self._shadow_loop is not None:
             try:
                 asyncio.run_coroutine_threadsafe(self._shadow_compare(text, result), self._shadow_loop)
@@ -117,9 +102,6 @@ class HybridIntentEngine:
         return result
 
     def set_shadow_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Register the running asyncio loop so classify() (called from a
-        worker thread via run_in_executor) can schedule shadow-mode
-        comparisons without blocking the caller."""
         self._shadow_loop = loop
 
     def _legacy_shaped(self, intent: str, text: str, confidence: float, source: str) -> dict:
@@ -131,6 +113,30 @@ class HybridIntentEngine:
             "model": source,
             "response_mode": self._legacy._response_modes.get(intent, "llm"),
         }
+
+    def _with_extracted_entities(self, seed: Command, spec, text: str) -> Command:
+        """Extract entities for a semantically selected command. Reuses the
+        classifier's target extraction (private, like guards.py's coupling) and
+        the shared extractors; never raises."""
+        target = ""
+        extract_target = getattr(self._legacy, "_extract_target", None)
+        if callable(extract_target):
+            try:
+                target = extract_target(text.lower(), spec.legacy_intent) or ""
+            except Exception as e:
+                logger.debug(f"Target extraction failed (non-fatal): {e}")
+        try:
+            ents, missing = extract_entities(spec, text, target)
+        except Exception as e:
+            logger.debug(f"Entity extraction failed (non-fatal): {e}")
+            ents, missing = {}, ()
+        if missing:
+            logger.info(
+                f"[router] semantic hit {spec.key} is missing required {list(missing)} — "
+                f"dispatching; the skill will ask for it."
+            )
+        return Command(domain=seed.domain, operation=seed.operation, entities=ents,
+                       confidence=seed.confidence)
 
     # ── Async entry point (full hybrid pipeline) ────────────────────────
 
@@ -162,16 +168,16 @@ class HybridIntentEngine:
             )
             return self._legacy.classify(text)
 
-        # Confidence is judged on the FULL command-level ranking: an
-        # out-of-allowlist runner-up is still genuine ambiguity.
         diag = retrieval.diagnostics()
         decision = evaluate(retrieval, self._thresholds)
 
         if decision == Decision.CONFIDENT:
-            command = Command(domain=top.spec.domain, operation=top.spec.operation,
-                               entities={}, confidence=top.similarity)
-            v = validate.validate(command, self._registry)
+            seed = Command(domain=top.spec.domain, operation=top.spec.operation,
+                           entities={}, confidence=top.similarity)
+            # Identity only: required entities are extracted after selection.
+            v = validate.validate(seed, self._registry, enforce_required=False)
             if v.ok:
+                command = self._with_extracted_entities(seed, v.spec, text)
                 logger.info(
                     f"[router] source=semantic winner={diag['winning_command']} "
                     f"score={diag['winning_score']:.3f} second={diag['second_command']} "
@@ -228,10 +234,8 @@ class HybridIntentEngine:
     # ── Shadow mode ──────────────────────────────────────────────────────
 
     async def _shadow_compare(self, text: str, legacy_result: dict) -> None:
-        """Compute the hybrid decision purely for comparison logging.
-        Never affects what was dispatched — legacy_result already went
-        to the router by the time this runs. Best-effort; any failure is
-        swallowed so shadow diagnostics can never destabilize a turn."""
+        """Compute the hybrid decision purely for comparison logging; never
+        affects what was dispatched. Best-effort."""
         try:
             t0 = time.perf_counter()
             hybrid_result = await self.aclassify(text)
