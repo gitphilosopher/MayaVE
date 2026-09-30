@@ -91,6 +91,16 @@ def test_adapter_every_spec_maps():
         d = to_legacy_intent(Command(s.domain, s.operation, {}, 1.0), s, "raw text", confidence=1.0, model_source="t")
         assert d["intent"] == s.legacy_intent
 
+def test_semantic_missing_required_entity_not_dispatched(monkeypatch, tmp_path):
+    from brain.router import hybrid_engine as he
+    called = []
+    eng = _engine(monkeypatch, tmp_path,
+                  _cands(("web.search", .95), ("app_or_web.open", .5)), None)
+    async def boom(*a, **k): called.append(1); return None
+    monkeypatch.setattr(he, "llm_route", boom)
+    d = asyncio.run(eng.aclassify("search"))
+    assert d["model"] == "legacy" and d["intent"] == "general_query"
+    assert "_command" not in d and not called
 
 # ── vector store isolation / fingerprint / search ──
 def test_store_seed_search_and_stale(tmp_path):

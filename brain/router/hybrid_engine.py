@@ -133,10 +133,10 @@ class HybridIntentEngine:
         if missing:
             logger.info(
                 f"[router] semantic hit {spec.key} is missing required {list(missing)} — "
-                f"dispatching; the skill will ask for it."
+                f"not dispatching from the legacy-shaped path (it has no clarification status)."
             )
         return Command(domain=seed.domain, operation=seed.operation, entities=ents,
-                       confidence=seed.confidence)
+                       confidence=seed.confidence), missing
 
     # ── Async entry point (full hybrid pipeline) ────────────────────────
 
@@ -177,7 +177,9 @@ class HybridIntentEngine:
             # Identity only: required entities are extracted after selection.
             v = validate.validate(seed, self._registry, enforce_required=False)
             if v.ok:
-                command = self._with_extracted_entities(seed, v.spec, text)
+                command, missing = self._with_extracted_entities(seed, v.spec, text)
+                if missing:
+                    return self._legacy.classify(text)
                 logger.info(
                     f"[router] source=semantic winner={diag['winning_command']} "
                     f"score={diag['winning_score']:.3f} second={diag['second_command']} "
