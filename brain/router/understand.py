@@ -131,8 +131,20 @@ class CommandUnderstander:
         return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
                          reason="conversational", legacy_intent=intent, **base)
 
+    def _target_for(self, spec, text, fallback):
+        """The classifier's target was extracted for ITS predicted intent; re-derive
+        it for the command actually selected (semantic/LLM may disagree)."""
+        fn = getattr(self._legacy, "_extract_target", None)
+        if callable(fn):
+            try:
+                return fn(text.lower(), spec.legacy_intent) or ""
+            except Exception:
+                logger.debug("Target re-extraction failed (non-fatal).", exc_info=True)
+        return fallback
+
     def _from_spec(self, spec, conf, margin, src, target, *, llm_entities=None, **base) -> CommandIR:
         text = base["effective_text"]
+        target = self._target_for(spec, text, target)
         ents, missing = extract_entities(spec, text, target, llm_entities)
         ent_target = ents.get(spec.target_mode.split(":", 1)[1]) if spec.target_mode.startswith("entity:") else None
         common = dict(domain=spec.domain, operation=spec.operation, entities=ents, confidence=conf,

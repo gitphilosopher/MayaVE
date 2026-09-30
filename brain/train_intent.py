@@ -20,18 +20,7 @@ Reports, in order:
   - confusion matrix (top confusions only, for readability)
   - 'general_query' catch-all class performance specifically (precision/
     recall) — the class most likely to silently rot if new intents crowd
-    it out. general_query absorbed the former 'help' and 'unknown'
-    intents (see docs/CHANGELOG.md); those ids no longer exist.
-
-Note: 'note_create'/'note_append' -> 'note_write', 'note_read'/
-'note_list'/'note_open' -> 'note_view', 'open_app'/'open_website' ->
-'open_target', and 'set_reminder' -> 'set_timer' have likewise been
-merged (see brain/intent_engine.py's datasets/intents.json and
-brain/dataset_tools.py's _LEGACY_INTENT_MAP) — those ids no longer
-exist either. Run `python -m brain.dataset_tools migrate-legacy-intents`
-once against existing train/validation/test/candidates data before
-retraining so old rows land under the new ids instead of failing
-load_dataset()'s "intent not declared" check.
+    it out.
 """
 
 import argparse

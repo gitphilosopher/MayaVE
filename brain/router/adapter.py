@@ -1,7 +1,7 @@
 """
 brain/router/adapter.py
 Translates a VALIDATED Command into the legacy intent dictionary shape
-that brain/router.py::Router.dispatch() and every skill already expect.
+that brain/router/dispatch.py::Router.dispatch() and every skill already expect.
 
 This is the interpretation layer described in the migration spec: no
 skill is rewritten to understand {domain, operation, entities} — the

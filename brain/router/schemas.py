@@ -145,15 +145,3 @@ class ValidationResult:
     ok: bool
     spec: CommandSpec | None = None
     error: str | None = None
-
-
-@dataclass(frozen=True)
-class RouterDecision:
-    """Final structured outcome handed to the adapter, carrying enough
-    provenance for the '_command' block and for observability logging."""
-    command: Command
-    spec: CommandSpec
-    source: str   # "guard" | "semantic" | "llm_fallback"
-    top1_similarity: float = 0.0
-    top2_similarity: float = 0.0
-    margin: float = 0.0

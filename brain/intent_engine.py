@@ -133,7 +133,7 @@ class IntentConfigError(ValueError):
 _REQUIRED_INTENT_FIELDS = {"id", "category", "description", "min_examples", "keywords", "response_mode"}
 
 # The only two valid handlers a classified intent can be routed to at
-# runtime: a deterministic skill (brain/router.py's skill map) or the
+# runtime: a deterministic skill (brain/router/dispatch.py's skill map) or the
 # LLM (services/llm/llm_service.py). This is the single source of truth
 # routing reads from — see build_response_modes() below. No intent-name
 # list is ever hardcoded in the router; it looks up response_mode here.

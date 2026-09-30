@@ -32,7 +32,7 @@ flowchart LR
         Queue["core/queue_manager.py\nasyncio.Queue"]
         Processor["core/processor.py"]
         Intent["brain/intent_engine.py\nPyTorch+TF ensemble"]
-        Router["brain/router.py"]
+        Router["brain/router/dispatch.py"]
         Skills["skills/*"]
         LLM["services/llm/llm_service.py\nOllama streaming"]
         Lifecycle["services/llm/ollama_lifecycle.py\nkeep_alive + turn diagnostics"]
@@ -134,7 +134,7 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 
 ## 3. Intent Classification (`brain/intent_engine.py`, `datasets/intents.json`)
 
-`datasets/intents.json` declares intents, response modes, keyword rules, and guard vocabularies. `IntentEngine` validates it and supplies the routing metadata used by `brain/router.py`; the training datasets and `brain/dataset_tools.py` / `brain/train_intent.py` support candidate review, retraining, and evaluation.
+`datasets/intents.json` declares intents, response modes, keyword rules, and guard vocabularies. `IntentEngine` validates it and supplies the routing metadata used by `brain/router/dispatch.py`; the training datasets and `brain/dataset_tools.py` / `brain/train_intent.py` support candidate review, retraining, and evaluation.
 
 - **Classification:** PyTorch BiLSTM and TensorFlow CNN predictions are combined, with deterministic guards and keyword rules for short inputs and low-confidence results.
 - **Retraining:** a fingerprint of intent configuration and training data triggers retraining when those inputs change.
@@ -142,9 +142,16 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 
 ---
 
-## 4. Skill Routing and Skills (`brain/router.py`, `skills/`)
+## 4. Skill Routing and Skills (`brain/router/dispatch.py`, `skills/`)
 
 `Router.__init__` builds a static `dict[intent → coroutine]`; every labelled intent is routed and unknown/unrouted intents fall back to `llm_query`. Before intent routing, `dispatch` calls `skills.system.power.resolve_pending(raw_text)`: a pending shutdown/restart request is **consumed by the next utterance** (one-shot, 30 s TTL) — confirm phrase → OS action + spoken reply; deny phrase → "cancelled"; anything else → request dropped and the utterance routes normally. It then does the same for a reminder awaiting its duration (`timer.resolve_pending`). Skill exceptions return `"[sad] Sorry senpai, I ran into a problem with that."` (spoken but kept out of history via `_no_history`). The `farewell` intent only replies; it does not sleep.
+
+### 4.1 Hybrid router package
+Processor → IntentEngine.classify → Router.dispatch.
+CommandUnderstander/CommandIR, HybridIntentEngine and skills/base.py exist but are not invoked by Processor.
+dispatch already honours an _ir fail-closed.
+config.router.* affects only HybridIntentEngine.
+
 
 **Convention:** skills implement `async execute(intent, text) -> str` and return tagged text. `perform_action` also supplies an action name for separate frontend dispatch. The LLM path speaks directly and returns `ALREADY_SPOKEN`.
 

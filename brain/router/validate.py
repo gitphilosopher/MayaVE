@@ -45,6 +45,7 @@ def validate_raw_llm_output(data: dict) -> Command | None:
         return None
     if not isinstance(entities, dict):
         entities = {}
+    entities = {k: v for k, v in entities.items() if v is not None and v != ""}
     try:
         confidence = float(confidence)
     except (TypeError, ValueError):

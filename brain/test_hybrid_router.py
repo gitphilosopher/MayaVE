@@ -206,19 +206,19 @@ def test_confident_skips_llm(monkeypatch, tmp_path):
     assert d["intent"] == "get_time" and not called and LEGACY_KEYS <= d.keys()
 
 def test_ambiguous_goes_to_llm_and_validates(monkeypatch, tmp_path):
-    eng = _engine(monkeypatch, tmp_path, _cands(("media.mute", .85), ("media.volume_down", .84)),
+    eng = _engine(monkeypatch, tmp_path, _cands(("media.volume_up", .85), ("media.volume_down", .84)),
                   {"domain": "media", "operation": "volume_down", "entities": {}, "confidence": .9})
     d = asyncio.run(eng.aclassify("make it quieter"))
     assert d["intent"] == "volume_down" and d["_command"]["source"] == "llm_fallback"
 
 def test_hallucinated_llm_falls_to_legacy(monkeypatch, tmp_path):
-    eng = _engine(monkeypatch, tmp_path, _cands(("media.mute", .6), ("media.volume_down", .59)),
+    eng = _engine(monkeypatch, tmp_path, _cands(("media.volume_up", .6), ("media.volume_down", .59)),
                   {"domain": "system", "operation": "format_disk", "entities": {}, "confidence": 1})
     d = asyncio.run(eng.aclassify("do something"))
     assert d["intent"] == "general_query"
 
 def test_llm_down_falls_to_legacy(monkeypatch, tmp_path):
-    eng = _engine(monkeypatch, tmp_path, _cands(("media.mute", .6), ("media.volume_down", .59)), None)
+    eng = _engine(monkeypatch, tmp_path, _cands(("media.volume_up", .6), ("media.volume_down", .59)), None)
     assert asyncio.run(eng.aclassify("hmm"))["intent"] == "general_query"
 
 def test_legacy_backend_never_uses_hybrid(monkeypatch, tmp_path):
@@ -226,8 +226,8 @@ def test_legacy_backend_never_uses_hybrid(monkeypatch, tmp_path):
     assert asyncio.run(eng.aclassify("what time"))["model"] == "legacy"
 
 def test_domain_allowlist(monkeypatch, tmp_path):
-    eng = _engine(monkeypatch, tmp_path, _cands(("media.mute", .99), ("media.next", .1)), None, domains=["datetime"])
-    assert asyncio.run(eng.aclassify("mute"))["model"] == "legacy"
+    eng = _engine(monkeypatch, tmp_path, _cands(("media.volume_up", .99), ("media.next", .1)), None, domains=["datetime"])
+    assert asyncio.run(eng.aclassify("louder"))["model"] == "legacy"
 
 def test_shadow_never_dispatches_hybrid(monkeypatch, tmp_path):
     from config.settings import config

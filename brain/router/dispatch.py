@@ -1,5 +1,5 @@
 """
-brain/router/dispatch.py   (moved from brain/router.py — `git mv`)
+brain/router/dispatch.py   (moved from brain/router/dispatch.py — `git mv`)
 Intent-to-skill dispatch for Maya's turn pipeline.
 
 Resolves in-flight confirmations first (power, reminder duration, note

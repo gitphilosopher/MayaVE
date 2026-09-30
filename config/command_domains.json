@@ -62,7 +62,8 @@
           "entities": {
             "duration": {
               "type": "string",
-              "required": false
+              "required": true,
+              "prompt": "How long should I set it for"
             },
             "message": {
               "type": "string",
@@ -202,6 +203,7 @@
         },
         "delete": {
           "legacy_intent": "note_delete",
+          "requires_confirmation": true,
           "entities": {},
           "target_mode": "raw",
           "seeds": [
@@ -638,6 +640,7 @@
         },
         "shutdown": {
           "legacy_intent": "shutdown",
+          "requires_confirmation": true,
           "entities": {},
           "target_mode": "raw",
           "seeds": [
@@ -652,6 +655,7 @@
         },
         "restart": {
           "legacy_intent": "restart",
+          "requires_confirmation": true,
           "entities": {},
           "target_mode": "raw",
           "seeds": [

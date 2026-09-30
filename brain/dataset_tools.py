@@ -37,8 +37,7 @@ Four data flows this module owns:
      auto-trained on.
 
   4. Legacy-intent migration — relabels rows whose intent id has been
-     retired from datasets/intents.json (e.g. 'help'/'unknown' consolidated
-     into 'general_query'; 'note_create'/'note_append' into 'note_write';
+     retired from datasets/intents.json (e.g. 'note_create'/'note_append' into 'note_write';
      'note_read'/'note_list'/'note_open' into 'note_view'; 'open_app'/
      'open_website' into 'open_target'; 'set_reminder' into 'set_timer' —
      see _LEGACY_INTENT_MAP) onto their replacement, across every split
@@ -1240,9 +1239,6 @@ def cmd_failures_promote(args: argparse.Namespace) -> None:
 # Historical intent ids that have been consolidated into another intent and
 # removed from datasets/intents.json. Extend this map (never delete an old
 # entry) whenever an intent is retired — see docs/CHANGELOG.md. Currently:
-#   - 'help' and 'unknown' merged into 'general_query' (help lost its canned
-#     reply and now goes to the LLM like general_query always did; unknown
-#     was already routed to the LLM under a different name).
 #   - 'note_create' and 'note_append' merged into 'note_write' (the skill
 #     now decides create-vs-append from the wording and whether a note
 #     already exists, instead of the intent id telling them apart).

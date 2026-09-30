@@ -502,3 +502,28 @@ def test_requires_confirmation_propagates():
 def test_command_spec_requires_confirmation_default():
     spec = CommandSpec(domain="x", operation="y", legacy_intent="z", entities={}, target_mode="raw")
     assert spec.requires_confirmation is False
+
+def test_llm_command_missing_required_entity_clarifies_not_rejected():
+    async def llm_route(*a):
+        return {"domain": "timer", "operation": "create", "entities": {},
+                "confidence": 0.9, "needs_clarification": False}
+    ir = run(make_understander({}, llm_route=llm_route).understand("set a timer"))
+    assert ir.status is Status.NEEDS_CLARIFICATION and ir.missing_entities == ("duration",)
+
+def test_llm_hallucinated_domain_is_rejected():
+    async def bad(*a):
+        return {"domain": "rocket", "operation": "launch", "entities": {}, "confidence": 0.9}
+    assert run(make_understander({}, llm_route=bad).understand("launch the rocket")).status is Status.REJECTED
+
+def test_escalated_target_uses_selected_spec_intent():
+    seen = []
+    class L(FakeLegacy):
+        def _extract_target(self, text, intent):
+            seen.append(intent); return "spotify"
+    web = CommandSpec("app_or_web", "open", "open_target",
+                      {"target": {"required": True}}, "entity:target")
+    async def semantic(text):
+        return RetrievalResult([CommandCandidate(web, 0.95, "s"), CommandCandidate(TIMER_SPEC, 0.1, "s2")])
+    u = CommandUnderstander(L({}), FakeRegistry([web]), guard_fn=_guard_check, semantic=semantic)
+    ir = run(u.understand("could you pull up spotify"))
+    assert ir.status is Status.READY and ir.entities["target"] == "spotify" and "open_target" in seen

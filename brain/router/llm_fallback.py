@@ -23,6 +23,7 @@ import logging
 import httpx
 
 from config.settings import config
+from services.llm.ollama_lifecycle import chat_keep_alive
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "format": "json",
-        "keep_alive": getattr(config.llm, "keep_alive", "60m"),
+        "keep_alive": chat_keep_alive(),
         "options": {"temperature": 0.0, "num_predict": 200},
     }
     try:

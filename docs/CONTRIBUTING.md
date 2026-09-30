@@ -42,13 +42,13 @@ All project knowledge so far comes from **static inspection; nothing has been ru
 * Reminder text is kept and the timer alert is routed through the injected `Speaker` under `run_interruptible`.
 * `skills/utilities/reminder.py` has already been deleted (`set_reminder` routes to `timer.py` — see CHANGELOG's "Dead reminder skill and stray files removed"). If a similar orphaned module turns up elsewhere, decide delete-vs-keep explicitly rather than silently "fixing" it.
 * A skill's `own blocking dispatch` work (before it starts speaking) is still not interruptible — only LLM turns, timer alerts, and any call already inside `Speaker.speak()` are. Extending this further is a deliberate future scope decision, not an oversight.
-* `datasets/intents.json` is the single source of truth for intent ids, descriptions, keyword triggers, the dismissal exact-phrase list, and the `perform_action` action-word map — see `brain/intent_engine.py`'s module docstring. Do not reintroduce a hardcoded intent/keyword list in `brain/intent_engine.py` or `brain/router.py`.
+* `datasets/intents.json` is the single source of truth for intent ids, descriptions, keyword triggers, the dismissal exact-phrase list, and the `perform_action` action-word map — see `brain/intent_engine.py`'s module docstring. Do not reintroduce a hardcoded intent/keyword list in `brain/intent_engine.py` or `brain/router/dispatch.py`.
 
 ## Start Here
 
 **Understand first:** (1) `Processor.handle` → `Router.dispatch` → `llm_service.query` and its `synth_q`/`play_q` pipeline; (2) the `audio_done` handshake and single-queue serialization; (3) the state sequence `listening → processing → speaking → idle` and which function owns each transition; (4) tag → `BehaviorEngine.compose` → `expression-composer.js`; (5) frontend arbitration (`animation-controller`, `expression-controller`).
 
-**Inspect first:** `main.py`, `core/processor.py`, `core/speaker.py`, `services/llm/llm_service.py`, `services/llm/ollama_lifecycle.py`, `core/state.py`, `services/ws_server.py`, `brain/router.py`, `skills/system/power.py`, `skills/utilities/timer.py`, `brain/intent_engine.py` (`_predict`), `brain/conversation.py`, `core/behavior_engine.py`, `frontend/js/{websocket,avatar,expression-composer}.js`, `config/settings.py`.
+**Inspect first:** `main.py`, `core/processor.py`, `core/speaker.py`, `services/llm/llm_service.py`, `services/llm/ollama_lifecycle.py`, `core/state.py`, `services/ws_server.py`, `brain/router/dispatch.py`, `skills/system/power.py`, `skills/utilities/timer.py`, `brain/intent_engine.py` (`_predict`), `brain/conversation.py`, `core/behavior_engine.py`, `frontend/js/{websocket,avatar,expression-composer}.js`, `config/settings.py`.
 
 **Fragile areas:** Kokoro concurrency/timeouts/rebuild; the single `_current_task` in `state`; fidget/animation bone ownership; `expressions.json` dual writers; closed vocabularies duplicated across files; one-shot power confirmation vs. mic echo. `core/turn_lifecycle.rest()` must be used at every new turn-completion site instead of a raw `state.set(IDLE)` — see the "Sleep race" fix.
 

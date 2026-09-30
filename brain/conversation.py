@@ -163,12 +163,12 @@ _NOISE_INTENTS = frozenset({
 
 # Intents that represent Maya actually doing something concrete.
 _TASK_INTENTS = frozenset({
-    "open_app", "search_web", "open_website", "play_music", "pause_music",
-    "next_track", "prev_track", "volume_up", "volume_down", "mute",
-    "get_time", "get_date", "set_reminder", "get_weather",
+    "open_target", "search_web", "play_music", "pause_music",
+    "next_track", "prev_track", "volume_up", "volume_down",
+    "get_time", "get_date", "get_weather",
     "clipboard_read", "clipboard_write", "clipboard_clear",
     "set_timer", "cancel_timer", "timer_status",
-    "note_create", "note_append", "note_read", "note_list", "note_delete", "note_open",
+    "note_write", "note_view", "note_delete",
     "perform_action", "system_info", "screenshot",
 })
 _CASUAL_PHASE_INTENTS = frozenset({"smalltalk", "greet", "joke", "motivate", "identity"})

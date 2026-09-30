@@ -6,7 +6,7 @@ confidence -> LLM fallback -> validate -> adapt).
 Two entry points:
   classify(text) -> dict   [SYNC]  legacy drop-in; always returns the legacy
                                    engine's result (+ optional shadow compare).
-  aclassify(text) -> dict  [ASYNC] full hybrid pipeline.
+  aclassify(text) -> dict  [ASYNC] full hybrid pipeline + force_hybrid option.
 
 BATCH 2 FIX (semantic path vs required entities): a CONFIDENT semantic hit
 selects a command before any entity exists, but it was validated with
@@ -48,6 +48,7 @@ from brain.router.normalize import normalize
 from brain.router.registry import CommandRegistry, load_specs
 from brain.router.schemas import Command
 from brain.router.semantic_router import SemanticRouter
+from brain.router.understand import LLM_MIN_CONF
 from config.settings import config
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ class HybridIntentEngine:
             "response_mode": self._legacy._response_modes.get(intent, "llm"),
         }
 
-    def _with_extracted_entities(self, seed: Command, spec, text: str) -> Command:
+    def _with_extracted_entities(self, seed: Command, spec, text: str) -> tuple[Command, tuple]:
         """Extract entities for a semantically selected command. Reuses the
         classifier's target extraction (private, like guards.py's coupling) and
         the shared extractors; never raises."""
@@ -140,7 +141,7 @@ class HybridIntentEngine:
 
     # ── Async entry point (full hybrid pipeline) ────────────────────────
 
-    async def aclassify(self, text: str) -> dict:
+    async def aclassify(self, text: str, *, force_hybrid: bool = False) -> dict:
         t0 = time.perf_counter()
 
         guard_hit = guards.check(self._legacy, text)
@@ -150,7 +151,7 @@ class HybridIntentEngine:
             return self._legacy_shaped(intent, text, confidence, source)
 
         backend = getattr(config.router, "backend", "legacy")
-        if backend == "legacy":
+        if backend == "legacy" and not force_hybrid:
             return self._legacy.classify(text)
 
         normalized = normalize(text)
@@ -211,6 +212,10 @@ class HybridIntentEngine:
             logger.warning(f"[router] LLM output structurally invalid: {raw!r} — falling to legacy.")
             return self._legacy.classify(text)
 
+        if parsed.confidence < LLM_MIN_CONF:
+            logger.info(f"[router] source=legacy_fallback reason=llm_low_confidence conf={parsed.confidence:.2f}")
+            return self._legacy.classify(text)
+
         v = validate.validate(parsed, self._registry)
         if not v.ok:
             logger.info(
@@ -240,7 +245,7 @@ class HybridIntentEngine:
         affects what was dispatched. Best-effort."""
         try:
             t0 = time.perf_counter()
-            hybrid_result = await self.aclassify(text)
+            hybrid_result = await self.aclassify(text, force_hybrid=True)
             latency = time.perf_counter() - t0
             agree = hybrid_result.get("intent") == legacy_result.get("intent")
             logger.info(
