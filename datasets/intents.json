@@ -97,8 +97,7 @@
         "search for",
         "look up",
         "find information",
-        "find news",
-        "google search"
+        "find news"
       ],
       "response_mode": "skill"
     },

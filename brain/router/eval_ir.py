@@ -65,8 +65,10 @@ def _flag(n: int) -> dict:
     return {"n": n, "low_sample": n < _MIN_MEANINGFUL_N}
 
 def _model_digest(engine) -> dict:
-    """Short hashes of the loaded weights, so two eval runs can prove they scored the same model."""
+    """Hashes of the loaded weights/vocab/labels (never derived from the seed),
+    plus the seed and training fingerprint as diagnostic metadata."""
     import numpy as np
+    from brain.intent_engine import _SEED, _read_saved_hash
     out = {}
     pt = getattr(engine, "_pt_model", None)
     if pt is not None:
@@ -80,7 +82,15 @@ def _model_digest(engine) -> dict:
         for w in tf_m.get_weights():
             h.update(np.ascontiguousarray(w).tobytes())
         out["tensorflow"] = h.hexdigest()[:12]
+    vocab = getattr(getattr(engine, "_vocab", None), "_w2i", {})
+    out["vocab"] = hashlib.sha256(json.dumps(vocab, sort_keys=True).encode()).hexdigest()[:12]
     out["labels"] = hashlib.sha256(json.dumps(getattr(engine, "_labels", [])).encode()).hexdigest()[:12]
+    # One comparable value, built only from the artifacts above (seed excluded).
+    out["combined"] = hashlib.sha256(
+        "|".join(f"{k}={out[k]}" for k in ("pytorch", "tensorflow", "vocab", "labels") if k in out).encode()
+    ).hexdigest()[:12]
+    out["seed"] = _SEED
+    out["training_hash"] = (_read_saved_hash() or "")[:12]
     return out
 
 async def run_eval(make_understander, cases: list[dict], wired: dict | None = None, verbose=False) -> dict:
@@ -222,8 +232,8 @@ async def _main(path: Path, use_semantic: bool, use_llm: bool, verbose: bool = F
         wired={"semantic": use_semantic, "llm": use_llm},
         verbose=verbose,
     )
-    print(json.dumps(result, indent=2))
     result["model_digest"] = _model_digest(legacy)
+    print(json.dumps(result, indent=2))
     print(f"model_digest: {result['model_digest']}", file=sys.stderr)
     if result["cases"] < _MIN_MEANINGFUL_N:
         print(

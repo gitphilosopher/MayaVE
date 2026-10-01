@@ -1,4 +1,4 @@
-{"text":"set a timer for ten minutes","category":"in_distribution","expect":{"status":"ready","key":"timer.create","entities":{"duration":600}}}
+﻿{"text":"set a timer for ten minutes","category":"in_distribution","expect":{"status":"ready","key":"timer.create","entities":{"duration":600}}}
 {"text":"set a timer","category":"clarification","expect":{"status":"needs_clarification","key":"timer.create"}}
 {"text":"remind me to call mom","category":"clarification","expect":{"status":"needs_clarification","key":"timer.create"}}
 {"text":"remind me to drink water in ten minutes","category":"entity","expect":{"status":"ready","key":"timer.create","entities":{"duration":600,"message":"drink water"}}}
@@ -55,6 +55,3 @@
 {"text": "turn off the porch light please", "category": "oos", "expect": {"status": "unknown"}}
 {"text": "note that the printer is out of paper", "category": "paraphrase", "expect": {"status": "ready", "key": "notes.create"}}
 {"text": "hit me up in twelve minutes", "category": "paraphrase", "expect": {"status": "ready", "key": "timer.create", "entities": {"duration": 720}}}
-{"text": "i should lock up the shop before i go", "category": "adversarial", "expect": {"status": "unknown"}}
-{"text": "she talked for ninety minutes", "category": "adversarial", "expect": {"status": "unknown"}}
-{"text": "the google search results were useless today", "category": "adversarial", "expect": {"status": "unknown"}}

@@ -1364,3 +1364,120 @@
 {"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "unknown", "confidence": 0.6464, "correct_intent": null, "timestamp": 1790856919.373195}
 {"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4909, "correct_intent": null, "timestamp": 1790856919.549645}
 {"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790856921.2871716}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.4973, "correct_intent": null, "timestamp": 1790876358.7743435}
+{"utterance": "no 5 apples please", "predicted_intent": "cancel_timer", "confidence": 0.4977, "correct_intent": null, "timestamp": 1790876367.8577254}
+{"utterance": "the sky looks orange today", "predicted_intent": "unknown", "confidence": 0.4937, "correct_intent": null, "timestamp": 1790876370.1212041}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790876371.7591174}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.5204, "correct_intent": null, "timestamp": 1790876373.5458393}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5006, "correct_intent": null, "timestamp": 1790876373.704579}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5, "correct_intent": null, "timestamp": 1790876375.2704117}
+{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5, "correct_intent": null, "timestamp": 1790876377.49554}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5, "correct_intent": null, "timestamp": 1790876379.0237832}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.502, "correct_intent": null, "timestamp": 1790876380.7806153}
+{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5246, "correct_intent": null, "timestamp": 1790876380.9418385}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "farewell", "confidence": 0.4145, "correct_intent": null, "timestamp": 1790876381.1006057}
+{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "unknown", "confidence": 0.6464, "correct_intent": null, "timestamp": 1790876382.9959657}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4909, "correct_intent": null, "timestamp": 1790876383.2462678}
+{"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790876385.0795455}
+{"utterance": "i should lock up the shop before i go", "predicted_intent": "unknown", "confidence": 0.4881, "correct_intent": null, "timestamp": 1790876386.751485}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.5062, "correct_intent": null, "timestamp": 1790876591.3409948}
+{"utterance": "no 5 apples please", "predicted_intent": "note_delete", "confidence": 0.5016, "correct_intent": null, "timestamp": 1790876593.820066}
+{"utterance": "the sky looks orange today", "predicted_intent": "joke", "confidence": 0.4432, "correct_intent": null, "timestamp": 1790876595.9872215}
+{"utterance": "my alarm clock radio is way too loud in the morning", "predicted_intent": "smalltalk", "confidence": 0.5022, "correct_intent": null, "timestamp": 1790876597.6882913}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "smalltalk", "confidence": 0.5222, "correct_intent": null, "timestamp": 1790876599.451558}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5005, "correct_intent": null, "timestamp": 1790876600.0966635}
+{"utterance": "it is so quiet in here today", "predicted_intent": "shutdown", "confidence": 0.4825, "correct_intent": null, "timestamp": 1790876602.1193898}
+{"utterance": "I should lock up the house before I leave", "predicted_intent": "smalltalk", "confidence": 0.5, "correct_intent": null, "timestamp": 1790876603.6100407}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "prev_track", "confidence": 0.2766, "correct_intent": null, "timestamp": 1790876603.838241}
+{"utterance": "what's it like outside right now", "predicted_intent": "get_weather", "confidence": 0.5209, "correct_intent": null, "timestamp": 1790876605.5311017}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4402, "correct_intent": null, "timestamp": 1790876607.2827756}
+{"utterance": "i should lock up the shop before i go", "predicted_intent": "lock_screen", "confidence": 0.6302, "correct_intent": null, "timestamp": 1790876609.0504158}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.5171, "correct_intent": null, "timestamp": 1790876807.0066733}
+{"utterance": "the sky looks orange today", "predicted_intent": "smalltalk", "confidence": 0.4769, "correct_intent": null, "timestamp": 1790876810.0566347}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.5058, "correct_intent": null, "timestamp": 1790876811.7378018}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.6374, "correct_intent": null, "timestamp": 1790876811.8820593}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5045, "correct_intent": null, "timestamp": 1790876812.040061}
+{"utterance": "the youtube app crashed on my tv again", "predicted_intent": "unknown", "confidence": 0.5011, "correct_intent": null, "timestamp": 1790876812.199901}
+{"utterance": "stop the music for a second", "predicted_intent": "pause_music", "confidence": 0.5338, "correct_intent": null, "timestamp": 1790876812.690934}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5056, "correct_intent": null, "timestamp": 1790876815.3561287}
+{"utterance": "weather in tokyo", "predicted_intent": "get_weather", "confidence": 0.5545, "correct_intent": null, "timestamp": 1790876817.108958}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5427, "correct_intent": null, "timestamp": 1790876818.9967144}
+{"utterance": "wipe whatever I copied", "predicted_intent": "clipboard_clear", "confidence": 0.5487, "correct_intent": null, "timestamp": 1790876820.660988}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.5018, "correct_intent": null, "timestamp": 1790876821.9790883}
+{"utterance": "what's it like outside right now", "predicted_intent": "get_weather", "confidence": 0.4983, "correct_intent": null, "timestamp": 1790876822.4445617}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4855, "correct_intent": null, "timestamp": 1790876824.1937072}
+{"utterance": "i should lock up the shop before i go", "predicted_intent": "lock_screen", "confidence": 0.4815, "correct_intent": null, "timestamp": 1790876827.6831677}
+{"utterance": "the google search results were useless today", "predicted_intent": "search_web", "confidence": 0.5184, "correct_intent": null, "timestamp": 1790876831.198769}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.4973, "correct_intent": null, "timestamp": 1790877020.9905088}
+{"utterance": "no 5 apples please", "predicted_intent": "cancel_timer", "confidence": 0.4977, "correct_intent": null, "timestamp": 1790877023.325131}
+{"utterance": "the sky looks orange today", "predicted_intent": "unknown", "confidence": 0.4937, "correct_intent": null, "timestamp": 1790877025.873354}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790877027.5184584}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.5204, "correct_intent": null, "timestamp": 1790877029.214777}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5006, "correct_intent": null, "timestamp": 1790877029.3756702}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877031.3622334}
+{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877033.8981133}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877035.5263836}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.502, "correct_intent": null, "timestamp": 1790877037.3613222}
+{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5246, "correct_intent": null, "timestamp": 1790877037.5208406}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "farewell", "confidence": 0.4145, "correct_intent": null, "timestamp": 1790877037.6789367}
+{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "unknown", "confidence": 0.6464, "correct_intent": null, "timestamp": 1790877039.5977528}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4909, "correct_intent": null, "timestamp": 1790877039.7603922}
+{"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790877041.5299902}
+{"utterance": "i should lock up the shop before i go", "predicted_intent": "unknown", "confidence": 0.4881, "correct_intent": null, "timestamp": 1790877043.1187549}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.4973, "correct_intent": null, "timestamp": 1790877348.617781}
+{"utterance": "no 5 apples please", "predicted_intent": "cancel_timer", "confidence": 0.4977, "correct_intent": null, "timestamp": 1790877350.8783286}
+{"utterance": "the sky looks orange today", "predicted_intent": "unknown", "confidence": 0.4937, "correct_intent": null, "timestamp": 1790877353.1237037}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790877354.8130128}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.5204, "correct_intent": null, "timestamp": 1790877356.6687126}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5006, "correct_intent": null, "timestamp": 1790877356.8546321}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877358.9818227}
+{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877361.3986652}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877362.9412289}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.502, "correct_intent": null, "timestamp": 1790877364.7071588}
+{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5246, "correct_intent": null, "timestamp": 1790877364.8681412}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "farewell", "confidence": 0.4145, "correct_intent": null, "timestamp": 1790877365.0429962}
+{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "unknown", "confidence": 0.6464, "correct_intent": null, "timestamp": 1790877366.9815593}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4909, "correct_intent": null, "timestamp": 1790877367.177358}
+{"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790877368.8923683}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.5062, "correct_intent": null, "timestamp": 1790877567.696897}
+{"utterance": "no 5 apples please", "predicted_intent": "note_delete", "confidence": 0.5016, "correct_intent": null, "timestamp": 1790877570.2288058}
+{"utterance": "the sky looks orange today", "predicted_intent": "joke", "confidence": 0.4432, "correct_intent": null, "timestamp": 1790877572.5553374}
+{"utterance": "my alarm clock radio is way too loud in the morning", "predicted_intent": "smalltalk", "confidence": 0.5022, "correct_intent": null, "timestamp": 1790877574.2861485}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "smalltalk", "confidence": 0.5222, "correct_intent": null, "timestamp": 1790877576.1100616}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5005, "correct_intent": null, "timestamp": 1790877576.8257275}
+{"utterance": "it is so quiet in here today", "predicted_intent": "shutdown", "confidence": 0.4825, "correct_intent": null, "timestamp": 1790877578.6865635}
+{"utterance": "I should lock up the house before I leave", "predicted_intent": "smalltalk", "confidence": 0.5, "correct_intent": null, "timestamp": 1790877580.2741947}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "prev_track", "confidence": 0.2766, "correct_intent": null, "timestamp": 1790877580.4956741}
+{"utterance": "what's it like outside right now", "predicted_intent": "get_weather", "confidence": 0.5209, "correct_intent": null, "timestamp": 1790877582.3193867}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4402, "correct_intent": null, "timestamp": 1790877584.1895545}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.5171, "correct_intent": null, "timestamp": 1790877796.7235992}
+{"utterance": "the sky looks orange today", "predicted_intent": "smalltalk", "confidence": 0.4769, "correct_intent": null, "timestamp": 1790877799.762321}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.5058, "correct_intent": null, "timestamp": 1790877801.4947176}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.6374, "correct_intent": null, "timestamp": 1790877801.6613576}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5045, "correct_intent": null, "timestamp": 1790877801.8445823}
+{"utterance": "the youtube app crashed on my tv again", "predicted_intent": "unknown", "confidence": 0.5011, "correct_intent": null, "timestamp": 1790877802.0211527}
+{"utterance": "stop the music for a second", "predicted_intent": "pause_music", "confidence": 0.5338, "correct_intent": null, "timestamp": 1790877802.5405312}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5056, "correct_intent": null, "timestamp": 1790877805.318666}
+{"utterance": "weather in tokyo", "predicted_intent": "get_weather", "confidence": 0.5545, "correct_intent": null, "timestamp": 1790877807.1616125}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5427, "correct_intent": null, "timestamp": 1790877809.1378741}
+{"utterance": "wipe whatever I copied", "predicted_intent": "clipboard_clear", "confidence": 0.5487, "correct_intent": null, "timestamp": 1790877810.8367982}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.5018, "correct_intent": null, "timestamp": 1790877812.2273927}
+{"utterance": "what's it like outside right now", "predicted_intent": "get_weather", "confidence": 0.4983, "correct_intent": null, "timestamp": 1790877812.740087}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4855, "correct_intent": null, "timestamp": 1790877814.6029627}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.4973, "correct_intent": null, "timestamp": 1790878053.4914558}
+{"utterance": "no 5 apples please", "predicted_intent": "cancel_timer", "confidence": 0.4977, "correct_intent": null, "timestamp": 1790878056.419577}
+{"utterance": "the sky looks orange today", "predicted_intent": "unknown", "confidence": 0.4937, "correct_intent": null, "timestamp": 1790878059.083783}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790878060.9409344}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.5204, "correct_intent": null, "timestamp": 1790878062.992574}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5006, "correct_intent": null, "timestamp": 1790878063.23321}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5, "correct_intent": null, "timestamp": 1790878065.3342955}
+{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5, "correct_intent": null, "timestamp": 1790878067.9542942}
+{"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "note_write", "confidence": 0.5, "correct_intent": null, "timestamp": 1790878069.7746322}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.502, "correct_intent": null, "timestamp": 1790878071.8135178}
+{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5246, "correct_intent": null, "timestamp": 1790878072.0099003}
+{"utterance": "could you pull up spotify for me", "predicted_intent": "farewell", "confidence": 0.4145, "correct_intent": null, "timestamp": 1790878072.2036326}
+{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "unknown", "confidence": 0.6464, "correct_intent": null, "timestamp": 1790878074.364}
+{"utterance": "turn off the porch light please", "predicted_intent": "shutdown", "confidence": 0.4909, "correct_intent": null, "timestamp": 1790878074.5655365}
+{"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790878076.5425577}
+{"utterance": "some ambiguous phrase", "predicted_intent": "get_time", "confidence": 0.5, "correct_intent": null, "timestamp": 1790878744.2365787}
+{"utterance": "completely unrelated gibberish text", "predicted_intent": "unknown", "confidence": 0.4, "correct_intent": null, "timestamp": 1790878744.243539}

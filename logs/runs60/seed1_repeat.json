@@ -1,0 +1,123 @@
+﻿{
+  "cases": 60,
+  "wired": {
+    "semantic": true,
+    "llm": true
+  },
+  "routing_accuracy": {
+    "value": 0.8666666666666667,
+    "n": 60,
+    "low_sample": false
+  },
+  "wrong_execution_rate": {
+    "value": 0.0,
+    "n": 60,
+    "low_sample": false
+  },
+  "oos_false_execution_rate": {
+    "value": 0.05,
+    "n": 60,
+    "low_sample": false
+  },
+  "wrong_entity_execution_rate": {
+    "value": 0.0,
+    "n": 60,
+    "low_sample": false
+  },
+  "oos_precision": {
+    "value": 0.8571428571428571,
+    "n": 21,
+    "low_sample": true
+  },
+  "oos_recall": {
+    "value": 0.782608695652174,
+    "n": 23,
+    "low_sample": true
+  },
+  "clarification_recall": {
+    "value": 1.0,
+    "n": 6,
+    "low_sample": true
+  },
+  "false_clarification_rate": {
+    "value": 0.03333333333333333,
+    "n": 60,
+    "low_sample": false
+  },
+  "llm_fallback_rate": {
+    "value": 0.18333333333333332,
+    "source": "call_counters",
+    "n": 60,
+    "low_sample": false
+  },
+  "entity_accuracy": {
+    "value": 1.0,
+    "n": 16,
+    "low_sample": true
+  },
+  "status_breakdown": {
+    "ready": 31,
+    "needs_clarification": 8,
+    "unknown": 15,
+    "rejected": 6
+  },
+  "call_totals": {
+    "guard": 0,
+    "classifier": 60,
+    "semantic": 12,
+    "llm": 11,
+    "semantic_errors": 0,
+    "llm_errors": 0,
+    "internal_errors": 0
+  },
+  "latency_p50_s": 0.09518450000177836,
+  "latency_p95_s": 1.9573207999928854,
+  "by_category": {
+    "in_distribution": {
+      "accuracy": 1.0,
+      "n": 2
+    },
+    "clarification": {
+      "accuracy": 1.0,
+      "n": 5
+    },
+    "entity": {
+      "accuracy": 1.0,
+      "n": 9
+    },
+    "context": {
+      "accuracy": 1.0,
+      "n": 7
+    },
+    "oos": {
+      "accuracy": 1.0,
+      "n": 4
+    },
+    "adversarial": {
+      "accuracy": 0.6875,
+      "n": 16
+    },
+    "paraphrase": {
+      "accuracy": 0.8,
+      "n": 10
+    },
+    "ambiguous_valid": {
+      "accuracy": 1.0,
+      "n": 4
+    },
+    "llm": {
+      "accuracy": 0.6666666666666666,
+      "n": 3
+    }
+  },
+  "llm_overreach_on_oos": 4,
+  "model_digest": {
+    "pytorch": "a734512ae79a",
+    "tensorflow": "70ab822c871c",
+    "vocab": "37885a7e1554",
+    "labels": "2e744823b86f",
+    "combined": "07aea1afdd41",
+    "seed": 1,
+    "training_hash": "5cc7cbdf8148"
+  }
+}
