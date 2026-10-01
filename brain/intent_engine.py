@@ -892,7 +892,7 @@ class IntentEngine:
             if trigger in text:
                 trigger_hit = True
                 after = text.split(trigger, 1)[-1].strip()
-                after = re.sub(r"^(for|to|the|a|an|me)\s+", "", after)
+                after = re.sub(r"^(?:for|to|the|a|an|me)(?:\s+|$)", "", after)
                 if after:
                     return after
         return "" if trigger_hit else text

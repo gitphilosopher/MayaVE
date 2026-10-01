@@ -1,0 +1,6 @@
+{"text": "my commute is forty minutes each way", "category": "adversarial", "expect": {"status": "unknown"}}
+{"text": "that clock in the lobby is gorgeous", "category": "adversarial", "expect": {"status": "unknown"}}
+{"text": "i googled my own name last night", "category": "adversarial", "expect": {"status": "unknown"}}
+{"text": "turn off the porch light please", "category": "oos", "expect": {"status": "unknown"}}
+{"text": "note that the printer is out of paper", "category": "paraphrase", "expect": {"status": "ready", "key": "notes.create"}}
+{"text": "hit me up in twelve minutes", "category": "paraphrase", "expect": {"status": "ready", "key": "timer.create", "entities": {"duration": 720}}}

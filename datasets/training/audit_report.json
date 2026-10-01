@@ -1,0 +1,1536 @@
+{
+  "total": 918,
+  "accepted": 764,
+  "flagged": 154,
+  "rejected": 0,
+  "per_intent": {
+    "get_time": {
+      "total": 31,
+      "accepted": 28,
+      "flagged": 3,
+      "rejected": 0
+    },
+    "get_date": {
+      "total": 23,
+      "accepted": 16,
+      "flagged": 7,
+      "rejected": 0
+    },
+    "search_web": {
+      "total": 23,
+      "accepted": 2,
+      "flagged": 21,
+      "rejected": 0
+    },
+    "play_music": {
+      "total": 26,
+      "accepted": 24,
+      "flagged": 2,
+      "rejected": 0
+    },
+    "pause_music": {
+      "total": 29,
+      "accepted": 29,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "next_track": {
+      "total": 31,
+      "accepted": 15,
+      "flagged": 16,
+      "rejected": 0
+    },
+    "prev_track": {
+      "total": 39,
+      "accepted": 33,
+      "flagged": 6,
+      "rejected": 0
+    },
+    "volume_up": {
+      "total": 17,
+      "accepted": 12,
+      "flagged": 5,
+      "rejected": 0
+    },
+    "volume_down": {
+      "total": 19,
+      "accepted": 4,
+      "flagged": 15,
+      "rejected": 0
+    },
+    "mute": {
+      "total": 24,
+      "accepted": 17,
+      "flagged": 7,
+      "rejected": 0
+    },
+    "screenshot": {
+      "total": 28,
+      "accepted": 28,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "shutdown": {
+      "total": 38,
+      "accepted": 36,
+      "flagged": 2,
+      "rejected": 0
+    },
+    "restart": {
+      "total": 25,
+      "accepted": 23,
+      "flagged": 2,
+      "rejected": 0
+    },
+    "lock_screen": {
+      "total": 29,
+      "accepted": 29,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "get_weather": {
+      "total": 11,
+      "accepted": 11,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "clipboard_read": {
+      "total": 15,
+      "accepted": 13,
+      "flagged": 2,
+      "rejected": 0
+    },
+    "clipboard_write": {
+      "total": 32,
+      "accepted": 27,
+      "flagged": 5,
+      "rejected": 0
+    },
+    "clipboard_clear": {
+      "total": 24,
+      "accepted": 24,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "cancel_timer": {
+      "total": 30,
+      "accepted": 11,
+      "flagged": 19,
+      "rejected": 0
+    },
+    "timer_status": {
+      "total": 22,
+      "accepted": 20,
+      "flagged": 2,
+      "rejected": 0
+    },
+    "note_write": {
+      "total": 20,
+      "accepted": 16,
+      "flagged": 4,
+      "rejected": 0
+    },
+    "note_view": {
+      "total": 28,
+      "accepted": 27,
+      "flagged": 1,
+      "rejected": 0
+    },
+    "note_delete": {
+      "total": 25,
+      "accepted": 25,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "perform_action": {
+      "total": 31,
+      "accepted": 31,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "greet": {
+      "total": 13,
+      "accepted": 13,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "farewell": {
+      "total": 29,
+      "accepted": 28,
+      "flagged": 1,
+      "rejected": 0
+    },
+    "thanks": {
+      "total": 18,
+      "accepted": 18,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "help": {
+      "total": 55,
+      "accepted": 42,
+      "flagged": 13,
+      "rejected": 0
+    },
+    "identity": {
+      "total": 21,
+      "accepted": 21,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "joke": {
+      "total": 26,
+      "accepted": 26,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "motivate": {
+      "total": 22,
+      "accepted": 22,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "followup": {
+      "total": 9,
+      "accepted": 9,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "dismissal": {
+      "total": 16,
+      "accepted": 15,
+      "flagged": 1,
+      "rejected": 0
+    },
+    "confirm": {
+      "total": 12,
+      "accepted": 12,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "unknown": {
+      "total": 77,
+      "accepted": 57,
+      "flagged": 20,
+      "rejected": 0
+    }
+  },
+  "reasons": {
+    "keyword_gap": 78,
+    "keyword_overlap": 10,
+    "near_duplicate": 29,
+    "skill_pair_ambiguous": 86,
+    "keyword_boundary_conflict": 3,
+    "overly_generic": 12,
+    "contradictory": 4,
+    "vocab_confusable": 2,
+    "help_missing_request": 9,
+    "unknown_looks_classifiable": 18
+  },
+  "confusion_pairs": [
+    {
+      "claimed": "search_web",
+      "suspected": "general_query",
+      "count": 23
+    },
+    {
+      "claimed": "cancel_timer",
+      "suspected": "set_timer",
+      "count": 18
+    },
+    {
+      "claimed": "next_track",
+      "suspected": "open_target",
+      "count": 16
+    },
+    {
+      "claimed": "volume_down",
+      "suspected": "mute",
+      "count": 15
+    },
+    {
+      "claimed": "mute",
+      "suspected": "volume_down",
+      "count": 8
+    },
+    {
+      "claimed": "get_date",
+      "suspected": "get_time",
+      "count": 5
+    },
+    {
+      "claimed": "volume_up",
+      "suspected": "play_music",
+      "count": 5
+    },
+    {
+      "claimed": "play_music",
+      "suspected": "volume_up",
+      "count": 2
+    },
+    {
+      "claimed": "restart",
+      "suspected": "shutdown",
+      "count": 2
+    },
+    {
+      "claimed": "help",
+      "suspected": "general_query",
+      "count": 2
+    },
+    {
+      "claimed": "unknown",
+      "suspected": "general_query",
+      "count": 2
+    },
+    {
+      "claimed": "get_time",
+      "suspected": "general_query",
+      "count": 1
+    },
+    {
+      "claimed": "get_date",
+      "suspected": "general_query",
+      "count": 1
+    },
+    {
+      "claimed": "search_web",
+      "suspected": "get_time",
+      "count": 1
+    },
+    {
+      "claimed": "volume_down",
+      "suspected": "volume_up",
+      "count": 1
+    },
+    {
+      "claimed": "timer_status",
+      "suspected": "get_time",
+      "count": 1
+    },
+    {
+      "claimed": "dismissal",
+      "suspected": "mute",
+      "count": 1
+    },
+    {
+      "claimed": "unknown",
+      "suspected": "timer_status",
+      "count": 1
+    },
+    {
+      "claimed": "unknown",
+      "suspected": "system_info",
+      "count": 1
+    },
+    {
+      "claimed": "unknown",
+      "suspected": "get_time",
+      "count": 1
+    }
+  ],
+  "template_clusters": [],
+  "diversity_warnings": [
+    {
+      "intent": "get_time",
+      "count": 31,
+      "unique_unigram_ratio": 0.183,
+      "unique_first_word_ratio": 0.194
+    },
+    {
+      "intent": "get_date",
+      "count": 23,
+      "unique_unigram_ratio": 0.287,
+      "unique_first_word_ratio": 0.261
+    },
+    {
+      "intent": "pause_music",
+      "count": 29,
+      "unique_unigram_ratio": 0.298,
+      "unique_first_word_ratio": 0.172
+    },
+    {
+      "intent": "next_track",
+      "count": 31,
+      "unique_unigram_ratio": 0.237,
+      "unique_first_word_ratio": 0.226
+    },
+    {
+      "intent": "prev_track",
+      "count": 39,
+      "unique_unigram_ratio": 0.124,
+      "unique_first_word_ratio": 0.205
+    },
+    {
+      "intent": "volume_up",
+      "count": 17,
+      "unique_unigram_ratio": 0.305,
+      "unique_first_word_ratio": 0.294
+    },
+    {
+      "intent": "volume_down",
+      "count": 19,
+      "unique_unigram_ratio": 0.278,
+      "unique_first_word_ratio": 0.368
+    },
+    {
+      "intent": "screenshot",
+      "count": 28,
+      "unique_unigram_ratio": 0.299,
+      "unique_first_word_ratio": 0.286
+    },
+    {
+      "intent": "shutdown",
+      "count": 38,
+      "unique_unigram_ratio": 0.225,
+      "unique_first_word_ratio": 0.211
+    },
+    {
+      "intent": "lock_screen",
+      "count": 29,
+      "unique_unigram_ratio": 0.311,
+      "unique_first_word_ratio": 0.172
+    },
+    {
+      "intent": "clipboard_write",
+      "count": 32,
+      "unique_unigram_ratio": 0.2,
+      "unique_first_word_ratio": 0.188
+    },
+    {
+      "intent": "clipboard_clear",
+      "count": 24,
+      "unique_unigram_ratio": 0.304,
+      "unique_first_word_ratio": 0.292
+    },
+    {
+      "intent": "cancel_timer",
+      "count": 30,
+      "unique_unigram_ratio": 0.256,
+      "unique_first_word_ratio": 0.367
+    },
+    {
+      "intent": "timer_status",
+      "count": 22,
+      "unique_unigram_ratio": 0.328,
+      "unique_first_word_ratio": 0.409
+    },
+    {
+      "intent": "note_view",
+      "count": 28,
+      "unique_unigram_ratio": 0.199,
+      "unique_first_word_ratio": 0.286
+    },
+    {
+      "intent": "perform_action",
+      "count": 31,
+      "unique_unigram_ratio": 0.314,
+      "unique_first_word_ratio": 0.387
+    },
+    {
+      "intent": "help",
+      "count": 55,
+      "unique_unigram_ratio": 0.229,
+      "unique_first_word_ratio": 0.182
+    }
+  ],
+  "review_queue": [
+    {
+      "text": "can you tell me the current time",
+      "intent": "get_time",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "give me the current time now",
+      "intent": "get_time",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can you give me the time now",
+      "intent": "get_time",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "what's today",
+      "intent": "get_date",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "tell me my birthday",
+      "intent": "get_date",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "what is the current date",
+      "intent": "get_date",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "what's today's date",
+      "intent": "get_date",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "what's the current time",
+      "intent": "get_date",
+      "issues": [
+        "keyword_boundary_conflict"
+      ]
+    },
+    {
+      "text": "current date and time now",
+      "intent": "get_date",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "tell me my date of birth",
+      "intent": "get_date",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google this song",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "search for what i just saw on the news",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "what's the best way to search for jobs",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "look up what time the store closes",
+      "intent": "search_web",
+      "issues": [
+        "keyword_overlap",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google the lyrics to this song",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "search the web for the best pizza in town",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "how do i search for apartments online",
+      "intent": "search_web",
+      "issues": [
+        "keyword_overlap",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google the best restaurants in paris",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you search for the history of the world cup",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "search for the best apps for kids",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google the meaning of this word",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "look up the weather forecast for this weekend",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "search the web for the best deals on laptops",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "what's the best way to search for a new job",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "search google for the best skincare products",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you look up the reviews for this movie",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google the best ways to save money on groceries",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "how do i search for a song on youtube",
+      "intent": "search_web",
+      "issues": [
+        "keyword_overlap",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "search the web for the best coffee shops in the city",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "google the best ways to improve my english",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "look up the best books to read this summer",
+      "intent": "search_web",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it up loud",
+      "intent": "play_music",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it up",
+      "intent": "play_music",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next one up",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can i get the next one",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "move on please",
+      "intent": "next_track",
+      "issues": [
+        "overly_generic",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next one coming",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next up",
+      "intent": "next_track",
+      "issues": [
+        "overly_generic",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "let's skip ahead",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next one",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "skip this and move on",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "go to next song",
+      "intent": "next_track",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "next up now",
+      "intent": "next_track",
+      "issues": [
+        "overly_generic",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next one's coming",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "skip to next track",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "next one's up",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can we skip to next",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "skip the next one",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "play next one",
+      "intent": "next_track",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can i switch",
+      "intent": "prev_track",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "i want to go back to the last song again",
+      "intent": "prev_track",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "switch to the previous one",
+      "intent": "prev_track",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "take me back to the previous track",
+      "intent": "prev_track",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can you switch to the previous track",
+      "intent": "prev_track",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can i go back to the previous one",
+      "intent": "prev_track",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "crank it up",
+      "intent": "volume_up",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "turn the volume up a little",
+      "intent": "volume_up",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it up louder",
+      "intent": "volume_up",
+      "issues": [
+        "skill_pair_ambiguous",
+        "contradictory"
+      ]
+    },
+    {
+      "text": "can you turn it up",
+      "intent": "volume_up",
+      "issues": [
+        "overly_generic",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it up a bit more",
+      "intent": "volume_up",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "volume's getting too loud can you turn it down a bit",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down the sound",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you make the music quieter",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn the volume down a notch",
+      "intent": "volume_down",
+      "issues": [
+        "vocab_confusable",
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down the audio",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it down a little bit",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "volume's too loud can we turn it down",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you turn the volume down already",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down the volume a click",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "volume's getting too loud can you turn it down",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "make the tv quieter",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down the volume some more",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you turn down the sound now",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it down a bit more",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you make the volume quieter",
+      "intent": "volume_down",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down the sound",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous",
+        "contradictory"
+      ]
+    },
+    {
+      "text": "make it quiet in here",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn down",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "keep it quiet please",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "turn it down low",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "quiet the room",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you turn it down",
+      "intent": "mute",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you just shut it down",
+      "intent": "shutdown",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can you just power off now",
+      "intent": "shutdown",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "i wanna shut down and restart",
+      "intent": "restart",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "can i just shut down and restart",
+      "intent": "restart",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "read me the clipboard",
+      "intent": "clipboard_read",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "what is on the clipboard right now",
+      "intent": "clipboard_read",
+      "issues": [
+        "overly_generic",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "get this on clipboard please",
+      "intent": "clipboard_write",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "save it on clipboard for later",
+      "intent": "clipboard_write",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "get it saved to clipboard",
+      "intent": "clipboard_write",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "what do i need to do to save to clipboard",
+      "intent": "clipboard_write",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "get this saved on clipboard please",
+      "intent": "clipboard_write",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "here is the timer off please",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "hey assistant cancel timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "i want to stop that timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "stop the timer please",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "timer off",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "can you stop the timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "i want to cancel timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "cancel the timer for me",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "cancel timer now",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "hey stop the timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "i need to stop the timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "cancel timer for me",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "stop the timer now",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "hey cancel that timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "stop timer for me",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "cancel my timer now",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous",
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "get rid of the timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "cancel that timer",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "timer off now",
+      "intent": "cancel_timer",
+      "issues": [
+        "skill_pair_ambiguous"
+      ]
+    },
+    {
+      "text": "whats the current timer time",
+      "intent": "timer_status",
+      "issues": [
+        "vocab_confusable"
+      ]
+    },
+    {
+      "text": "whats going on with the timer now",
+      "intent": "timer_status",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "just write it down for me",
+      "intent": "note_write",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "note this for me",
+      "intent": "note_write",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "jot that down",
+      "intent": "note_write",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "write this down",
+      "intent": "note_write",
+      "issues": [
+        "overly_generic"
+      ]
+    },
+    {
+      "text": "read my last note",
+      "intent": "note_view",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "see u later then",
+      "intent": "farewell",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "i need a hand",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "can you lend a hand",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "you know i can ask",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "can you guide me",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "i need some guidance",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "whats it like to use you",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "how do i get you to help me",
+      "intent": "help",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "can you do stuff for me",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "how do i make you help me",
+      "intent": "help",
+      "issues": [
+        "keyword_overlap"
+      ]
+    },
+    {
+      "text": "whats the point of you",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "what kind of help can you give",
+      "intent": "help",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "can you give me a hand",
+      "intent": "help",
+      "issues": [
+        "help_missing_request"
+      ]
+    },
+    {
+      "text": "can you assist with something",
+      "intent": "help",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "shut it down",
+      "intent": "dismissal",
+      "issues": [
+        "contradictory"
+      ]
+    },
+    {
+      "text": "i need help with this thing",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "what's going on with the weather now",
+      "intent": "unknown",
+      "issues": [
+        "contradictory"
+      ]
+    },
+    {
+      "text": "how do i get the wifi to work on my new laptop",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "what time is the game tonight",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "how do i pronounce that french word",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "can you help me with my taxes",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "why is my phone battery dying so fast",
+      "intent": "unknown",
+      "issues": [
+        "keyword_boundary_conflict",
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "what are the symptoms of a cold",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "how do i get my cat to stop meowing at 3am",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "why is my internet connection so slow today",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "how do i know if my cat is happy",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "im trying to remember what day it is",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "i need help with my taxes",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "can you tell me what time the sun sets",
+      "intent": "unknown",
+      "issues": [
+        "keyword_boundary_conflict",
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "there's a weird noise coming from the basement",
+      "intent": "unknown",
+      "issues": [
+        "near_duplicate"
+      ]
+    },
+    {
+      "text": "what are some good books to read",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "which one is better",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "how does that thing work",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "whats the difference between those two",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    },
+    {
+      "text": "how do you use this thing",
+      "intent": "unknown",
+      "issues": [
+        "unknown_looks_classifiable"
+      ]
+    }
+  ]
+}

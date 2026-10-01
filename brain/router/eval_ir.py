@@ -65,6 +65,7 @@ def _flag(n: int) -> dict:
 
 
 async def run_eval(make_understander, cases: list[dict], wired: dict | None = None, verbose=False) -> dict:
+    overreach = 0
     n = correct = 0
     wrong_exec = oos_false_exec = wrong_entity_exec = 0
     oos_tp = oos_fp = oos_fn = 0
@@ -88,7 +89,11 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         exp = c["expect"]
         want_status, want_key = exp["status"], exp.get("key")
 
-        ok = ir.status.value == want_status and (want_key is None or ir.key == want_key)
+        # REJECTED routes exactly like UNKNOWN (see ir.to_legacy_intent / dispatch).
+        rejected_oos = want_status == "unknown" and ir.status.value == "rejected"
+        overreach += rejected_oos
+        got_status = "unknown" if rejected_oos else ir.status.value
+        ok = got_status == want_status and (want_key is None or ir.key == want_key)
         n += 1; correct += ok
         by_cat[c.get("category", "?")][0] += ok; by_cat[c.get("category", "?")][1] += 1
         status_breakdown[ir.status.value] += 1
@@ -166,6 +171,7 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         "latency_p50_s": statistics.median(lat) if lat else None,
         "latency_p95_s": lat[min(n - 1, int(.95 * n))] if lat else None,
         "by_category": {k: {"accuracy": v[0] / v[1], "n": v[1]} for k, v in by_cat.items()},
+        "llm_overreach_on_oos": overreach,
     }
 
 

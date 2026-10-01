@@ -1,0 +1,60 @@
+{"text": "i have about ten minutes before my next call", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my commute takes about twenty minutes every morning", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the movie was two hours long", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "it took me thirty minutes to cook dinner tonight", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i only slept for five hours last night", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the meeting ran forty five minutes over today", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "we waited fifteen minutes for a table", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my flight is delayed by two hours", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the bus is ten minutes late again", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i spent an hour on the phone with support", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "that workout was only twenty minutes but it felt endless", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the download will take about five minutes apparently", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my laptop only lasts about six hours unplugged now", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the presentation was thirty minutes long", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "she talked for ninety minutes without stopping", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the soup has been simmering for twenty minutes already", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the clock in the hallway is five minutes slow", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my wall clock stopped working again", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the clock on my microwave is always wrong", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "that old grandfather clock chimes every hour", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the kitchen clock is ten minutes ahead on purpose", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my watch is two minutes fast", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the clock tower in town square is beautiful", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i love the ticking sound of that clock", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my browser search history is a total mess", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the google search results were useless today", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i googled that symptom last night and regretted it", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the google search bar vanished from my homepage", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "searching for a good apartment is exhausting", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i spent all morning searching for my keys", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "my search engine keeps showing me ads", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "google maps led me the wrong way yesterday", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the search feature in this app is really slow", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i got lost in a google rabbit hole again", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "her search for a new job is going well", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i cleared my search history yesterday", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "turn on the lights in the living room", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "set the oven to three fifty degrees", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "close all of my browser tabs", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "call my mom on the phone", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "send a text message to my brother", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "order me a pizza for dinner", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "book a table for two tonight", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "turn the heating up a few degrees", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "note that the project deadline moved to friday", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "note that i need to renew my passport", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "note that the wifi password is on the fridge", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "note down that we are out of coffee", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "make a note that the landlord called today", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "jot a memo that the invoice is due monday", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "write a quick memo about tomorrow's agenda", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "record a short memo that the keys are in the drawer", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "write down that the parking code changed", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "erase the text i copied a minute ago", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "throw away what is on my clipboard", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "dump the stuff i copied earlier", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "tell me when ten minutes have passed", "intent": "set_timer", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "buzz me in fifteen minutes", "intent": "set_timer", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "shout when twenty minutes are up", "intent": "set_timer", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "nudge me in thirty five minutes", "intent": "set_timer", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}

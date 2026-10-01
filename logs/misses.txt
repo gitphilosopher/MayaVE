@@ -1,0 +1,44 @@
+﻿MISS [context] 'I have 5 minutes to kill before my meeting'
+   want=unknown/None got=ready/timer.create src=pytorch+tensorflow reason=''
+   classifier: set_timer 0.96 margin=0.929 via pytorch+tensorflow
+   semantic: timer.create 0.7069 / notes.create 0.6261 margin=0.0808
+MISS [adversarial] 'can you set my alarm clock radio to jazz'
+   want=unknown/None got=ready/datetime.time src=keyword_fallback reason=''
+   classifier: get_time 1.0 margin=None via keyword_fallback
+   semantic: media.play 0.6609 / datetime.time 0.5964 margin=0.0644
+MISS [adversarial] 'the clock on the stove is ten minutes fast'
+   want=unknown/None got=ready/timer.create src=pytorch+tensorflow reason=''
+   classifier: set_timer 0.895 margin=0.814 via pytorch+tensorflow
+   semantic: timer.create 0.7229 / timer.status 0.6426 margin=0.0804
+MISS [adversarial] 'I set a timer for my kids once and they loved it'
+   want=unknown/None got=needs_clarification/timer.create src=keyword_fallback reason='missing_required_entity'
+   classifier: set_timer 1.0 margin=None via keyword_fallback
+   semantic: timer.create 0.7659 / timer.status 0.6968 margin=0.0691
+MISS [adversarial] 'my google search history is embarrassing'
+   want=unknown/None got=ready/web.search src=pytorch+tensorflow reason=''
+   classifier: search_web 1.0 margin=1.0 via pytorch+tensorflow
+   semantic: app_or_web.open 0.6676 / web.search 0.569 margin=0.0986
+MISS [ambiguous_valid] 'note that I need to buy eggs'
+   want=ready/notes.create got=unknown/None src=llm reason='llm_low_confidence'
+   classifier: note_write 0.734 margin=0.596 via pytorch+tensorflow
+   semantic: notes.create 0.6315 / weather.current 0.523 margin=0.1085
+MISS [llm] 'hey could you jot a quick memo that the dentist is at three'
+   want=ready/notes.create got=rejected/None src=llm reason="unexpected entity 'dentist' for notes.create"
+   classifier: smalltalk 0.457 margin=0.244 via low_confidence_trusted
+   semantic: timer.create 0.6235 / notes.create 0.5661 margin=0.0574
+MISS [llm] 'wipe whatever I copied'
+   want=ready/clipboard.clear got=rejected/None src=llm reason='unknown domain/operation: app_or_web.clear'
+   classifier: clipboard_clear 0.51 margin=0.132 via low_confidence_trusted
+   semantic: clipboard.read 0.7352 / clipboard.clear 0.6969 margin=0.0383
+MISS [paraphrase] 'could you pull up spotify for me'
+   want=ready/app_or_web.open got=unknown/None src=low_confidence_trusted reason='conversational'
+   classifier: followup 0.611 margin=0.397 via low_confidence_trusted
+   semantic: app_or_web.open 0.735 / media.play 0.6688 margin=0.0663
+MISS [paraphrase] 'make it a bit louder'
+   want=ready/media.volume_up got=unknown/None src=llm reason='llm_low_confidence'
+   classifier: volume_up 0.757 margin=0.532 via pytorch+tensorflow
+   semantic: media.volume_up 0.9505 / media.volume_down 0.8749 margin=0.0756
+MISS [paraphrase] "what's it like outside right now"
+   want=ready/weather.current got=unknown/None src=llm reason='llm_low_confidence'
+   classifier: get_weather 0.577 margin=0.154 via low_confidence_trusted
+   semantic: weather.current 0.752 / datetime.time 0.6506 margin=0.1014

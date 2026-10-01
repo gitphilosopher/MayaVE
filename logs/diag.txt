@@ -1,0 +1,121 @@
+﻿=== PART 1: IR misses (current model) ===
+OVERREACH [context] 'no 5 apples please'
+   want=unknown/None got=rejected/None src=llm reason="unexpected entity 'app' for app_or_web.open"
+   classifier: dismissal 0.495 margin=0.013 via low_confidence_trusted
+   semantic: web.search 0.4519 / timer.create 0.4299 margin=0.022
+OVERREACH [oos] 'the sky looks orange today'
+   want=unknown/None got=rejected/None src=llm reason="unexpected entity 'sky' for weather.current"
+   classifier: shutdown 0.433 margin=0.266 via low_confidence_trusted
+   semantic: weather.current 0.649 / datetime.date 0.5972 margin=0.0517
+MISS [adversarial] 'can you set my alarm clock radio to jazz'
+   want=unknown/None got=ready/datetime.time src=keyword_fallback reason=''
+   classifier: get_time 1.0 margin=None via keyword_fallback
+   semantic: media.play 0.6609 / datetime.time 0.5964 margin=0.0644
+MISS [adversarial] 'my alarm clock radio is way too loud in the morning'
+   want=unknown/None got=ready/datetime.time src=keyword_fallback reason=''
+   classifier: get_time 1.0 margin=None via keyword_fallback
+   semantic: media.volume_up 0.6281 / media.volume_down 0.5967 margin=0.0314
+OVERREACH [adversarial] 'I set a timer for my kids once and they loved it'
+   want=unknown/None got=rejected/None src=llm reason="unexpected entity 'timer' for timer.create"
+   classifier: set_timer 0.731 margin=0.462 via pytorch+tensorflow
+   semantic: timer.create 0.7659 / timer.status 0.6969 margin=0.0691
+OVERREACH [oos] 'turn the radio to a country station'
+   want=unknown/None got=rejected/None src=llm reason="unexpected entity 'station' for media.play"
+   classifier: unknown 0.427 margin=0.123 via low_confidence_trusted
+   semantic: media.play 0.6919 / media.volume_up 0.596 margin=0.0959
+MISS [adversarial] 'my google search history is embarrassing'
+   want=unknown/None got=ready/web.search src=pytorch+tensorflow reason=''
+   classifier: search_web 0.937 margin=0.877 via pytorch+tensorflow
+   semantic: app_or_web.open 0.6676 / web.search 0.569 margin=0.0986
+MISS [llm] 'hey could you jot a quick memo that the dentist is at three'
+   want=ready/notes.create got=rejected/None src=llm reason="unexpected entity 'dentist' for notes.create"
+   classifier: greet 0.5 margin=0.182 via low_confidence_trusted
+   semantic: timer.create 0.6235 / notes.create 0.6037 margin=0.0198
+MISS [paraphrase] 'could you pull up spotify for me'
+   want=ready/app_or_web.open got=rejected/None src=llm reason="unexpected entity 'name' for media.play"
+   classifier: smalltalk 0.365 margin=0.021 via low_confidence_trusted
+   semantic: app_or_web.open 0.7351 / media.play 0.6688 margin=0.0663
+MISS [paraphrase] 'make it a bit louder'
+   want=ready/media.volume_up got=unknown/None src=llm reason='llm_low_confidence'
+   classifier: volume_up 0.539 margin=0.331 via low_confidence_trusted
+   semantic: media.volume_up 0.9505 / media.volume_down 0.8749 margin=0.0755
+MISS [paraphrase] "what's it like outside right now"
+   want=ready/weather.current got=unknown/None src=llm reason='llm_low_confidence'
+   classifier: get_weather 0.5 margin=0.002 via low_confidence_trusted
+   semantic: weather.current 0.752 / datetime.time 0.6505 margin=0.1015
+MISS [adversarial] 'that clock in the lobby is gorgeous'
+   want=unknown/None got=ready/datetime.time src=keyword_fallback reason=''
+   classifier: get_time 1.0 margin=None via keyword_fallback
+   semantic: datetime.time 0.6294 / timer.status 0.5504 margin=0.079
+OVERREACH [oos] 'turn off the porch light please'
+   want=unknown/None got=rejected/None src=llm reason="unexpected entity 'light' for system.shutdown"
+   classifier: shutdown 0.532 margin=0.249 via low_confidence_trusted
+   semantic: system.shutdown 0.5894 / timer.cancel 0.5801 margin=0.0093
+--- 49/57 pass ---
+
+=== PART 2: classifier misses on val/test (new rows + moved intents) ===
+val      get_weather -> get_time (0.454 via low_confidence_trusted) | natural | what's the humidity like right now
+val      smalltalk -> opinion (0.961 via pytorch+tensorflow) | natural | you seem excited
+val      smalltalk -> opinion (0.675 via pytorch+tensorflow) | natural | makes sense
+val      smalltalk -> opinion (0.999 via pytorch+tensorflow) | natural | r u sad
+val      smalltalk -> opinion (0.984 via pytorch+tensorflow) | natural | are you excited today
+val      smalltalk -> opinion (0.277 via low_confidence_trusted) | natural | kinda tired ngl
+val      smalltalk -> greet (0.692 via pytorch+tensorflow) | natural | all good
+val      unknown -> farewell (1.0 via keyword_fallback) | natural | I think it might snow later
+val      unknown -> followup (0.256 via low_confidence_trusted) | natural | my neighbor is renovating again
+val      unknown -> motivate (0.576 via low_confidence_trusted) | natural | I just remembered I have a dentist appointment
+val      unknown -> smalltalk (1.0 via pytorch+tensorflow) | natural | the bus was ten minutes late
+val      clipboard_read -> unknown (0.452 via low_confidence_trusted) | synthetic | What did I copy and paste
+val      dismissal -> smalltalk (0.588 via low_confidence_trusted) | synthetic | don't need to know about it
+val      search_web -> unknown (0.493 via low_confidence_trusted) | synthetic | find out what's the best vpn for streaming
+val      smalltalk -> greet (0.96 via pytorch+tensorflow) | synthetic | hey you good
+val      smalltalk -> unknown (0.702 via pytorch+tensorflow) | synthetic | i'm trying to decide what to eat for dinner
+val      smalltalk -> motivate (0.338 via low_confidence_trusted) | synthetic | I'm not really sure what I want to eat
+val      smalltalk -> greet (0.825 via pytorch+tensorflow) | synthetic | what's poppin
+val      smalltalk -> general_query (0.501 via low_confidence_trusted) | synthetic | what's the haps
+val      thanks -> smalltalk (0.757 via pytorch+tensorflow) | synthetic | i'm really grateful
+val      clipboard_read -> smalltalk (0.59 via low_confidence_trusted) | synthetic | i copied something but forgot what it was
+val      joke -> set_timer (0.443 via low_confidence_trusted) | synthetic | something to put a smile on my face
+val      unknown -> play_music (0.5 via low_confidence_trusted) | synthetic | i love this song can you play it
+val      unknown -> opinion (1.0 via pytorch+tensorflow) | synthetic | what do you think of trump
+val      unknown -> smalltalk (0.568 via low_confidence_trusted) | synthetic | there's a huge pile of paperwork i need to sort through
+val      unknown -> smalltalk (0.875 via pytorch+tensorflow) | synthetic | i just remembered i have to pick up milk
+val      unknown -> smalltalk (0.51 via low_confidence_trusted) | synthetic | what's the thing on the wall called
+val  NEW general_query -> get_time (1.0 via keyword_fallback) | hard_negative | who invented the alarm clock
+val  NEW smalltalk -> lock_screen (0.575 via low_confidence_trusted) | hard_negative | i should lock up the shop before i go
+val  NEW smalltalk -> get_weather (0.488 via low_confidence_trusted) | hard_negative | the weather app on my laptop was awful
+val  NEW unknown -> play_music (0.48 via low_confidence_trusted) | hard_negative | change the time on the microwave
+val  NEW note_write -> set_timer (0.579 via low_confidence_trusted) | positive_control | record a short memo that the keys are in the drawer
+val  NEW smalltalk -> search_web (0.999 via pytorch+tensorflow) | hard_negative | the google search results were useless today
+val  NEW smalltalk -> set_timer (0.998 via pytorch+tensorflow) | hard_negative | she talked for ninety minutes without stopping
+val  NEW unknown -> volume_up (0.405 via low_confidence_trusted) | hard_negative | turn the heating up a few degrees
+test     set_timer -> cancel_timer (0.588 via low_confidence_trusted) | natural | one hour timer
+test     unknown -> opinion (0.918 via pytorch+tensorflow) | natural | which is more powerful
+test     smalltalk -> opinion (0.691 via pytorch+tensorflow) | natural | you good
+test     smalltalk -> followup (0.468 via low_confidence_trusted) | natural | just vibing over here
+test     smalltalk -> opinion (0.964 via pytorch+tensorflow) | natural | r u bored
+test     smalltalk -> opinion (1.0 via pytorch+tensorflow) | natural | are you bored today
+test     smalltalk -> dismissal (0.564 via low_confidence_trusted) | natural | not gonna lie
+test     help -> smalltalk (0.501 via low_confidence_trusted) | natural | my chair keeps squeaking
+test     followup -> smalltalk (0.494 via low_confidence_trusted) | synthetic | You said what now
+test     set_timer -> unknown (0.268 via low_confidence_trusted) | synthetic | count down from one hour
+test     smalltalk -> opinion (0.953 via pytorch+tensorflow) | synthetic | are you done with work
+test     smalltalk -> opinion (0.951 via pytorch+tensorflow) | synthetic | are you around now
+test     smalltalk -> motivate (0.516 via low_confidence_trusted) | synthetic | i'm not really feeling well today
+test     volume_down -> smalltalk (0.437 via low_confidence_trusted) | synthetic | down a notch would be great
+test     farewell -> smalltalk (0.61 via low_confidence_trusted) | synthetic | it was nice chatting
+test     get_time -> general_query (1.0 via keyword_fallback) | synthetic | tell me the time in this city
+test     search_web -> general_query (0.445 via low_confidence_trusted) | synthetic | what's the latest news on the corona vaccine
+test     unknown -> smalltalk (0.995 via pytorch+tensorflow) | synthetic | im trying to remember what i was doing yesterday
+test     unknown -> smalltalk (0.5 via low_confidence_trusted) | synthetic | i dont know how to use snapchat
+test     unknown -> smalltalk (0.427 via low_confidence_trusted) | synthetic | what's the thingy called
+test     unknown -> confirm (0.309 via low_confidence_trusted) | synthetic | i cant remember my password
+test     unknown -> smalltalk (0.99 via pytorch+tensorflow) | synthetic | oh no i forgot to buy milk
+test     unknown -> followup (0.499 via low_confidence_trusted) | synthetic | i need to return this book but i lost the receipt
+test NEW smalltalk -> get_time (0.516 via low_confidence_trusted) | hard_negative | what a time to be here
+test NEW unknown -> shutdown (0.475 via low_confidence_trusted) | hard_negative | change the channel to the news
+test NEW clipboard_clear -> set_timer (0.408 via low_confidence_trusted) | positive_control | erase the text i copied a minute ago
+test NEW smalltalk -> set_timer (0.873 via pytorch+tensorflow) | hard_negative | the meeting ran forty five minutes over today
+test NEW smalltalk -> get_time (1.0 via keyword_fallback) | hard_negative | the clock tower in town square is beautiful
+test NEW smalltalk -> get_time (1.0 via keyword_fallback) | hard_negative | the clock on my microwave is always wrong
+test NEW unknown -> system_info (0.348 via low_confidence_trusted) | hard_negative | close all of my browser tabs

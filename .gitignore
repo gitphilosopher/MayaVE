@@ -11,12 +11,12 @@ tests/
 temp.py
 edge-automation-profile
 # test_*.py
-review_candidates.py
-datasets/training/candidates_rejected.jsonl
-datasets/training/audit_report.json
+# review_candidates.py
+# datasets/training/candidates_rejected.jsonl
+# datasets/training/audit_report.json
 
 # Runtime logs
-logs/
+# logs/
 *.log
 
 # Local/model files

@@ -308,3 +308,15 @@
 {"text": "i need to return this book but i lost the receipt", "intent": "unknown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "can you turn the volume down already", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "can you turn the volume way up", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "the weather was so nice yesterday", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "my old phone was terrible", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "what a time to be here", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "change the channel to the news", "intent": "unknown", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "set the air conditioner to twenty two degrees", "intent": "unknown", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "erase the text i copied a minute ago", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "note down that we are out of coffee", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "shout when twenty minutes are up", "intent": "set_timer", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "the meeting ran forty five minutes over today", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the clock tower in town square is beautiful", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "the clock on my microwave is always wrong", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "close all of my browser tabs", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}

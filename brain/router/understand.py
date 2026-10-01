@@ -58,7 +58,7 @@ class CommandUnderstander:
         self.ctx = ctx or ConversationContext()
         self._resolver = ContextResolver()
         self.stats = {"guard": 0, "classifier": 0, "semantic": 0, "llm": 0,
-                      "semantic_errors": 0, "llm_errors": 0, "internal_errors": 0}
+                      "semantic_errors": 0, "llm_errors": 0, "internal_errors": 0, "semantic_empty": 0}
 
     # ── public ────────────────────────────────────────────────────────────
     async def understand(self, text: str) -> CommandIR:
@@ -167,6 +167,8 @@ class CommandUnderstander:
             try:
                 r = await self._semantic(normalize(text))   # embeddings get normalized text
                 self.stats["semantic"] += 1
+                if not getattr(r, "candidates", None):
+                    self.stats["semantic_empty"] += 1   # embedder down / corpus empty
             except Exception as e:
                 self.stats["semantic_errors"] += 1
                 logger.warning(f"Semantic retrieval failed (non-fatal, falling through): {e}")

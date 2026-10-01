@@ -306,3 +306,15 @@
 {"text": "what's the thing on the wall called", "intent": "unknown", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "volume's getting too loud can you turn it down", "intent": "volume_down", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
 {"text": "make it higher", "intent": "volume_up", "source": "generated:llama3.1", "verified": true, "variant": "synthetic"}
+{"text": "who invented the alarm clock", "intent": "general_query", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "the radio played jazz all morning", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i should lock up the shop before i go", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "the weather app on my laptop was awful", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "turn on the radio in the kitchen", "intent": "unknown", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "change the time on the microwave", "intent": "unknown", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "record a short memo that the keys are in the drawer", "intent": "note_write", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "positive_control"}
+{"text": "the google search results were useless today", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "it took me thirty minutes to cook dinner tonight", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "she talked for ninety minutes without stopping", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "that workout was only twenty minutes but it felt endless", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "turn the heating up a few degrees", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}

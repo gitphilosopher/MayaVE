@@ -18,6 +18,7 @@ All notable changes to MayaVE are documented here.
 - **Barge-in history** — interrupted LLM turns now record only the phrases whose playback started (`_spoken_phrases`) while finished turns record the full reply (`_reply_finished`).
 - **Error strings and tags in history** — `query()` error replies set `intent["_no_history"]` (spoken, not stored) and `Processor` stores and broadcasts tag-stripped text for both skill and LLM replies.
 - **Log volume** — `main.py` writes `logs/maya.log` through a `RotatingFileHandler` (5 MB × 3 backups) and sets the `httpx`/`httpcore`/`websockets`/`urllib3`/`tensorflow` loggers to WARNING to drop per-request noise.
+- **Intent hard negatives and router eval coverage** — 55 hand-written hard negatives (`unknown` 19, `smalltalk` 30, `general_query` 6) targeting `set_timer`/`lock_screen`/`get_weather` lexical traps (alarm clock radio, clock/time statements, lock/app/weather mentions) promoted via `dataset_tools candidates promote`; `datasets/router_eval/cases.jsonl` expanded from 20 to 50 cases covering OOS/adversarial, paraphrase, ambiguous-valid, context, clarification, entity and LLM-fallback categories.
 
 ### Architecture
 - **Listening state broadcast** — `main.on_speech` broadcasts `state:listening` only when Maya is not PROCESSING/SPEAKING, empty STT resets to IDLE with baseline behavior, and the FSM no longer overwrites an in-flight turn, giving the sequence `listening → processing → speaking → idle`.
@@ -87,6 +88,7 @@ All notable changes to MayaVE are documented here.
 
 
 ### Issues
+- **Short-input keyword path bypasses the classifier** — [Limitation] Inputs of three tokens or fewer take `keyword_short_input`, so "alarm clock" resolves to `get_time` via the bare `clock` keyword regardless of training data.
 - **Hybrid router not wired into Processor** — [Limitation] path is opt-in and its thresholds are unmeasured.
 - **Skill dispatch phase still not interruptible** — [Limitation] A skill's own blocking work *before* it starts speaking (`weather.py`'s HTTP call, `system_info.py`'s 1s CPU sample) has no registered task yet, so `can_interrupt()` is False for that window; only once it reaches its own `Speaker.speak()` call does a barge-in (or a concurrent "go to sleep") actually stop it.
 - **Stray reply after a mid-dispatch sleep command** — [Potential] If "go to sleep" lands while a skill is still in that uninterruptible dispatch phase, she'll still speak that skill's reply once dispatch finishes (ending back at SLEEPING correctly via `Speaker.speak()`'s fresh sleep check, but only after speaking one more line she probably shouldn't have).
