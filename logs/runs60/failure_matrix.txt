@@ -1,0 +1,148 @@
+=== Run identity ===
+seed1          combined=07aea1afdd41 seed=1 training_hash=5cc7cbdf8148
+seed2          combined=48808af0cad8 seed=2 training_hash=ad42d9792747
+seed3          combined=eec50b8e06b2 seed=3 training_hash=588de728aec4
+seed1_repeat   combined=07aea1afdd41 seed=1 training_hash=5cc7cbdf8148
+
+seed1 vs seed1_repeat: same model=True, differing case outcomes=0
+
+=== seed1: 8 failure(s) of 60 ===
+X [adversarial] "I set a timer for my kids once and they loved it"
+     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
+X [adversarial] "my google search history is embarrassing"
+     want=unknown/None  got=ready/web.search  src=pytorch+tensorflow  reason=''
+X [llm] "hey could you jot a quick memo that the dentist is at three"
+     want=ready/notes.create  got=rejected/None  src=llm  reason="unexpected entity 'dentist' for notes.create"
+X [adversarial] "I should lock up the house before I leave"
+     want=unknown/None  got=ready/system.lock  src=pytorch+tensorflow  reason=''
+X [paraphrase] "could you pull up spotify for me"
+     want=ready/app_or_web.open  got=rejected/None  src=llm  reason="unexpected entity 'name' for media.play"
+X [paraphrase] "hit me up in twelve minutes"
+     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
+X [adversarial] "she talked for ninety minutes"
+     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
+X [adversarial] "the google search results were useless today"
+     want=unknown/None  got=ready/web.search  src=pytorch+tensorflow  reason=''
+  -- 4 overreach (scored pass, but REJECTED instead of UNKNOWN):
+~ [context] "no 5 apples please"  reason="unexpected entity 'app' for app_or_web.open"
+~ [oos] "the sky looks orange today"  reason="unexpected entity 'sky' for weather.current"
+~ [adversarial] "can you set my alarm clock radio to jazz"  reason="unexpected entity 'music' for media.play"
+~ [oos] "turn off the porch light please"  reason="unexpected entity 'light' for system.shutdown"
+
+=== seed2: 5 failure(s) of 60 ===
+X [adversarial] "I set a timer for my kids once and they loved it"
+     want=unknown/None  got=needs_clarification/timer.create  src=keyword_fallback  reason='missing_required_entity'
+X [llm] "hey could you jot a quick memo that the dentist is at three"
+     want=ready/notes.create  got=rejected/None  src=llm  reason="unexpected entity 'dentist' for notes.create"
+X [paraphrase] "could you pull up spotify for me"
+     want=ready/app_or_web.open  got=rejected/None  src=llm  reason="unexpected entity 'name' for media.play"
+X [paraphrase] "what's it like outside right now"
+     want=ready/weather.current  got=unknown/None  src=llm  reason='llm_low_confidence'
+X [adversarial] "she talked for ninety minutes"
+     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
+  -- 4 overreach (scored pass, but REJECTED instead of UNKNOWN):
+~ [context] "no 5 apples please"  reason="unexpected entity 'app' for app_or_web.open"
+~ [oos] "the sky looks orange today"  reason="unexpected entity 'sky' for weather.current"
+~ [oos] "turn off the porch light please"  reason="unexpected entity 'light' for system.shutdown"
+~ [adversarial] "the google search results were useless today"  reason="unexpected entity 'search' for web.search"
+
+=== seed3: 8 failure(s) of 60 ===
+X [adversarial] "I set a timer for my kids once and they loved it"
+     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
+X [ambiguous_valid] "timer for a quarter of an hour"
+     want=needs_clarification/timer.create  got=rejected/None  src=llm  reason="unexpected entity 'time' for timer.create"
+X [entity] "weather in tokyo"
+     want=ready/weather.current  got=rejected/None  src=llm  reason="unexpected entity 'city' for weather.current"
+X [llm] "hey could you jot a quick memo that the dentist is at three"
+     want=ready/notes.create  got=rejected/None  src=llm  reason="unexpected entity 'dentist' for notes.create"
+X [llm] "wipe whatever I copied"
+     want=ready/clipboard.clear  got=rejected/None  src=llm  reason='unknown domain/operation: app_or_web.clear'
+X [paraphrase] "could you pull up spotify for me"
+     want=ready/app_or_web.open  got=unknown/None  src=pytorch+tensorflow  reason='conversational'
+X [paraphrase] "what's it like outside right now"
+     want=ready/weather.current  got=unknown/None  src=llm  reason='llm_low_confidence'
+X [paraphrase] "hit me up in twelve minutes"
+     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
+  -- 4 overreach (scored pass, but REJECTED instead of UNKNOWN):
+~ [oos] "the sky looks orange today"  reason="unexpected entity 'sky' for weather.current"
+~ [oos] "turn off the porch light please"  reason="unexpected entity 'light' for system.shutdown"
+~ [adversarial] "she talked for ninety minutes"  reason='unknown domain/operation: datetime.status'
+~ [adversarial] "the google search results were useless today"  reason="unexpected entity 'search' for web.search"
+
+=== Cross-seed matrix (rows with at least one X or ~) ===
+case                                                           seed1        seed2        seed3        seed1_repeat fails
+no 5 apples please                                             ~            ~            OK           ~            0/3
+the sky looks orange today                                     ~            ~            ~            ~            0/3
+can you set my alarm clock radio to jazz                       ~            OK           OK           ~            0/3
+I set a timer for my kids once and they loved it               X            X            X            X            3/3
+my google search history is embarrassing                       X            OK           OK           X            1/3
+timer for a quarter of an hour                                 OK           OK           X            OK           1/3
+weather in tokyo                                               OK           OK           X            OK           1/3
+hey could you jot a quick memo that the dentist is at three    X            X            X            X            3/3
+wipe whatever I copied                                         OK           OK           X            OK           1/3
+I should lock up the house before I leave                      X            OK           OK           X            1/3
+could you pull up spotify for me                               X            X            X            X            3/3
+what's it like outside right now                               OK           X            X            OK           2/3
+turn off the porch light please                                ~            ~            ~            ~            0/3
+hit me up in twelve minutes                                    X            OK           X            X            2/3
+she talked for ninety minutes                                  X            X            ~            X            2/3
+the google search results were useless today                   X            ~            ~            X            1/3
+
+=== Failure frequency across seed1/seed2/seed3 ===
+
+3/3  consistent: likely a real routing/data problem  (3)
+   [adversarial] "I set a timer for my kids once and they loved it"  expected unknown/None
+        seed1: got needs_clarification/timer.create via pytorch+tensorflow
+        seed2: got needs_clarification/timer.create via keyword_fallback
+        seed3: got needs_clarification/timer.create via pytorch+tensorflow
+   [llm] "hey could you jot a quick memo that the dentist is at three"  expected ready/notes.create
+        seed1: got rejected/None via llm
+        seed2: got rejected/None via llm
+        seed3: got rejected/None via llm
+   [paraphrase] "could you pull up spotify for me"  expected ready/app_or_web.open
+        seed1: got rejected/None via llm
+        seed2: got rejected/None via llm
+        seed3: got unknown/None via pytorch+tensorflow
+
+2/3  seed-sensitive boundary  (3)
+   [paraphrase] "what's it like outside right now"  expected ready/weather.current
+        seed2: got unknown/None via llm
+        seed3: got unknown/None via llm
+   [paraphrase] "hit me up in twelve minutes"  expected ready/timer.create
+        seed1: got unknown/None via llm
+        seed3: got unknown/None via llm
+   [adversarial] "she talked for ninety minutes"  expected unknown/None
+        seed1: got needs_clarification/timer.create via pytorch+tensorflow
+        seed2: got needs_clarification/timer.create via pytorch+tensorflow
+
+1/3  likely training variance  (6)
+   [adversarial] "my google search history is embarrassing"  expected unknown/None
+        seed1: got ready/web.search via pytorch+tensorflow
+   [ambiguous_valid] "timer for a quarter of an hour"  expected needs_clarification/timer.create
+        seed3: got rejected/None via llm
+   [entity] "weather in tokyo"  expected ready/weather.current
+        seed3: got rejected/None via llm
+   [llm] "wipe whatever I copied"  expected ready/clipboard.clear
+        seed3: got rejected/None via llm
+   [adversarial] "I should lock up the house before I leave"  expected unknown/None
+        seed1: got ready/system.lock via pytorch+tensorflow
+   [adversarial] "the google search results were useless today"  expected unknown/None
+        seed1: got ready/web.search via pytorch+tensorflow
+
+=== Failures by category (summed over the 3 seeds) ===
+adversarial          8/48  failing case-runs
+paraphrase           7/30  failing case-runs
+llm                  4/9   failing case-runs
+entity               1/27  failing case-runs
+ambiguous_valid      1/12  failing case-runs
+in_distribution      0/6   failing case-runs
+clarification        0/15  failing case-runs
+context              0/21  failing case-runs
+oos                  0/12  failing case-runs
+
+=== Failure modes (all seeds) ===
+  7  missed command (-> rejected)
+  5  expected unknown, got needs_clarification
+  5  missed command (-> unknown)
+  3  false execution (OOS -> ready)
+  1  expected needs_clarification, got rejected

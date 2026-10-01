@@ -106,6 +106,7 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
     have_real_stats = False
     llm_source_hits = 0
     ent_total = ent_ok = 0
+    per_case = []
 
     for c in cases:
         u = make_understander()                      # fresh context per case
@@ -123,6 +124,13 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         overreach += rejected_oos
         got_status = "unknown" if rejected_oos else ir.status.value
         ok = got_status == want_status and (want_key is None or ir.key == want_key)
+        per_case.append({
+            "text": c["text"], "category": c.get("category", "?"),
+            "want_status": want_status, "want_key": want_key,
+            "got_status": ir.status.value, "got_key": ir.key,
+            "source": ir.source, "reason": ir.reason,
+            "ok": bool(ok), "overreach": bool(rejected_oos),
+        })
         n += 1; correct += ok
         by_cat[c.get("category", "?")][0] += ok; by_cat[c.get("category", "?")][1] += 1
         status_breakdown[ir.status.value] += 1
@@ -201,6 +209,7 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         "latency_p95_s": lat[min(n - 1, int(.95 * n))] if lat else None,
         "by_category": {k: {"accuracy": v[0] / v[1], "n": v[1]} for k, v in by_cat.items()},
         "llm_overreach_on_oos": overreach,
+        "per_case": per_case,   
     }
 
 
