@@ -110,6 +110,7 @@ _EPOCHS       = 40
 _BATCH        = 16
 _LR           = 1e-3
 _CONF_THRESH  = 0.65      # at/above this, the ensemble's own label is final
+_SEED = int(os.environ.get("MAYA_SEED", "1337"))      # fixed training seed; also part of the dataset fingerprint
 
 # Below _CONF_THRESH the ensemble's label is no longer "final" on its own,
 # but it is still evidence. _LOW_CONF_FLOOR is the point below which that
@@ -297,7 +298,8 @@ def load_dataset(path: Path, valid_intent_ids: set[str]) -> list[dict]:
 
 def _dataset_fingerprint(train_rows: list[dict], intents_cfg: dict) -> str:
     payload = json.dumps(
-        {"intents": intents_cfg, "train": [(r["text"], r["intent"]) for r in train_rows]},
+        {"intents": intents_cfg, "seed": _SEED,
+         "train": [(r["text"], r["intent"]) for r in train_rows]},
         sort_keys=True, ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -407,12 +409,17 @@ def _build_pytorch_model(vocab_size: int, n_classes: int):
     return BiLSTMIntent()
 
 
-def _train_pytorch(X: list[list[int]], y: list[int],
-                   vocab_size: int, n_classes: int,
-                   save_path: Path) -> object:
+def _train_pytorch(X, y, vocab_size, n_classes, save_path):
+    import random
     import torch
     import torch.nn as nn
     from torch.utils.data import DataLoader, TensorDataset
+
+    random.seed(_SEED)
+    np.random.seed(_SEED)
+    torch.manual_seed(_SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(_SEED)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model  = _build_pytorch_model(vocab_size, n_classes).to(device)
@@ -421,7 +428,8 @@ def _train_pytorch(X: list[list[int]], y: list[int],
 
     Xt = torch.tensor(X, dtype=torch.long)
     yt = torch.tensor(y, dtype=torch.long)
-    loader = DataLoader(TensorDataset(Xt, yt), batch_size=_BATCH, shuffle=True)
+    loader = DataLoader(TensorDataset(Xt, yt), batch_size=_BATCH, shuffle=True,
+                        generator=torch.Generator().manual_seed(_SEED))
 
     model.train()
     for epoch in range(_EPOCHS):
@@ -475,14 +483,12 @@ def _build_tf_model(vocab_size: int, n_classes: int):
     return model
 
 
-def _train_tf(X: list[list[int]], y: list[int],
-              vocab_size: int, n_classes: int,
-              save_path: Path) -> object:
+def _train_tf(X, y, vocab_size, n_classes, save_path):
     import numpy as np_local
+    import tensorflow as tf
+    tf.keras.utils.set_random_seed(_SEED)   # seeds python, numpy and TF; must precede model build
     model = _build_tf_model(vocab_size, n_classes)
-    Xa = np_local.array(X)
-    ya = np_local.array(y)
-    model.fit(Xa, ya, epochs=_EPOCHS, batch_size=_BATCH, verbose=0)
+    model.fit(np_local.array(X), np_local.array(y), epochs=_EPOCHS, batch_size=_BATCH, verbose=0)
     model.save(str(save_path))
     logger.info(f"TensorFlow model saved → {save_path}")
     return model

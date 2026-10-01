@@ -44,6 +44,7 @@ from core.state import state, MayaState
 from core.turn_lifecycle import rest as turn_rest
 from brain.intent_engine import IntentEngine
 from brain.conversation import ConversationManager, context_manager
+from brain.router.dispatch import Router
 from brain.router.ir import to_legacy_intent
 from config.settings import config
 from services.llm.llm_service import ALREADY_SPOKEN
@@ -57,7 +58,9 @@ class Processor:
     """Handle one queued command from transcription through response and cleanup."""
 
     def __init__(self, speaker: Speaker):
-        self.speaker = speaker
+        self._speaker       = speaker
+        self._conversation  = ConversationManager()
+        self._router        = Router(speaker)   # also injects the speaker into timer.py
         self._intent_engine = IntentEngine()
         self._understander  = self._build_understander(self._intent_engine)
         logger.info("Routing: %s", "hybrid CommandUnderstander" if self._understander else "legacy IntentEngine")
@@ -72,6 +75,7 @@ class Processor:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._intent_engine.classify, text)
 
+    @staticmethod
     def _build_understander(engine):
         """CommandUnderstander when config.router.backend == "hybrid", else None (legacy path)."""
         if config.router.backend != "hybrid":

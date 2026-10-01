@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import statistics
 import sys
@@ -63,6 +64,24 @@ def _entities_match(got: dict, want: dict) -> bool:
 def _flag(n: int) -> dict:
     return {"n": n, "low_sample": n < _MIN_MEANINGFUL_N}
 
+def _model_digest(engine) -> dict:
+    """Short hashes of the loaded weights, so two eval runs can prove they scored the same model."""
+    import numpy as np
+    out = {}
+    pt = getattr(engine, "_pt_model", None)
+    if pt is not None:
+        h = hashlib.sha256()
+        for k, v in sorted(pt.state_dict().items()):
+            h.update(k.encode()); h.update(v.detach().cpu().numpy().tobytes())
+        out["pytorch"] = h.hexdigest()[:12]
+    tf_m = getattr(engine, "_tf_model", None)
+    if tf_m is not None:
+        h = hashlib.sha256()
+        for w in tf_m.get_weights():
+            h.update(np.ascontiguousarray(w).tobytes())
+        out["tensorflow"] = h.hexdigest()[:12]
+    out["labels"] = hashlib.sha256(json.dumps(getattr(engine, "_labels", [])).encode()).hexdigest()[:12]
+    return out
 
 async def run_eval(make_understander, cases: list[dict], wired: dict | None = None, verbose=False) -> dict:
     overreach = 0
@@ -204,6 +223,8 @@ async def _main(path: Path, use_semantic: bool, use_llm: bool, verbose: bool = F
         verbose=verbose,
     )
     print(json.dumps(result, indent=2))
+    result["model_digest"] = _model_digest(legacy)
+    print(f"model_digest: {result['model_digest']}", file=sys.stderr)
     if result["cases"] < _MIN_MEANINGFUL_N:
         print(
             f"\nWARNING: only {result['cases']} case(s) evaluated — below the "

@@ -139,6 +139,7 @@ State sequence per command: `listening → processing → speaking → idle` (sk
 - **Classification:** PyTorch BiLSTM and TensorFlow CNN predictions are combined, with deterministic guards and keyword rules for short inputs and low-confidence results.
 - **Retraining:** a fingerprint of intent configuration and training data triggers retraining when those inputs change.
 - **Routing data:** classification returns an intent and target. Missing skill targets remain empty so the skill can ask for clarification; response modes select skill routing or the LLM.
+- **Reproducible training:** both models train from a fixed seed (`_SEED`), which is part of the retrain fingerprint.
 
 ---
 

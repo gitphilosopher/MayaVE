@@ -54,7 +54,7 @@
         "what time",
         "current time",
         "time please",
-        "clock"
+        "tell me the time"
       ],
       "response_mode": "skill"
     },
@@ -427,7 +427,8 @@
         "exit",
         "quit",
         "sleep",
-        "later"
+        "talk to you later",
+        "catch you later"
       ],
       "response_mode": "skill"
     },

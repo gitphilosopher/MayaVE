@@ -1,0 +1,311 @@
+﻿
+TRAIN: 2393 examples across 41 intents
+    smalltalk            186
+    general_query        132
+    opinion              91
+    set_timer            88
+    get_weather          81
+    note_write           80
+    open_target          78
+    search_web           77
+    note_view            76
+    unknown              75
+    identity             64
+    system_info          61
+    followup             59
+    dismissal            57
+    perform_action       54
+    clipboard_clear      51
+    motivate             50
+    get_date             49
+    farewell             48
+    get_time             48
+    greet                48
+    play_music           48
+    thanks               48
+    clipboard_read       47
+    clipboard_write      47
+    joke                 45
+    lock_screen          45
+    note_delete          45
+    restart              45
+    shutdown             45
+    pause_music          44
+    timer_status         44
+    help                 43
+    prev_track           42
+    cancel_timer         41
+    confirm              40
+    mute                 36
+    screenshot           36
+    volume_up            35
+    volume_down          33
+    next_track           31
+
+VALIDATION: 320 examples across 41 intents
+    smalltalk            29
+    general_query        18
+    unknown              14
+    set_timer            12
+    note_view            11
+    note_write           11
+    get_weather          10
+    open_target          10
+    search_web           9
+    followup             8
+    identity             8
+    system_info          8
+    clipboard_clear      7
+    clipboard_write      7
+    farewell             7
+    get_date             7
+    perform_action       7
+    timer_status         7
+    cancel_timer         6
+    clipboard_read       6
+    dismissal            6
+    get_time             6
+    greet                6
+    help                 6
+    lock_screen          6
+    motivate             6
+    mute                 6
+    opinion              6
+    pause_music          6
+    play_music           6
+    prev_track           6
+    screenshot           6
+    shutdown             6
+    thanks               6
+    joke                 5
+    next_track           5
+    note_delete          5
+    restart              5
+    volume_down          5
+    volume_up            5
+    confirm              4
+
+TEST: 322 examples across 41 intents
+    smalltalk            26
+    general_query        15
+    set_timer            13
+    unknown              12
+    get_weather          10
+    note_view            10
+    note_write           10
+    open_target          10
+    opinion              10
+    clipboard_clear      9
+    identity             9
+    search_web           9
+    followup             8
+    help                 8
+    system_info          8
+    clipboard_read       7
+    dismissal            7
+    farewell             7
+    get_time             7
+    greet                7
+    perform_action       7
+    play_music           7
+    shutdown             7
+    timer_status         7
+    clipboard_write      6
+    get_date             6
+    joke                 6
+    lock_screen          6
+    motivate             6
+    note_delete          6
+    pause_music          6
+    restart              6
+    cancel_timer         5
+    confirm              5
+    mute                 5
+    next_track           5
+    prev_track           5
+    screenshot           5
+    thanks               5
+    volume_up            5
+    volume_down          4
+
+ΓÜá 29 intent(s) below their datasets/intents.json min_examples target (run brain/dataset_tools.py generate to close the gap):
+    next_track             31 / 50  
+    help                   43 / 60  
+    get_time               48 / 60  
+    farewell               48 / 60  
+    get_date               49 / 60  
+    cancel_timer           41 / 50  
+    prev_track             42 / 50  
+    volume_down            33 / 40  
+    pause_music            44 / 50  
+    timer_status           44 / 50  
+    perform_action         54 / 60  
+    volume_up              35 / 40  
+    shutdown               45 / 50  
+    restart                45 / 50  
+    lock_screen            45 / 50  
+    note_delete            45 / 50  
+    joke                   45 / 50  
+    unknown                75 / 80  
+    mute                   36 / 40  
+    screenshot             36 / 40  
+    note_view              76 / 80  
+    search_web             77 / 80  
+    clipboard_read         47 / 50  
+    clipboard_write        47 / 50  
+    dismissal              57 / 60  
+    play_music             48 / 50  
+    greet                  48 / 50  
+    thanks                 48 / 50  
+    followup               59 / 60  
+
+≡ƒùæ∩╕Å  Removing saved models for full retrainΓÇª
+   deleted vocab.json
+   deleted labels.json
+
+≡ƒÜÇ TrainingΓÇª
+
+ΓöÇΓöÇ VALIDATION ΓÇö accuracy: 0.844 (270/320) ΓöÇΓöÇ
+intent               precision    recall      f1  support
+cancel_timer              1.00      1.00    1.00        6
+clipboard_clear           1.00      1.00    1.00        7
+clipboard_read            1.00      0.83    0.91        6
+clipboard_write           1.00      0.86    0.92        7
+confirm                   0.67      1.00    0.80        4
+dismissal                 0.71      0.83    0.77        6
+farewell                  0.71      0.71    0.71        7
+followup                  0.78      0.88    0.82        8
+general_query             0.85      0.94    0.89       18
+get_date                  1.00      1.00    1.00        7
+get_time                  0.86      1.00    0.92        6
+get_weather               1.00      0.90    0.95       10
+greet                     0.67      1.00    0.80        6
+help                      0.62      0.83    0.71        6
+identity                  0.71      0.62    0.67        8
+joke                      0.71      1.00    0.83        5
+lock_screen               0.86      1.00    0.92        6
+motivate                  0.67      0.67    0.67        6
+mute                      1.00      0.83    0.91        6
+next_track                1.00      1.00    1.00        5
+note_delete               1.00      0.60    0.75        5
+note_view                 1.00      0.91    0.95       11
+note_write                0.83      0.91    0.87       11
+open_target               0.91      1.00    0.95       10
+opinion                   0.56      0.83    0.67        6
+pause_music               0.86      1.00    0.92        6
+perform_action            1.00      0.86    0.92        7
+play_music                1.00      0.67    0.80        6
+prev_track                1.00      1.00    1.00        6
+restart                   1.00      1.00    1.00        5
+screenshot                1.00      1.00    1.00        6
+search_web                0.78      0.78    0.78        9
+set_timer                 0.86      1.00    0.92       12
+shutdown                  1.00      1.00    1.00        6
+smalltalk                 0.60      0.52    0.56       29
+system_info               1.00      1.00    1.00        8
+thanks                    1.00      0.83    0.91        6
+timer_status              1.00      1.00    1.00        7
+unknown                   0.57      0.29    0.38       14  ΓÜá
+volume_down               1.00      1.00    1.00        5
+volume_up                 1.00      1.00    1.00        5
+
+'general_query' catch-all ΓÇö precision=0.85 recall=0.94 support=18
+  3 other-intent utterances were misclassified AS general_query (force-fitting risk in reverse ΓÇö check these).
+  1 genuinely off-topic/catch-all utterances were force-fit into a specific intent instead of falling back to general_query.
+
+Top confusions (true ΓåÆ predicted):
+    unknown            ΓåÆ smalltalk          ├ù 6
+    smalltalk          ΓåÆ opinion            ├ù 3
+    search_web         ΓåÆ general_query      ├ù 2
+    smalltalk          ΓåÆ greet              ├ù 2
+    smalltalk          ΓåÆ unknown            ├ù 2
+    get_weather        ΓåÆ unknown            ├ù 1
+    farewell           ΓåÆ open_target        ├ù 1
+    smalltalk          ΓåÆ dismissal          ├ù 1
+    smalltalk          ΓåÆ farewell           ├ù 1
+    identity           ΓåÆ smalltalk          ├ù 1
+
+ΓöÇΓöÇ TEST (final, unbiased) ΓÇö accuracy: 0.823 (265/322) ΓöÇΓöÇ
+intent               precision    recall      f1  support
+cancel_timer              0.83      1.00    0.91        5
+clipboard_clear           0.90      1.00    0.95        9
+clipboard_read            1.00      0.86    0.92        7
+clipboard_write           1.00      1.00    1.00        6
+confirm                   0.38      0.60    0.46        5
+dismissal                 0.71      0.71    0.71        7
+farewell                  1.00      0.86    0.92        7
+followup                  0.57      0.50    0.53        8
+general_query             0.76      0.87    0.81       15
+get_date                  1.00      0.83    0.91        6
+get_time                  0.88      1.00    0.93        7
+get_weather               0.77      1.00    0.87       10
+greet                     0.88      1.00    0.93        7
+help                      0.71      0.62    0.67        8
+identity                  0.83      0.56    0.67        9
+joke                      0.71      0.83    0.77        6
+lock_screen               1.00      1.00    1.00        6
+motivate                  0.62      0.83    0.71        6
+mute                      0.80      0.80    0.80        5
+next_track                1.00      1.00    1.00        5
+note_delete               0.71      0.83    0.77        6
+note_view                 1.00      0.90    0.95       10
+note_write                0.91      1.00    0.95       10
+open_target               0.91      1.00    0.95       10
+opinion                   0.47      0.80    0.59       10
+pause_music               1.00      1.00    1.00        6
+perform_action            0.86      0.86    0.86        7
+play_music                1.00      0.86    0.92        7
+prev_track                0.83      1.00    0.91        5
+restart                   1.00      0.83    0.91        6
+screenshot                0.83      1.00    0.91        5
+search_web                1.00      0.89    0.94        9
+set_timer                 1.00      0.77    0.87       13
+shutdown                  1.00      0.86    0.92        7
+smalltalk                 0.65      0.58    0.61       26
+system_info               0.89      1.00    0.94        8
+thanks                    1.00      0.80    0.89        5
+timer_status              1.00      1.00    1.00        7
+unknown                   0.60      0.25    0.35       12  ΓÜá
+volume_down               1.00      0.75    0.86        4
+volume_up                 1.00      1.00    1.00        5
+
+'general_query' catch-all ΓÇö precision=0.76 recall=0.87 support=15
+  4 other-intent utterances were misclassified AS general_query (force-fitting risk in reverse ΓÇö check these).
+  2 genuinely off-topic/catch-all utterances were force-fit into a specific intent instead of falling back to general_query.
+
+Top confusions (true ΓåÆ predicted):
+    smalltalk          ΓåÆ opinion            ├ù 5
+    unknown            ΓåÆ smalltalk          ├ù 4
+    identity           ΓåÆ opinion            ├ù 3
+    unknown            ΓåÆ followup           ├ù 2
+    followup           ΓåÆ confirm            ├ù 2
+    play_music         ΓåÆ open_target        ├ù 1
+    set_timer          ΓåÆ cancel_timer       ├ù 1
+    opinion            ΓåÆ general_query      ├ù 1
+    general_query      ΓåÆ opinion            ├ù 1
+    smalltalk          ΓåÆ note_delete        ├ù 1
+
+Γ£à Done. Spot-check a few predictions:
+  'open youtube'  ΓåÆ  open_target [skill] (1.00 via keyword_short_input)
+  'what time is it'  ΓåÆ  get_time [skill] (1.00 via pytorch+tensorflow)
+  'set a timer for 5 minutes'  ΓåÆ  set_timer [skill] (1.00 via pytorch+tensorflow)
+  'search for python tutorials'  ΓåÆ  search_web [skill] (1.00 via pytorch+tensorflow)
+  'what is photosynthesis'  ΓåÆ  general_query [llm] (1.00 via keyword_short_input)
+  'volume up'  ΓåÆ  volume_up [skill] (1.00 via keyword_short_input)
+  'hello'  ΓåÆ  greet [skill] (1.00 via keyword_short_input)
+  'hey maya'  ΓåÆ  greet [skill] (1.00 via keyword_short_input)
+  'hi'  ΓåÆ  greet [skill] (1.00 via keyword_short_input)
+  'which one is better SSD or HDD'  ΓåÆ  opinion [llm] (1.00 via pytorch+tensorflow)
+  'are you excited today'  ΓåÆ  opinion [llm] (1.00 via pytorch+tensorflow)
+  'my dog just knocked over a plant'  ΓåÆ  unknown [llm] (0.70 via pytorch+tensorflow)
+  'the sky looks orange today'  ΓåÆ  smalltalk [llm] (0.51 via low_confidence_trusted)
+  'open chrome'  ΓåÆ  open_target [skill] (1.00 via keyword_short_input)
+  'go to reddit'  ΓåÆ  open_target [skill] (1.00 via keyword_short_input)
+  'launch notepad'  ΓåÆ  open_target [skill] (1.00 via keyword_short_input)
+  'remind me to call mom in ten minutes'  ΓåÆ  set_timer [skill] (1.00 via pytorch+tensorflow)
+  'set a timer for 20 minutes'  ΓåÆ  set_timer [skill] (1.00 via pytorch+tensorflow)
+  'take a note buy milk'  ΓåÆ  note_write [skill] (1.00 via pytorch+tensorflow)
+  'add to my note'  ΓåÆ  note_write [skill] (1.00 via pytorch+tensorflow)
+  'read my notes'  ΓåÆ  note_view [skill] (1.00 via keyword_short_input)
+  'list my notes'  ΓåÆ  note_view [skill] (1.00 via keyword_short_input)
+  'open my note in notepad'  ΓåÆ  note_view [skill] (1.00 via pytorch+tensorflow)
