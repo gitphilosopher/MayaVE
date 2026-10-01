@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 """
 stage_data.py - safe, deduplicating staging of hand-written training rows and
 eval cases. Run from the repo root. Dry run unless --apply is passed.
 
-  python stage_data.py                 # report only
-  python stage_data.py --apply         # append new rows / cases
+  python datasets/stage_data.py                 # report only
+  python datasets/stage_data.py --apply         # append new rows / cases
 
 Rows go to datasets/training/candidates.jsonl (append only, existing rows are
 never rewritten); cases go to datasets/router_eval/cases.jsonl. The source

@@ -17,6 +17,7 @@ module's only job is "ask Ollama for JSON, parse it defensively,
 return a plain dict or None" — never raises out to the caller.
 """
 
+import functools
 import json
 import logging
 import time
@@ -36,11 +37,43 @@ _RESPONSE_SCHEMA_HINT = (
 )
 
 
+@functools.lru_cache(maxsize=1)
+def _entity_keys_by_operation() -> dict[str, tuple[str, ...]]:
+    """'domain.operation' -> allowed entity keys, read from the same
+    registry (config/command_domains.json) validate.py checks against.
+    Returns {} if the registry can't be loaded, in which case the prompt
+    simply omits the entity schema section (previous behavior); never raises."""
+    try:
+        from brain.router.registry import load_specs
+        return {spec.key: tuple(spec.entities.keys()) for spec in load_specs()}
+    except Exception as e:
+        logger.warning(f"Router LLM fallback: entity schema unavailable for prompt: {e}")
+        return {}
+
+
 def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict[str, list[str]],
                    top_candidates: list[str]) -> str:
     domain_lines = "\n".join(
         f"- {d}: {', '.join(operations_by_domain.get(d, []))}" for d in domains
     )
+
+    entity_keys = _entity_keys_by_operation()
+    entity_lines = "\n".join(
+        f"- {d}.{op}: entities {{{', '.join(entity_keys[f'{d}.{op}'])}}}"
+        for d in domains
+        for op in operations_by_domain.get(d, [])
+        if f"{d}.{op}" in entity_keys
+    )
+    entity_section = (
+        "Allowed entity keys per operation (an empty {} means the operation takes no entities):\n"
+        f"{entity_lines}\n"
+        "Entity keys are schema-defined. Never invent entity keys from words in the user's "
+        "request. Use only the entity keys allowed for the selected operation, and place the "
+        "extracted value under the appropriate key. If the operation allows no entities, "
+        "return \"entities\": {}.\n\n"
+        if entity_lines else ""
+    )
+
     candidate_hint = (
         f"\nThe most similar known commands (for reference only, do not assume one is correct): "
         f"{', '.join(top_candidates)}\n" if top_candidates else ""
@@ -50,7 +83,8 @@ def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict
         "utterance into EXACTLY ONE domain and operation from the list below. Do not "
         "invent a domain or operation that isn't listed. Extract only entities that are "
         "explicitly present in the utterance.\n\n"
-        f"Allowed domains and operations:\n{domain_lines}\n"
+        f"Allowed domains and operations:\n{domain_lines}\n\n"
+        f"{entity_section}"
         f"{candidate_hint}\n"
         f'User utterance: "{utterance}"\n\n'
         "If the utterance is not an actionable command from the list above (e.g. it's "
@@ -116,5 +150,5 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
                 time.perf_counter()-t0, (data.get("load_duration") or 0)/ns, data.get("prompt_eval_count"),
                 (data.get("prompt_eval_duration") or 0)/ns, data.get("eval_count"),
                 (data.get("eval_duration") or 0)/ns)
-    
+
     return parsed

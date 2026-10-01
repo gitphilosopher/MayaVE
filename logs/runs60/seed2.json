@@ -58,8 +58,8 @@
   "status_breakdown": {
     "ready": 28,
     "needs_clarification": 8,
-    "unknown": 18,
-    "rejected": 6
+    "rejected": 4,
+    "unknown": 20
   },
   "call_totals": {
     "guard": 0,
@@ -70,8 +70,8 @@
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.08351979999861214,
-  "latency_p95_s": 1.8731337999925017,
+  "latency_p50_s": 0.06668655000248691,
+  "latency_p95_s": 1.7974278000037884,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,
@@ -165,24 +165,24 @@
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "unknown",
+      "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "unexpected entity 'needs_clarification' for web.search",
       "ok": true,
-      "overreach": false
+      "overreach": true
     },
     {
       "text": "no 5 apples please",
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'app' for app_or_web.open",
+      "reason": "llm_low_confidence",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "actually make it 30",
@@ -252,7 +252,7 @@
       "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'sky' for weather.current",
+      "reason": "unexpected entity 'query' for weather.current",
       "ok": true,
       "overreach": true
     },
@@ -621,10 +621,10 @@
       "category": "llm",
       "want_status": "ready",
       "want_key": "notes.create",
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'dentist' for notes.create",
+      "reason": "llm_low_confidence",
       "ok": false,
       "overreach": false
     },
@@ -648,7 +648,7 @@
       "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "conversational",
+      "reason": "llm_low_confidence",
       "ok": true,
       "overreach": false
     },
@@ -693,10 +693,10 @@
       "category": "paraphrase",
       "want_status": "ready",
       "want_key": "app_or_web.open",
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'name' for media.play",
+      "reason": "llm_low_confidence",
       "ok": false,
       "overreach": false
     },
@@ -768,7 +768,7 @@
       "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'light' for system.shutdown",
+      "reason": "unexpected entity 'location' for system.shutdown",
       "ok": true,
       "overreach": true
     },
@@ -801,12 +801,12 @@
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "unknown",
+      "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_clarification_but_nothing_missing",
+      "reason": "unexpected entity 'target' for system.lock",
       "ok": true,
-      "overreach": false
+      "overreach": true
     },
     {
       "text": "she talked for ninety minutes",
@@ -825,12 +825,12 @@
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'search' for web.search",
+      "reason": "llm_clarification_but_nothing_missing",
       "ok": true,
-      "overreach": true
+      "overreach": false
     }
   ],
   "model_digest": {

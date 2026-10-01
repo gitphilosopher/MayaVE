@@ -5,7 +5,7 @@
     "llm": true
   },
   "routing_accuracy": {
-    "value": 0.8666666666666667,
+    "value": 0.85,
     "n": 60,
     "low_sample": false
   },
@@ -25,8 +25,8 @@
     "low_sample": false
   },
   "oos_precision": {
-    "value": 0.8571428571428571,
-    "n": 21,
+    "value": 0.8181818181818182,
+    "n": 22,
     "low_sample": true
   },
   "oos_recall": {
@@ -56,10 +56,10 @@
     "low_sample": true
   },
   "status_breakdown": {
-    "ready": 31,
+    "ready": 30,
     "needs_clarification": 8,
-    "unknown": 15,
-    "rejected": 6
+    "rejected": 6,
+    "unknown": 16
   },
   "call_totals": {
     "guard": 0,
@@ -70,8 +70,8 @@
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.07884949999424862,
-  "latency_p95_s": 1.734518900004332,
+  "latency_p50_s": 0.08230004999495577,
+  "latency_p95_s": 1.5694071000034455,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,
@@ -106,11 +106,11 @@
       "n": 4
     },
     "llm": {
-      "accuracy": 0.6666666666666666,
+      "accuracy": 0.3333333333333333,
       "n": 3
     }
   },
-  "llm_overreach_on_oos": 4,
+  "llm_overreach_on_oos": 6,
   "per_case": [
     {
       "text": "set a timer for ten minutes",
@@ -165,24 +165,24 @@
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "unknown",
+      "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "unexpected entity 'duration' for datetime.date",
       "ok": true,
-      "overreach": false
+      "overreach": true
     },
     {
       "text": "no 5 apples please",
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'app' for app_or_web.open",
+      "reason": "llm_low_confidence",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "actually make it 30",
@@ -252,7 +252,7 @@
       "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'sky' for weather.current",
+      "reason": "unexpected entity 'query' for weather.current",
       "ok": true,
       "overreach": true
     },
@@ -264,7 +264,7 @@
       "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'music' for media.play",
+      "reason": "unexpected entity 'content' for media.play",
       "ok": true,
       "overreach": true
     },
@@ -501,12 +501,12 @@
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "unknown",
+      "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "unexpected entity 'length' for datetime.date",
       "ok": true,
-      "overreach": false
+      "overreach": true
     },
     {
       "text": "start a countdown",
@@ -609,11 +609,11 @@
       "category": "llm",
       "want_status": "ready",
       "want_key": "system.shutdown",
-      "got_status": "ready",
-      "got_key": "system.shutdown",
+      "got_status": "unknown",
+      "got_key": null,
       "source": "llm",
-      "reason": "",
-      "ok": true,
+      "reason": "llm_low_confidence",
+      "ok": false,
       "overreach": false
     },
     {
@@ -621,10 +621,10 @@
       "category": "llm",
       "want_status": "ready",
       "want_key": "notes.create",
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'dentist' for notes.create",
+      "reason": "llm_low_confidence",
       "ok": false,
       "overreach": false
     },
@@ -693,10 +693,10 @@
       "category": "paraphrase",
       "want_status": "ready",
       "want_key": "app_or_web.open",
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'name' for media.play",
+      "reason": "llm_low_confidence",
       "ok": false,
       "overreach": false
     },
@@ -768,7 +768,7 @@
       "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'light' for system.shutdown",
+      "reason": "unexpected entity 'location' for system.shutdown",
       "ok": true,
       "overreach": true
     },
@@ -801,12 +801,12 @@
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "unknown",
+      "got_status": "rejected",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_clarification_but_nothing_missing",
+      "reason": "unexpected entity 'target' for system.lock",
       "ok": true,
-      "overreach": false
+      "overreach": true
     },
     {
       "text": "she talked for ninety minutes",
