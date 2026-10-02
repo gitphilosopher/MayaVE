@@ -6,23 +6,17 @@ seed1_repeat   combined=20e2c14d7ff0 seed=1 training_hash=c98be1f82710
 
 seed1 vs seed1_repeat: same model=True, differing case outcomes=0
 
-=== seed1: 1 failure(s) of 60 ===
-X [llm] "wipe whatever I copied"
-     want=ready/clipboard.clear  got=ready/app_or_web.open  src=llm  reason=''
+=== seed1: 0 failure(s) of 60 ===
 
-=== seed2: 2 failure(s) of 60 ===
+=== seed2: 1 failure(s) of 60 ===
 X [ambiguous_valid] "timer for a quarter of an hour"
      want=needs_clarification/timer.create  got=ready/timer.create  src=llm  reason=''
-X [oos] "turn off the porch light please"
-     want=unknown/None  got=ready/system.shutdown  src=pytorch+tensorflow  reason=''
 
 === seed3: 0 failure(s) of 60 ===
 
 === Cross-seed matrix (rows with at least one X or ~) ===
 case                                                           seed1        seed2        seed3        seed1_repeat fails
 timer for a quarter of an hour                                 OK           X            OK           OK           1/3
-wipe whatever I copied                                         X            OK           OK           X            1/3
-turn off the porch light please                                OK           X            OK           OK           1/3
 
 === Failure frequency across seed1/seed2/seed3 ===
 
@@ -30,26 +24,20 @@ turn off the porch light please                                OK           X   
 
 2/3  seed-sensitive boundary  (0)
 
-1/3  likely training variance  (3)
+1/3  likely training variance  (1)
    [ambiguous_valid] "timer for a quarter of an hour"  expected needs_clarification/timer.create
         seed2: got ready/timer.create via llm
-   [llm] "wipe whatever I copied"  expected ready/clipboard.clear
-        seed1: got ready/app_or_web.open via llm
-   [oos] "turn off the porch light please"  expected unknown/None
-        seed2: got ready/system.shutdown via pytorch+tensorflow
 
 === Failures by category (summed over the 3 seeds) ===
-oos                  1/12  failing case-runs
 ambiguous_valid      1/12  failing case-runs
-llm                  1/9   failing case-runs
 in_distribution      0/6   failing case-runs
 clarification        0/15  failing case-runs
 entity               0/27  failing case-runs
 context              0/21  failing case-runs
+oos                  0/12  failing case-runs
 adversarial          0/48  failing case-runs
 paraphrase           0/30  failing case-runs
+llm                  0/9   failing case-runs
 
 === Failure modes (all seeds) ===
-  1  wrong command
   1  expected needs_clarification, got ready
-  1  false execution (OOS -> ready)

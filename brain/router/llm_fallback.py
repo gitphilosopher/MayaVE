@@ -68,8 +68,11 @@ _OP_DESCRIPTIONS: dict[str, str] = {
     "system.shutdown": "Shut down or power off the host computer/PC only (NOT lights, appliances, TVs, or external devices).",
     "system.restart": "Reboot or restart the host computer/PC only.",
     "clipboard.read": "Read or display text currently stored on the computer clipboard.",
-    "clipboard.copy": "Copy specified text to the computer clipboard.",
-    "clipboard.clear": "Wipe or clear the computer clipboard contents.",
+    "clipboard.clear": (
+        "Wipe, clear, empty, or delete the computer clipboard contents or whatever was copied "
+        "(covers 'wipe clipboard', 'clear clipboard', 'wipe my clipboard', 'wipe whatever I copied', "
+        "'clear what I copied', 'clear whatever I copied', 'delete the copied contents', 'remove what I copied')."
+    ),
 }
 
 
@@ -140,8 +143,8 @@ def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict
         "3. NO NEAREST-NEIGHBOR GUESSING: If a request is not one of the supported computer operations, "
         "do NOT guess the closest registered command. Respond with domain='unknown', operation='unknown'.\n\n"
         "4. PRESERVE LEGITIMATE COMMANDS: When the user directly commands the assistant to perform a supported "
-        "computer action (such as setting a timer, checking weather or outdoor conditions, launching apps, "
-        "taking notes, locking the computer screen, shutting down the computer, or searching the web), "
+        "computer action (such as setting a timer, checking weather or outdoor conditions, clearing or reading the clipboard, "
+        "launching apps, taking notes, locking the computer screen, shutting down the computer, or searching the web), "
         "classify it into the correct domain and operation with high confidence (e.g. 0.8 to 1.0).\n\n"
     )
 

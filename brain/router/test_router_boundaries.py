@@ -794,3 +794,104 @@ def test_conversational_gating_logic():
     # Confident and uncontested conversational predictions MUST be plausible_chat (skip LLM)
     assert ("llm" == "llm" and 0.80 >= 0.70 and (0.20 is None or 0.20 >= 0.15))
     assert ("llm" == "llm" and 0.72 >= 0.70 and (None is None or None >= 0.15))
+
+
+# ── 18. Physical-world system boundary & clipboard.clear regression tests ─────
+
+@pytest.mark.parametrize("utterance", [
+    "turn off the porch light please",
+    "turn off the TV please",
+    "turn off the lights",
+    "lock the door",
+    "i should lock up the shop before i go",
+])
+def test_physical_world_system_requests_remain_unknown(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status} ({ir.domain}.{ir.operation})"
+    assert ir.domain is None, f"Expected domain=None for '{utterance}', got {ir.domain}"
+    assert ir.operation is None, f"Expected operation=None for '{utterance}', got {ir.operation}"
+
+
+@pytest.mark.parametrize("utterance,expected_op", [
+    ("shut down my computer", "shutdown"),
+    ("turn off my PC", "shutdown"),
+    ("power off the laptop", "shutdown"),
+    ("lock my computer", "lock"),
+    ("lock the screen", "lock"),
+])
+def test_system_legitimate_computer_positives_preserved(utterance, expected_op):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
+    assert ir.domain == "system", f"Wrong domain for '{utterance}': {ir.domain}"
+    assert ir.operation == expected_op, f"Wrong operation for '{utterance}': {ir.operation}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "wipe whatever I copied",
+    "clear what I copied",
+])
+def test_clipboard_clear_router(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
+    assert ir.domain == "clipboard", f"Wrong domain for '{utterance}': {ir.domain}"
+    assert ir.operation == "clear", f"Wrong operation for '{utterance}': {ir.operation}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "wipe whatever I copied",
+    "clear what I copied",
+])
+def test_clipboard_clear_llm_fallback(utterance):
+    import httpx
+    from brain.router.llm_fallback import route
+    from brain.router.registry import CommandRegistry, load_specs
+    from config.settings import config
+
+    try:
+        r = httpx.get(f"{config.llm.base_url.rstrip('/')}/api/tags", timeout=1.0)
+        if r.status_code != 200:
+            pytest.skip("Ollama not running")
+    except Exception:
+        pytest.skip("Ollama not running")
+
+    reg = CommandRegistry(load_specs())
+    domains = reg.domains()
+    ops = {d: reg.operations_for(d) for d in domains}
+
+    result = run(route(utterance, domains, ops, []))
+    assert result is not None
+    assert result.get("domain") == "clipboard", f"Wrong domain for '{utterance}': {result}"
+    assert result.get("operation") == "clear", f"Wrong operation for '{utterance}': {result}"
+    assert not result.get("needs_clarification", False)
+
+
+@pytest.mark.parametrize("utterance,expected_target", [
+    ("open spotify", "spotify"),
+    ("launch notepad", "notepad"),
+])
+def test_app_opening_remains_app_or_web(utterance, expected_target):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
+    assert ir.domain == "app_or_web", f"Wrong domain for '{utterance}': {ir.domain}"
+    assert ir.operation == "open", f"Wrong operation for '{utterance}': {ir.operation}"
+    assert expected_target in ir.target.lower()

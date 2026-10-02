@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 
 from brain.router import validate
@@ -50,6 +51,18 @@ logger = logging.getLogger(__name__)
 # Placeholders pending eval_ir.py measurements on real data (same policy as confidence.py).
 MIN_CONF, MIN_MARGIN, MIN_CONF_NO_MARGIN = 0.85, 0.25, 0.93
 LLM_MIN_CONF = 0.5   # below this, a validated-but-weak LLM command is not trusted either
+
+# System operations (shutdown, lock, restart) apply strictly to the host computer / PC environment.
+# Physical devices, fixtures, appliances, lights, TVs, doors, and premises are out of scope.
+_PHYSICAL_SYSTEM_TARGETS = re.compile(
+    r"\b(?:"
+    r"lights?|lamps?|porch|living room|bedroom|kitchen|"
+    r"tv|tvs|televisions?|"
+    r"appliances?|oven|stove|fans?|heaters?|thermostats?|"
+    r"doors?|gates?|shops?|house|premises"
+    r")\b",
+    re.I,
+)
 
 
 class CommandUnderstander:
@@ -159,6 +172,10 @@ class CommandUnderstander:
 
     def _from_spec(self, spec, conf, margin, src, target, *, llm_entities=None, **base) -> CommandIR:
         text = base["effective_text"]
+        if spec.domain == "system" and _PHYSICAL_SYSTEM_TARGETS.search(text):
+            logger.info(f"[router] physical-world target out of scope for {spec.key}: {text!r}")
+            return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
+                             reason="physical_world_out_of_scope", legacy_intent="unknown", **base)
         target = self._target_for(spec, text, target)
         ents, missing = extract_entities(spec, text, target, llm_entities)
         ent_target = ents.get(spec.target_mode.split(":", 1)[1]) if spec.target_mode.startswith("entity:") else None

@@ -5,7 +5,7 @@
     "llm": true
   },
   "routing_accuracy": {
-    "value": 0.9666666666666667,
+    "value": 0.9833333333333333,
     "n": 60,
     "low_sample": false
   },
@@ -15,7 +15,7 @@
     "low_sample": false
   },
   "oos_false_execution_rate": {
-    "value": 0.03333333333333333,
+    "value": 0.016666666666666666,
     "n": 60,
     "low_sample": false
   },
@@ -26,11 +26,11 @@
   },
   "oos_precision": {
     "value": 1.0,
-    "n": 22,
+    "n": 23,
     "low_sample": true
   },
   "oos_recall": {
-    "value": 0.9565217391304348,
+    "value": 1.0,
     "n": 23,
     "low_sample": true
   },
@@ -56,9 +56,9 @@
     "low_sample": true
   },
   "status_breakdown": {
-    "ready": 33,
+    "ready": 32,
     "needs_clarification": 5,
-    "unknown": 22
+    "unknown": 23
   },
   "call_totals": {
     "guard": 0,
@@ -69,8 +69,8 @@
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.06149450001248624,
-  "latency_p95_s": 1.6345219999784604,
+  "latency_p50_s": 0.06740225000248756,
+  "latency_p95_s": 1.6450242999999318,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,
@@ -89,7 +89,7 @@
       "n": 7
     },
     "oos": {
-      "accuracy": 0.75,
+      "accuracy": 1.0,
       "n": 4
     },
     "adversarial": {
@@ -764,11 +764,11 @@
       "category": "oos",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "ready",
-      "got_key": "system.shutdown",
+      "got_status": "unknown",
+      "got_key": null,
       "source": "pytorch+tensorflow",
-      "reason": "",
-      "ok": false,
+      "reason": "physical_world_out_of_scope",
+      "ok": true,
       "overreach": false
     },
     {

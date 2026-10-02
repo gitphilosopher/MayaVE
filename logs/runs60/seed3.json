@@ -69,8 +69,8 @@
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.06573494999611285,
-  "latency_p95_s": 1.645304000005126,
+  "latency_p50_s": 0.06395070000144187,
+  "latency_p95_s": 1.6439608999935444,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,

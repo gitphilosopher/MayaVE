@@ -10,6 +10,7 @@ __pycache__/
 tests/
 temp.py
 edge-automation-profile
+_tmp*.py
 # test_*.py
 # review_candidates.py
 # datasets/training/candidates_rejected.jsonl
