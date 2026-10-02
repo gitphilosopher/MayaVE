@@ -1,66 +1,34 @@
 """
 brain/intent_engine.py
 ======================
-Intent classification and target extraction for Maya's command pipeline.
+Intent classification, guard logic, and target extraction for Maya's command pipeline.
 
-The engine loads and validates the intent taxonomy from
-``datasets/intents.json`` and the labelled training split from
-``datasets/training/train_data.jsonl``. It compiles the configured keyword
-rules and response modes, applies deterministic dismissal, presence, and
-action guards, then combines predictions from a PyTorch BiLSTM with attention
-and a TensorFlow/Keras 1-D CNN. Keyword matches take precedence; otherwise a
-high-confidence ensemble result is used, followed by a chance-relative
-low-confidence floor and the ``unknown`` fallback.
+This module is the canonical runtime definition of the bot's intent taxonomy and
+classification behavior. It validates ``datasets/intents.json`` and the training
+splits at startup, builds the config-driven keyword rules and response-mode map,
+and loads or trains a dual-model ensemble: a PyTorch BiLSTM with attention and a
+TensorFlow/Keras 1-D CNN over a shared vocabulary. The public contract is
+``IntentEngine.classify(text)`` returning the router-facing record used to select
+skills or fall back to the LLM.
 
-On startup, saved models, vocabulary, and labels are reused when their
-fingerprint matches the current intent configuration and training data.
-Missing or stale artifacts trigger training and update
-``datasets/intent_model/training_hash.txt``. ``brain.train_intent`` remains the explicit
-retraining and evaluation entry point. Adding an intent therefore requires a
-definition in ``intents.json`` and labelled training examples, followed by a
-restart or manual retrain.
+Classification precedence is intentionally deterministic-first:
+1. dismissal, presence, and action-request guards
+2. ordered keyword matches for short/strong command-like inputs
+3. averaged ensemble probability across both ML models
+4. keyword fallback below the high-confidence threshold
+5. chance-relative low-confidence floor and finally ``unknown``
 
-The public contract is ``IntentEngine.classify(text)`` returning
-``intent``, ``target``, ``confidence``, ``raw``, ``model``, and
-``response_mode`` fields, PLUS (see PATCH below) ``second_intent``,
-``second_confidence``, and ``margin``. The router consumes the result to
-select a skill or the LLM; target extraction removes command phrases for
-intents such as ``open_target``, ``search_web``, and ``set_timer``. Dataset
-validation is strict so malformed taxonomy or training records fail at
-startup instead of silently changing classification behavior.
+The same file also strips command phrases from utterances for intents such as
+``open_target``, ``search_web``, and ``set_timer`` so downstream handlers receive a
+clean target string instead of the raw user utterance. Artifact persistence under
+``datasets/intent_model`` keeps the trained models and vocabulary aligned with the
+current taxonomy and training data, retraining automatically whenever the fingerprint
+changes.
 
-PATCH (brain/router hybrid-router stabilization pass): the hybrid router's
-CommandUnderstander needs a top-2/margin signal to decide whether the
-classifier's own result is trustworthy enough to dispatch without escalating
-to semantic retrieval or the LLM fallback. Before this patch, classify()'s
-return dict had no such field at all — only intent/target/confidence/raw/
-model/response_mode — so the understander's `res.get("margin")` always read
-None and every ML-sourced result was judged by the stricter no-margin rule.
-
-This patch is purely additive:
-  - `_predict()` (return shape, precedence order: dismissal/presence/action
-    guards -> deterministic keyword match on a short input -> ensemble ->
-    keyword fallback below threshold -> low-confidence floor -> unknown) is
-    UNCHANGED and still the single source of truth `classify()` calls.
-  - A new `_predict_detailed()` wraps `_predict()`'s exact logic (same
-    branches, same precedence, same guard/keyword short-circuits) but also
-    captures the second-best class and its probability from the SAME
-    averaged ensemble output (`avg_probs`) `_predict()` already computes
-    internally when the ensemble path is actually reached. For any result
-    that comes from a guard, a keyword rule, or a keyword-fallback path
-    (i.e. the ensemble was never consulted, or its output was overridden by
-    a stronger deterministic signal), `second_intent`/`second_confidence`/
-    `margin` are `None` — there is no meaningful "second place" for a
-    guard/keyword decision, and reporting a fabricated one would be worse
-    than reporting nothing.
-  - `classify()` now calls `_predict_detailed()` instead of `_predict()`
-    and adds the three new keys to its returned dict. Every existing key,
-    every existing caller reading the pre-patch keys (services/llm/
-    llm_service.py, core/processor.py, brain/router/adapter.py, brain/
-    router/guards.py, brain/router/hybrid_engine.py's `_legacy_shaped`) is
-    unaffected — they simply ignore the three new keys.
-  - The PyTorch BiLSTM and TensorFlow CNN model architectures, training
-    loop, and saved-artifact format are completely untouched.
+Other AI agents should treat this file as the source of truth for intent IDs,
+response routing, guard ordering, and keyword fallback behavior. The API contract
+and decision ordering are more important than the historical implementation details
+that created them.
 """
 
 from __future__ import annotations
@@ -384,6 +352,8 @@ def _tokenize(text: str) -> list[str]:
 
 
 class _Vocab:
+    """Shared token vocabulary for both trained models."""
+
     PAD = 0
     UNK = 1
 
@@ -419,6 +389,7 @@ class _Vocab:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_pytorch_model(vocab_size: int, n_classes: int):
+    """Create the BiLSTM + attention model used by the PyTorch branch."""
     import torch
     import torch.nn as nn
 
@@ -508,6 +479,7 @@ def _predict_pytorch(model, X_single: list[int], device) -> np.ndarray:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_tf_model(vocab_size: int, n_classes: int):
+    """Create the 1-D CNN model used by the TensorFlow branch."""
     import tensorflow as tf
     from tensorflow import keras  # type: ignore
 
@@ -591,7 +563,7 @@ class IntentEngine:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def classify(self, text: str) -> dict:
-        """Classify one utterance and return the router-facing result record."""
+        """Return the router-facing result record for one user utterance."""
         text = text.strip()
         detail = self._predict_detailed(text)
         intent, confidence, source = detail["intent"], detail["confidence"], detail["source"]
@@ -608,10 +580,8 @@ class IntentEngine:
             # actually reachable from _predict() is validated to have one
             # in load_intent_config().
             "response_mode": self._response_modes.get(intent, "llm"),
-            # Additive — see module docstring's PATCH note. None when the
-            # decision came from a guard/keyword path with no meaningful
-            # "second place" (the ensemble was never consulted, or was
-            # overridden by stronger deterministic evidence).
+            # When the decision came from a deterministic guard or keyword rule,
+            # there is no meaningful ensemble runner-up to report.
             "second_intent":     detail["second_intent"],
             "second_confidence": None if detail["second_confidence"] is None
                                   else round(float(detail["second_confidence"]), 3),
@@ -788,9 +758,7 @@ class IntentEngine:
                          "pros and cons", "better than", "or hdd", "or ssd")
 
     def _predict(self, text: str) -> tuple[str, float, str]:
-        """Returns (intent, confidence, source_label). UNCHANGED — see
-        module docstring's PATCH note; _predict_detailed() below wraps
-        this exact logic without altering any branch or precedence."""
+        """Return the canonical intent/confidence/source tuple used by the classifier."""
         detail = self._predict_detailed(text)
         return detail["intent"], detail["confidence"], detail["source"]
 
@@ -819,24 +787,23 @@ class IntentEngine:
         t = text.lower().strip()
         tokens = re.findall(r"[a-z0-9]+", t)
 
-        # ── Negation / dismissal guard ────────────────────────────────────────
+        # Deterministic guards win before any learned model output. They are
+        # intentionally strict and cross-cutting so they cannot be bypassed by
+        # a model's label or a keyword-driven false positive.
         if self._is_dismissal(t):
             return {"intent": "dismissal", "confidence": 1.0, "source": "negation_guard", **_none}
 
-        # ── Presence / arrival guard ──────────────────────────────────────────
         if self._PRESENCE_RE.search(t):
             logger.debug(f"Presence guard fired for '{text}' → smalltalk")
             return {"intent": "smalltalk", "confidence": 1.0, "source": "presence_guard", **_none}
 
-        # ── Action-request guard ──────────────────────────────────────────────
         if self._ACTION_WORD_RE.search(t) and not self._ACTION_QUESTION_RE.search(t):
             logger.debug(f"Action-request guard fired for '{text}' → perform_action")
             return {"intent": "perform_action", "confidence": 1.0, "source": "action_guard", **_none}
 
-        # ── Deterministic keyword check ─────────────────────────────────────
-        # Computed once and reused by both the short-input path and the
-        # low-confidence path below — a keyword match always wins outright
-        # over the ensemble, at any utterance length or confidence level.
+        # Keyword evidence is computed once and reused by both the short-input
+        # path and the low-confidence fallback logic. A keyword result always beats
+        # the ensemble when it is present, regardless of absolute model confidence.
         kw_intent, kw_conf, _ = self._keyword_fallback(text)
 
         is_comparison = any(w in t for w in self._COMPARISON_WORDS)
@@ -891,9 +858,8 @@ class IntentEngine:
 
         # A deterministic keyword match still wins below the high-confidence
         # bar because it is stronger evidence than the ensemble estimate.
-        # The ensemble's own top-2/margin is no longer what's being acted
-        # on here, so it is NOT reported — the keyword decision has no
-        # genuine "second place" of its own.
+        # The ensemble's top-2 / margin is intentionally suppressed here because
+        # the keyword result is the decision actually being acted on.
         if kw_conf > 0:
             logger.debug(
                 f"ML confidence {conf:.2f} < threshold; "
@@ -946,7 +912,7 @@ class IntentEngine:
             # Specific phrases precede generic fallbacks so multi-word
             # commands such as "go to" and "launch" are stripped correctly.
             "open_target": ["go to", "navigate to", "open website",
-                             "launch", "start", "open"],
+                             "pull up", "launch", "start", "open"],
             "search_web":  ["search google for", "google search", "search for",
                              "look up", "google", "search"],
             # A bare timer request has no trigger and keeps the complete
@@ -988,6 +954,7 @@ class IntentEngine:
 
             trigger_hit = True
             after = re.sub(r"^(?:for|to|the|a|an|me)(?:\s+|$)", "", after)
+            after = re.sub(r"(?:\s+(?:for\s+me|please|thanks))+\s*$", "", after)
             if after:
                 return after
 

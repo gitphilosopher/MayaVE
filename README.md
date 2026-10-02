@@ -16,6 +16,7 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 
 * Local LLM inference through **Ollama**
 * ML-based intent classification using **PyTorch + TensorFlow**
+* Optional hybrid command router (opt-in): deterministic guards, semantic retrieval, and validated LLM fallback
 * Context-aware conversation handling
 * Topic and conversational-state tracking
 * Short-term conversation memory
@@ -300,6 +301,40 @@ goodbye
 ```
 
 She can be awakened again using the configured wake word.
+
+---
+
+## 🔭 Future Features
+
+The following capabilities are planned but **not yet implemented**. None of them is available today.
+
+### 📓 Diary
+
+A separate diary where Maya records her own account of interactions and experiences over time, distinct from the semantic memory used for retrieval. Entries would be generated automatically and be retrievable for later context.
+
+### 🌙 Dream Mode
+
+A configurable, periodic autonomous reflection process that runs while the user is away (targeting roughly every 3 hours). During a dream cycle Maya would reflect on recent interactions and feed the results into her diary and memory.
+
+### 🔎 Autonomous Research
+
+The ability to research a topic on her own initiative, without an immediate user request: searching the web, reading webpages and academic papers, viewing images, weighing sources, and synthesizing what she finds. Today's web search only opens a results page on request.
+
+### 📚 Learning Notes
+
+A knowledge store, separate from personal memory and user notes, for what Maya learns through research.
+
+### 🧭 Autonomous Curiosity
+
+A mechanism that lets Maya pick research topics herself, based on knowledge gaps, unresolved questions, novelty, recent interactions and learning, and relationships between pieces of knowledge. This is a functional notion of curiosity, not human-like boredom.
+
+### 🧠 Cognitive States
+
+Named, switchable generation states (for example focused, exploratory, or reflective) that adjust LLM sampling and reasoning behavior at runtime. These are independent of her mood and facial-expression system.
+
+### 🔁 Metacognitive Memory Curation
+
+Autonomous maintenance of long-term memory, inspired by Hegelian *Sublation* (*Aufhebung*): detecting redundant, conflicting, or fragmented memories, reasoning about how they change over time, and synthesizing them into higher-level representations while preserving the original memories and their provenance. Maya currently only deduplicates similar memories when writing them.
 
 ---
 

@@ -1,65 +1,55 @@
 === Run identity ===
-seed1          combined=0ffa1167892e seed=1 training_hash=63562089fbc0
-seed2          combined=7798b27ab6df seed=2 training_hash=22ba760febbe
-seed3          combined=23c1299ed532 seed=3 training_hash=0a8b07293bdc
-seed1_repeat   combined=0ffa1167892e seed=1 training_hash=63562089fbc0
+seed1          combined=20e2c14d7ff0 seed=1 training_hash=c98be1f82710
+seed2          combined=2ac8ea059a59 seed=2 training_hash=07926ff5ecae
+seed3          combined=21b241b8066b seed=3 training_hash=9bee4eb24fac
+seed1_repeat   combined=20e2c14d7ff0 seed=1 training_hash=c98be1f82710
 
 seed1 vs seed1_repeat: same model=True, differing case outcomes=0
 
-=== seed1: 3 failure(s) of 60 ===
-X [llm] "hey could you jot a quick memo that the dentist is at three"
-     want=ready/notes.create  got=unknown/None  src=low_confidence_trusted  reason='conversational'
-X [paraphrase] "could you pull up spotify for me"
-     want=ready/app_or_web.open  got=unknown/None  src=low_confidence_trusted  reason='conversational'
-X [paraphrase] "what's it like outside right now"
-     want=ready/weather.current  got=unknown/None  src=llm  reason='conversational'
+=== seed1: 1 failure(s) of 60 ===
+X [llm] "wipe whatever I copied"
+     want=ready/clipboard.clear  got=ready/app_or_web.open  src=llm  reason=''
 
 === seed2: 2 failure(s) of 60 ===
 X [ambiguous_valid] "timer for a quarter of an hour"
      want=needs_clarification/timer.create  got=ready/timer.create  src=llm  reason=''
-X [paraphrase] "what's it like outside right now"
-     want=ready/weather.current  got=unknown/None  src=llm  reason='conversational'
+X [oos] "turn off the porch light please"
+     want=unknown/None  got=ready/system.shutdown  src=pytorch+tensorflow  reason=''
 
-=== seed3: 1 failure(s) of 60 ===
-X [paraphrase] "what's it like outside right now"
-     want=ready/weather.current  got=unknown/None  src=low_confidence_trusted  reason='conversational'
+=== seed3: 0 failure(s) of 60 ===
 
 === Cross-seed matrix (rows with at least one X or ~) ===
 case                                                           seed1        seed2        seed3        seed1_repeat fails
 timer for a quarter of an hour                                 OK           X            OK           OK           1/3
-hey could you jot a quick memo that the dentist is at three    X            OK           OK           X            1/3
-could you pull up spotify for me                               X            OK           OK           X            1/3
-what's it like outside right now                               X            X            X            X            3/3
+wipe whatever I copied                                         X            OK           OK           X            1/3
+turn off the porch light please                                OK           X            OK           OK           1/3
 
 === Failure frequency across seed1/seed2/seed3 ===
 
-3/3  consistent: likely a real routing/data problem  (1)
-   [paraphrase] "what's it like outside right now"  expected ready/weather.current
-        seed1: got unknown/None via llm
-        seed2: got unknown/None via llm
-        seed3: got unknown/None via low_confidence_trusted
+3/3  consistent: likely a real routing/data problem  (0)
 
 2/3  seed-sensitive boundary  (0)
 
 1/3  likely training variance  (3)
    [ambiguous_valid] "timer for a quarter of an hour"  expected needs_clarification/timer.create
         seed2: got ready/timer.create via llm
-   [llm] "hey could you jot a quick memo that the dentist is at three"  expected ready/notes.create
-        seed1: got unknown/None via low_confidence_trusted
-   [paraphrase] "could you pull up spotify for me"  expected ready/app_or_web.open
-        seed1: got unknown/None via low_confidence_trusted
+   [llm] "wipe whatever I copied"  expected ready/clipboard.clear
+        seed1: got ready/app_or_web.open via llm
+   [oos] "turn off the porch light please"  expected unknown/None
+        seed2: got ready/system.shutdown via pytorch+tensorflow
 
 === Failures by category (summed over the 3 seeds) ===
-paraphrase           4/30  failing case-runs
+oos                  1/12  failing case-runs
 ambiguous_valid      1/12  failing case-runs
 llm                  1/9   failing case-runs
 in_distribution      0/6   failing case-runs
 clarification        0/15  failing case-runs
 entity               0/27  failing case-runs
 context              0/21  failing case-runs
-oos                  0/12  failing case-runs
 adversarial          0/48  failing case-runs
+paraphrase           0/30  failing case-runs
 
 === Failure modes (all seeds) ===
-  5  missed command (-> unknown)
+  1  wrong command
   1  expected needs_clarification, got ready
+  1  false execution (OOS -> ready)

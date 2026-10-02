@@ -1,20 +1,23 @@
 """
 brain/router/llm_fallback.py
-Structured, non-streaming Ollama routing fallback.
+==========================
+Structured Ollama fallback for command routing.
 
-Deliberately does NOT reuse services/llm/llm_service.py — that module
-is built for streaming conversational replies straight into Kokoro TTS
-(phrase-boundary splitting, expression tags, prosody). None of that
-applies here: this is a single blocking-shaped request/response JSON
-call with no persona, no streaming, no audio. Reusing it would mean
-either dragging the TTS pipeline along for a routing decision or
-forking half of its internals — both worse than a small dedicated
-client.
+This module is a small, dedicated router-side LLM client. It intentionally does
+not reuse the conversational TTS-oriented service layer because routing needs a
+single blocking JSON response with strict validation semantics, not streaming
+chat behavior, persona handling, or audio generation.
 
-The LLM is NEVER trusted directly: callers MUST run the returned dict
-through brain/router/validate.py before using it for anything. This
-module's only job is "ask Ollama for JSON, parse it defensively,
-return a plain dict or None" — never raises out to the caller.
+Its responsibility is narrow and defensive: build a command-routing prompt from
+registry metadata, call the local Ollama model, parse the response as JSON, and
+return a plain dict or None on any failure. The returned payload is never trusted
+as-is; callers must validate it through ``brain.router.validate`` before turning it
+into a command or dispatch decision.
+
+The module is a safety net for uncertain or unresolved commands, not the primary
+routing mechanism. It is designed to fail closed: malformed responses, timeouts,
+connection issues, and invalid JSON all degrade to ``None`` rather than raising an
+exception back to the caller.
 """
 
 import functools
@@ -47,7 +50,12 @@ _OP_DESCRIPTIONS: dict[str, str] = {
     "notes.delete": "Delete or discard a saved note from the notepad.",
     "app_or_web.open": "Launch, open, or navigate to a specific desktop application or website URL.",
     "web.search": "Search the web or Google for a new search query requested by the user right now.",
-    "weather.current": "Check current weather conditions or forecast for a location.",
+    "weather.current": (
+        "Check current weather conditions, outdoor conditions, or forecasts "
+        "(covers both explicitly specified locations and local outdoor weather; location is optional). "
+        "Does NOT cover non-weather physical activity, events, or vision (e.g. 'what is happening outside', "
+        "'look outside', 'who is outside', or 'what is going on outside')."
+    ),
     "media.play": "Start or resume local media or music playback.",
     "media.pause": "Pause or stop currently playing media or music.",
     "media.next": "Skip to the next media track.",
@@ -81,6 +89,7 @@ def _entity_keys_by_operation() -> dict[str, tuple[str, ...]]:
 
 def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict[str, list[str]],
                    top_candidates: list[str]) -> str:
+    """Construct the strict routing instruction prompt sent to the local Ollama model."""
     domain_lines = "\n".join(
         f"- {d}: {', '.join(operations_by_domain.get(d, []))}" for d in domains
     )
@@ -119,25 +128,28 @@ def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict
         "and directly instructing the assistant to execute an action right now. Respond with "
         "domain='unknown', operation='unknown' if the utterance is:\n"
         "   - A past event, completed narrative, or story (e.g. describing what happened previously).\n"
-        "   - A critique, evaluation, or complaint about past results or tools.\n"
+        "   - A critique, evaluation, or complaint about past results or tools (e.g. 'my Google search results were useless', 'the results were terrible').\n"
         "   - An internal thought, deliberation, or personal reminder to self (e.g. 'I should...', 'I need to...').\n"
         "   - A casual mention or discussion of a tool or capability without requesting its execution.\n\n"
         "2. COMPUTER SCOPE VS PHYSICAL WORLD: Supported operations apply strictly to the host computer / desktop environment. "
         "The assistant CANNOT control external physical devices, appliances, lights, televisions, doors, or physical premises. "
         "Commands regarding physical fixtures (e.g. turning off lights or TVs, locking doors or shops, unlocking premises) are OUT-OF-SCOPE. "
         "NEVER map physical-world actions to system.shutdown or system.lock. "
-        "Respond with domain='unknown', operation='unknown'.\n\n"
+        "Weather queries about outdoor conditions/forecasts are supported computer queries (weather.current). "
+        "Respond with domain='unknown', operation='unknown' for non-weather physical tasks.\n\n"
         "3. NO NEAREST-NEIGHBOR GUESSING: If a request is not one of the supported computer operations, "
         "do NOT guess the closest registered command. Respond with domain='unknown', operation='unknown'.\n\n"
         "4. PRESERVE LEGITIMATE COMMANDS: When the user directly commands the assistant to perform a supported "
-        "computer action (such as setting a timer, locking the computer or screen, shutting down the computer, "
-        "or searching the web), classify it into the correct domain and operation with high confidence.\n\n"
+        "computer action (such as setting a timer, checking weather or outdoor conditions, launching apps, "
+        "taking notes, locking the computer screen, shutting down the computer, or searching the web), "
+        "classify it into the correct domain and operation with high confidence (e.g. 0.8 to 1.0).\n\n"
     )
 
     return (
         "You are a strict command router for a voice assistant running on a personal computer (PC). "
         "Classify the user's utterance into EXACTLY ONE domain and operation from the list below, or "
         "respond with domain='unknown', operation='unknown' if it is not an actionable command for this PC assistant.\n\n"
+        f"Domains and valid operations:\n{domain_lines}\n\n"
         f"Supported operations and descriptions:\n{op_desc_lines}\n\n"
         f"{entity_section}"
         f"{routing_rules}"
@@ -146,7 +158,8 @@ def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict
         "If the utterance is not an actionable command from the list above (e.g. smalltalk, conversation, "
         "past narrative, physical world task, or unsupported request), respond with domain='unknown', operation='unknown'.\n"
         "If it IS one of the listed commands but you cannot confidently determine the operation or a required entity, "
-        "set needs_clarification=true and confidence<=0.3.\n"
+        "set needs_clarification=true and confidence<=0.3. For weather.current, location is optional (defaults to local weather) "
+        "and never requires clarification.\n"
         "confidence is REQUIRED: a JSON number from 0.0 to 1.0 reflecting how certain "
         "you are that the utterance matches the selected domain and operation. "
         "Never omit it.\n\n"

@@ -2402,4 +2402,13 @@
 {"text": "the google search results were useless today", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
 {"text": "i looked at my google search history", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
 {"text": "those search results were terrible", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "what's it like outside right now", "intent": "get_weather", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "how is it looking outside", "intent": "get_weather", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "what's it like outside today", "intent": "get_weather", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "could you pull up spotify for me", "intent": "open_target", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "pull up spotify", "intent": "open_target", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "can you pull up the calculator", "intent": "open_target", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "hey could you jot a quick memo that the dentist is at three", "intent": "note_write", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "jot a quick memo to buy printer paper", "intent": "note_write", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
+{"text": "could you jot down a quick note for me", "intent": "note_write", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
 

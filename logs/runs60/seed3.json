@@ -5,7 +5,7 @@
     "llm": true
   },
   "routing_accuracy": {
-    "value": 0.9833333333333333,
+    "value": 1.0,
     "n": 60,
     "low_sample": false
   },
@@ -25,8 +25,8 @@
     "low_sample": false
   },
   "oos_precision": {
-    "value": 0.9583333333333334,
-    "n": 24,
+    "value": 1.0,
+    "n": 23,
     "low_sample": true
   },
   "oos_recall": {
@@ -45,7 +45,7 @@
     "low_sample": false
   },
   "llm_fallback_rate": {
-    "value": 0.08333333333333333,
+    "value": 0.13333333333333333,
     "source": "call_counters",
     "n": 60,
     "low_sample": false
@@ -56,21 +56,21 @@
     "low_sample": true
   },
   "status_breakdown": {
-    "ready": 30,
+    "ready": 31,
     "needs_clarification": 6,
-    "unknown": 24
+    "unknown": 23
   },
   "call_totals": {
     "guard": 0,
     "classifier": 60,
-    "semantic": 16,
-    "llm": 5,
+    "semantic": 10,
+    "llm": 8,
     "semantic_errors": 0,
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.06535785000596661,
-  "latency_p95_s": 1.7923985999950673,
+  "latency_p50_s": 0.06573494999611285,
+  "latency_p95_s": 1.645304000005126,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,
@@ -97,7 +97,7 @@
       "n": 16
     },
     "paraphrase": {
-      "accuracy": 0.9,
+      "accuracy": 1.0,
       "n": 10
     },
     "ambiguous_valid": {
@@ -166,7 +166,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "low_confidence_trusted",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -178,7 +178,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "low_confidence_trusted",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -250,7 +250,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "low_confidence_trusted",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -274,7 +274,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "low_confidence_trusted",
+      "source": "pytorch+tensorflow",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -310,7 +310,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "llm",
+      "source": "pytorch+tensorflow",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -334,7 +334,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "pytorch+tensorflow",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -406,7 +406,7 @@
       "want_key": "media.pause",
       "got_status": "ready",
       "got_key": "media.pause",
-      "source": "semantic",
+      "source": "pytorch+tensorflow",
       "reason": "",
       "ok": true,
       "overreach": false
@@ -622,7 +622,7 @@
       "want_key": "notes.create",
       "got_status": "ready",
       "got_key": "notes.create",
-      "source": "llm",
+      "source": "pytorch+tensorflow",
       "reason": "",
       "ok": true,
       "overreach": false
@@ -646,7 +646,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "pytorch+tensorflow",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -694,7 +694,7 @@
       "want_key": "app_or_web.open",
       "got_status": "ready",
       "got_key": "app_or_web.open",
-      "source": "llm",
+      "source": "pytorch+tensorflow",
       "reason": "",
       "ok": true,
       "overreach": false
@@ -716,11 +716,11 @@
       "category": "paraphrase",
       "want_status": "ready",
       "want_key": "weather.current",
-      "got_status": "unknown",
-      "got_key": null,
-      "source": "low_confidence_trusted",
-      "reason": "conversational",
-      "ok": false,
+      "got_status": "ready",
+      "got_key": "weather.current",
+      "source": "pytorch+tensorflow",
+      "reason": "",
+      "ok": true,
       "overreach": false
     },
     {
@@ -742,7 +742,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "pytorch+tensorflow",
+      "source": "llm",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -833,12 +833,12 @@
     }
   ],
   "model_digest": {
-    "pytorch": "d352b95c0921",
-    "tensorflow": "5b06f3b8a53a",
-    "vocab": "6872206b1320",
+    "pytorch": "d61a611cd0fb",
+    "tensorflow": "c65ccce3f10a",
+    "vocab": "0f9f7d8768e4",
     "labels": "2e744823b86f",
-    "combined": "23c1299ed532",
+    "combined": "21b241b8066b",
     "seed": 3,
-    "training_hash": "0a8b07293bdc"
+    "training_hash": "9bee4eb24fac"
   }
 }

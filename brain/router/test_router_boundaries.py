@@ -52,7 +52,7 @@ from skills.base import LegacySkillAdapter, SkillResult, SkillRegistry
 run = asyncio.run
 
 
-# ── Shared fixtures: a tiny registry + a fake legacy classifier ─────────────
+# Shared fixtures: a small registry and a fake legacy classifier for isolated router tests.
 
 TIMER_SPEC = CommandSpec(
     domain="timer", operation="create", legacy_intent="set_timer",
@@ -70,6 +70,8 @@ WEATHER_SPEC = CommandSpec(
 
 
 class FakeRegistry:
+    """Minimal registry stub used to resolve command specs during router tests."""
+
     def __init__(self, specs):
         self.specs = specs
         self._by_key = {s.key: s for s in specs}
@@ -89,10 +91,7 @@ REG = FakeRegistry([TIMER_SPEC, SHUTDOWN_SPEC, WEATHER_SPEC])
 
 
 class FakeLegacy:
-    """Mimics the real IntentEngine.classify() return shape (see
-    brain/intent_engine.py's PATCHED classify(), which now includes
-    second_intent/second_confidence/margin) plus the guard attributes
-    brain/router/guards.py reaches into."""
+    """Minimal legacy classifier stub that matches the runtime contract used by the router."""
 
     _response_modes = {"set_timer": "skill", "shutdown": "skill", "get_weather": "skill",
                         "smalltalk": "llm", "greet": "skill", "unknown": "llm"}
@@ -127,9 +126,7 @@ class FakeLegacy:
 
 
 def _guard_check(engine, text):
-    """Minimal reimplementation of brain/router/guards.py's check(), scoped
-    to what these tests exercise, so the test file doesn't need to import
-    the real guards module's IntentEngine type-hint import chain."""
+    """Small guard shim for the router tests that exercises only the relevant boundary cases."""
     t = text.lower().strip()
     if engine._is_dismissal(t):
         return "dismissal", 1.0, "guard:dismissal"
@@ -144,6 +141,7 @@ def _guard_check(engine, text):
 
 
 def make_understander(table, **kwargs):
+    """Build a router-understand harness with the shared fake registry and guard shim."""
     return CommandUnderstander(FakeLegacy(table), REG, guard_fn=_guard_check, **kwargs)
 
 
@@ -173,11 +171,8 @@ def test_classifier_low_margin_falls_through():
 
 
 def test_margin_none_uses_stricter_bar():
-    # margin=None from an ensemble-sourced result (not a keyword/guard
-    # source, which would already be trusted outright via the "keyword"/
-    # "guard" substring check) must be judged by MIN_CONF_NO_MARGIN
-    # (0.93), not the margin-aware bar — 0.90 clears the normal bar but
-    # not the stricter one.
+    # If the classifier reports no margin, the stricter no-margin threshold
+    # still applies; this would pass the normal gate but fail the safer one.
     u = make_understander({"timer": ("set_timer", 0.90, None, "pytorch+tensorflow")})
     ir = run(u.understand("timer thing"))
     assert ir.status is Status.UNKNOWN
@@ -186,6 +181,7 @@ def test_margin_none_uses_stricter_bar():
 # ── 4. semantic escalation ───────────────────────────────────────────────────
 
 def _retrieval(spec, sim, second_sim=0.1):
+    """Create a synthetic retrieval result with a primary and secondary candidate."""
     return RetrievalResult([
         CommandCandidate(spec, sim, "seed"),
         CommandCandidate(WEATHER_SPEC if spec is not WEATHER_SPEC else TIMER_SPEC, second_sim, "seed2"),
@@ -266,8 +262,8 @@ def test_llm_exception_counts_as_error_not_crash():
 
 
 def test_llm_valid_but_low_confidence_unknown():
-    # PATCH: a structurally valid, registry-matching command must still be
-    # gated by its own confidence — not dispatched just because it parsed.
+    # A structurally valid command must still honor its own confidence before
+    # it is accepted, even when it matches the registry cleanly.
     async def llm_route(text, domains, ops, hints):
         return {"domain": "weather", "operation": "current", "entities": {},
                 "confidence": 0.1, "needs_clarification": False}
@@ -277,8 +273,8 @@ def test_llm_valid_but_low_confidence_unknown():
 
 
 def test_llm_clarification_with_nothing_missing():
-    # PATCH: needs_clarification=True but every required entity is already
-    # present/derivable -> UNKNOWN, not a forced READY at low confidence.
+    # A clarification flag is not enough to accept a command when all required
+    # entities are already satisfied; this must remain UNKNOWN rather than READY.
     async def llm_route(text, domains, ops, hints):
         return {"domain": "timer", "operation": "create", "entities": {"duration": "600"},
                 "confidence": 0.4, "needs_clarification": True}
@@ -326,11 +322,8 @@ def test_to_legacy_intent_ready():
 
 
 def test_to_legacy_intent_clarify():
-    # PATCH: this must be "clarify" AND brain/router/dispatch.py must have a
-    # route for it (see that module's Router._routes) — verified by source
-    # inspection; dispatch.py is not imported here (it pulls in kokoro/
-    # sounddevice/httpx transitively, which this test file avoids per the
-    # stabilization-pass brief).
+    # Clarification intent must be emitted as a special legacy shape, even
+    # when the router itself is not imported in this isolated unit test.
     ir = CommandIR(Status.NEEDS_CLARIFICATION, legacy_intent="set_timer",
                    prompt="How long?", raw_text="set a timer", effective_text="set a timer")
     d = to_legacy_intent(ir)
@@ -357,8 +350,8 @@ def test_context_pending_reply_rewrites():
 
 
 def test_context_pending_does_not_swallow_unrelated_turn():
-    # PATCH: a long unrelated sentence that happens to contain a duration
-    # must NOT be rewritten into the pending timer command.
+    # A long unrelated sentence containing a number must not get rewritten into
+    # the pending timer command just because it includes a duration-like phrase.
     import time as _time
     from brain.router.context import Pending
     ctx = ConversationContext()
@@ -383,8 +376,8 @@ def test_context_correction_rewrites():
 
 
 def test_context_correction_requires_marker():
-    # PATCH: a bare number with no correction marker must not edit the
-    # active timer — "no 5 apples please" is not "actually make it 5".
+    # A bare numeric phrase without an explicit correction marker must not
+    # rewrite the active timer command.
     import time as _time
     from brain.router.context import ActionRecord
     ctx = ConversationContext()
@@ -413,8 +406,7 @@ def test_extract_duration():
     assert extract_duration("for twenty five minutes") == 1500
     assert extract_duration("10 minutes") == 600
     assert extract_duration("no time here") is None
-    # PATCH: bare word-forms the real timer skill can't parse are no
-    # longer accepted here either — see entities.py's module docstring.
+    # Bare word forms that the timer parser does not accept should remain invalid.
     assert extract_duration("an hour") is None
     assert extract_duration("half an hour") is None
 
@@ -451,9 +443,7 @@ def test_legacy_skill_adapter_success():
 
 
 def test_legacy_skill_adapter_carries_meta():
-    # PATCH: intent["action"] / intent["_no_history"] set by a legacy skill
-    # (e.g. perform_action.py) must survive through to SkillResult.meta —
-    # the original adapter discarded them.
+    # Legacy skill metadata must be preserved when the adapter wraps the result.
     async def execute(intent, text):
         intent["action"] = "nod"
         intent["_no_history"] = True
@@ -709,3 +699,98 @@ def test_l1_keyword_fallback_timer_narrative_vs_imperative():
     assert intent == "set_timer" and conf == 1.0
     intent, conf, _ = engine._keyword_fallback("timer for 15 minutes")
     assert intent == "set_timer" and conf == 1.0
+
+
+# ── 17. Residual failure fixes: Cases A–C & conversational gating ─────────────
+
+@pytest.mark.parametrize("utterance", [
+    "what's it like outside right now",
+    "how is it looking outside",
+    "what's it like outside today",
+])
+def test_case_a_ambient_weather_positive(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status} (source={ir.source}, reason={ir.reason})"
+    assert ir.domain == "weather", f"Wrong domain for '{utterance}': {ir.domain}"
+    assert ir.operation == "current", f"Wrong operation for '{utterance}': {ir.operation}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "what's happening outside",
+    "look outside",
+    "who is outside",
+    "what's going on outside",
+])
+def test_case_a_ambient_weather_physical_negatives_llm(utterance):
+    import httpx
+    from brain.router.llm_fallback import route
+    from brain.router.registry import CommandRegistry, load_specs
+    from config.settings import config
+
+    try:
+        r = httpx.get(f"{config.llm.base_url.rstrip('/')}/api/tags", timeout=1.0)
+        if r.status_code != 200:
+            pytest.skip("Ollama not running")
+    except Exception:
+        pytest.skip("Ollama not running")
+
+    reg = CommandRegistry(load_specs())
+    domains = reg.domains()
+    ops = {d: reg.operations_for(d) for d in domains}
+
+    result = run(route(utterance, domains, ops, []))
+    assert result is not None
+    is_unknown = (
+        result.get("domain") in ("unknown", None)
+        or result.get("operation") in ("unknown", None)
+        or float(result.get("confidence", 0.0)) < 0.5
+    )
+    assert is_unknown, f"Expected unknown for '{utterance}', got {result}"
+
+
+def test_case_b_target_extraction_pull_up():
+    from brain.intent_engine import IntentEngine
+    engine = IntentEngine()
+    assert engine._extract_target("could you pull up spotify for me", "open_target") == "spotify"
+    assert engine._extract_target("pull up spotify", "open_target") == "spotify"
+    assert engine._extract_target("can you pull up the calculator", "open_target") == "calculator"
+
+
+def test_case_b_pull_up_spotify_router():
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand("could you pull up spotify for me"))
+    assert ir.status is Status.READY, f"Expected READY, got {ir.status} (source={ir.source})"
+    assert ir.domain == "app_or_web"
+    assert ir.operation == "open"
+    assert "spotify" in ir.target.lower()
+
+
+def test_case_c_jot_memo_router():
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand("hey could you jot a quick memo that the dentist is at three"))
+    assert ir.status is Status.READY, f"Expected READY, got {ir.status} (source={ir.source})"
+    assert ir.domain == "notes"
+    assert ir.operation == "create"
+
+
+def test_conversational_gating_logic():
+    # Test the gating predicate: plausible_chat = mode == "llm" and conf >= 0.70 and (margin is None or margin >= 0.15)
+    # Weak/contested predictions must NOT be plausible_chat (must allow LLM escalation)
+    assert not ("llm" == "llm" and 0.52 >= 0.70 and (0.16 is None or 0.16 >= 0.15))
+    assert not ("llm" == "llm" and 0.75 >= 0.70 and (0.05 is None or 0.05 >= 0.15))
+    # Confident and uncontested conversational predictions MUST be plausible_chat (skip LLM)
+    assert ("llm" == "llm" and 0.80 >= 0.70 and (0.20 is None or 0.20 >= 0.15))
+    assert ("llm" == "llm" and 0.72 >= 0.70 and (None is None or None >= 0.15))

@@ -118,7 +118,7 @@ class CommandUnderstander:
         # command. It now always gets semantic retrieval as competing
         # evidence; the LLM fallback stays off for that case only, so the
         # existing LLM behaviour and latency are unchanged elsewhere.
-        plausible_chat = mode == "llm" and conf >= 0.5
+        plausible_chat = mode == "llm" and conf >= 0.70 and (margin is None or margin >= 0.15)
         ir = await self._escalate(text, target, allow_llm=not plausible_chat, **base)
         if ir is not None:
             return ir

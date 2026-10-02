@@ -1,33 +1,30 @@
 """
 brain/router/hybrid_engine.py
-HybridIntentEngine — legacy-shaped hybrid pipeline (guards -> semantic ->
-confidence -> LLM fallback -> validate -> adapt).
+============================
+Hybrid compatibility engine for legacy-shaped command routing.
 
-Two entry points:
-  classify(text) -> dict   [SYNC]  legacy drop-in; always returns the legacy
-                                   engine's result (+ optional shadow compare).
-  aclassify(text) -> dict  [ASYNC] full hybrid pipeline + force_hybrid option.
+This module is the bridge between the legacy ``IntentEngine.classify()`` output
+and the newer hybrid route selection strategy. It keeps the legacy API shape for
+compatibility while optionally evaluating semantic retrieval and LLM fallback
+before returning a legacy-style result dictionary.
 
-BATCH 2 FIX (semantic path vs required entities): a CONFIDENT semantic hit
-selects a command before any entity exists, but it was validated with
-entities={} against the full required-entity rules. Any operation with a
-required entity (timer.create -> duration, app_or_web.open -> target,
-web.search -> query) therefore failed validation and fell through to the LLM
-even though retrieval was confident. Now:
-  1. the command's identity is validated with enforce_required=False;
-  2. entities are extracted AFTER selection with the existing extractors
-     (brain/router/entities.py) and the classifier's own target extraction
-     (IntentEngine._extract_target — reused, not re-implemented);
-  3. missing required entities do not block dispatch here: this legacy-shaped
-     path has no clarification status, and adapter.py already falls back to
-     the raw utterance so the skill asks its own clarification. (The IR
-     pipeline in understand.py is the path that represents NEEDS_CLARIFICATION.)
-The LLM branch is unchanged: LLM output is validated with required-entity
-enforcement. Nothing here executes a skill.
+The important runtime behavior is:
+- ``classify()`` remains the synchronous drop-in entry point and preserves the
+  legacy output contract while optionally scheduling a shadow comparison.
+- ``aclassify()`` runs the full hybrid pipeline for async callers, including
+  guard checks, semantic retrieval, and LLM fallback when needed.
+- semantic hits are validated as command identities first with required-entity
+  checks relaxed, then entity extraction is performed afterward so required
+  properties such as timer duration or search query can be resolved without
+  prematurely rejecting a confident command.
+- when the command is not trusted or not fully actionable, the engine falls back
+  to the legacy classifier or to the LLM path without executing any skill.
+- hybrid routing remains allowlist-aware: only configured domains are run
+  through the hybrid path when the backend is set to ``"hybrid"``.
 
-Allowlisting: only domains in config.router.hybrid_domains are routed through
-this pipeline when backend == "hybrid"; the allowlist is applied to the
-WINNING command, and an out-of-allowlist runner-up still counts toward margin.
+The file is intentionally compatibility-oriented rather than a primary execution
+layer; it adapts command selection back into the older dict-based intent contract
+for callers that still rely on that shape.
 """
 
 from __future__ import annotations
@@ -55,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 
 class HybridIntentEngine:
+    """Compatibility wrapper that can route through semantic and LLM fallback while preserving the legacy result shape."""
+
     def __init__(self, legacy_engine: IntentEngine | None = None):
         self._legacy = legacy_engine or IntentEngine()
 
@@ -87,6 +86,7 @@ class HybridIntentEngine:
     # ── Sync entry point (drop-in for IntentEngine.classify) ────────────
 
     def classify(self, text: str) -> dict:
+        """Return the legacy-style classification result while optionally running a shadow comparison."""
         guard_hit = guards.check(self._legacy, text)
         if guard_hit is not None:
             intent, confidence, source = guard_hit
@@ -106,6 +106,7 @@ class HybridIntentEngine:
         self._shadow_loop = loop
 
     def _legacy_shaped(self, intent: str, text: str, confidence: float, source: str) -> dict:
+        """Normalize a routed intent into the legacy dict shape expected by older callers."""
         return {
             "intent": intent,
             "target": "",
@@ -116,9 +117,7 @@ class HybridIntentEngine:
         }
 
     def _with_extracted_entities(self, seed: Command, spec, text: str) -> tuple[Command, tuple]:
-        """Extract entities for a semantically selected command. Reuses the
-        classifier's target extraction (private, like guards.py's coupling) and
-        the shared extractors; never raises."""
+        """Fill a semantic command with extracted entities after selection and before legacy adaptation."""
         target = ""
         extract_target = getattr(self._legacy, "_extract_target", None)
         if callable(extract_target):
@@ -142,6 +141,7 @@ class HybridIntentEngine:
     # ── Async entry point (full hybrid pipeline) ────────────────────────
 
     async def aclassify(self, text: str, *, force_hybrid: bool = False) -> dict:
+        """Run the full hybrid routing pipeline and return the legacy-shaped result."""
         t0 = time.perf_counter()
 
         guard_hit = guards.check(self._legacy, text)
@@ -193,7 +193,9 @@ class HybridIntentEngine:
                 return intent
             logger.warning(f"[router] semantic candidate failed validation ({v.error}) — falling to LLM.")
 
-        # AMBIGUOUS, LOW, or a confident-but-invalid semantic match: ask the LLM.
+        # When semantic evidence is ambiguous or unusable, the LLM becomes the
+        # next fallback. This keeps the hybrid engine conservative without
+        # changing the legacy output contract.
         top_candidate_keys = [c.spec.key for c in retrieval.candidates[:3]]
         operations_by_domain = {d: self._registry.operations_for(d) for d in self._registry.domains()}
         t_llm0 = time.perf_counter()
@@ -241,8 +243,7 @@ class HybridIntentEngine:
     # ── Shadow mode ──────────────────────────────────────────────────────
 
     async def _shadow_compare(self, text: str, legacy_result: dict) -> None:
-        """Compute the hybrid decision purely for comparison logging; never
-        affects what was dispatched. Best-effort."""
+        """Log the hybrid decision for comparison only; it never changes dispatch behavior."""
         try:
             t0 = time.perf_counter()
             hybrid_result = await self.aclassify(text, force_hybrid=True)

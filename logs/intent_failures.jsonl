@@ -1,5 +1,5 @@
 {"utterance": "what's the humidity like right now", "predicted_intent": "get_weather", "confidence": 0.4746, "correct_intent": null, "timestamp": 1790927608.3199797, "occurrences": 11}
-{"utterance": "what model are you running on", "predicted_intent": "smalltalk", "confidence": 0.4978, "correct_intent": null, "timestamp": 1790855790.6814167, "occurrences": 10}
+{"utterance": "what model are you running on", "predicted_intent": "identity", "confidence": 0.4987, "correct_intent": null, "timestamp": 1790932405.4145567, "occurrences": 11}
 {"utterance": "what makes you happy", "predicted_intent": "opinion", "confidence": 0.5117, "correct_intent": null, "timestamp": 1790853194.8616307, "occurrences": 4}
 {"utterance": "my neighbor is renovating again", "predicted_intent": "followup", "confidence": 0.2562, "correct_intent": null, "timestamp": 1790853630.0260448, "occurrences": 11}
 {"utterance": "there's a weird smell in the kitchen", "predicted_intent": "smalltalk", "confidence": 0.6454, "correct_intent": null, "timestamp": 1790539297.943161, "occurrences": 6}
@@ -8,219 +8,219 @@
 {"utterance": "do you have a personality", "predicted_intent": "identity", "confidence": 0.5321, "correct_intent": null, "timestamp": 1790539315.1815243, "occurrences": 3}
 {"utterance": "I burned the toast again", "predicted_intent": "unknown", "confidence": 0.6468, "correct_intent": null, "timestamp": 1790855814.3564203, "occurrences": 9}
 {"utterance": "my chair keeps squeaking", "predicted_intent": "smalltalk", "confidence": 0.5009, "correct_intent": null, "timestamp": 1790853651.0794098, "occurrences": 9}
-{"utterance": "my dog just knocked over a plant", "predicted_intent": "identity", "confidence": 0.4964, "correct_intent": null, "timestamp": 1790852321.410189, "occurrences": 8}
-{"utterance": "the sky looks orange today", "predicted_intent": "unknown", "confidence": 0.483, "correct_intent": null, "timestamp": 1790929179.7778583, "occurrences": 67}
+{"utterance": "my dog just knocked over a plant", "predicted_intent": "smalltalk", "confidence": 0.5749, "correct_intent": null, "timestamp": 1790932446.434724, "occurrences": 9}
+{"utterance": "the sky looks orange today", "predicted_intent": "set_timer", "confidence": 0.3863, "correct_intent": null, "timestamp": 1790933563.4192498, "occurrences": 72}
 {"utterance": "give me a quote", "predicted_intent": "motivate", "confidence": 0.556, "correct_intent": null, "timestamp": 1790830702.4937544, "occurrences": 4}
-{"utterance": "I just remembered I have a dentist appointment", "predicted_intent": "smalltalk", "confidence": 0.4883, "correct_intent": null, "timestamp": 1790927610.448095, "occurrences": 10}
-{"utterance": "What did I copy and paste", "predicted_intent": "note_write", "confidence": 0.4396, "correct_intent": null, "timestamp": 1790927610.9672034, "occurrences": 12}
+{"utterance": "I just remembered I have a dentist appointment", "predicted_intent": "smalltalk", "confidence": 0.6068, "correct_intent": null, "timestamp": 1790932406.2740843, "occurrences": 11}
+{"utterance": "What did I copy and paste", "predicted_intent": "followup", "confidence": 0.4219, "correct_intent": null, "timestamp": 1790932406.8842225, "occurrences": 13}
 {"utterance": "clip the word hello", "predicted_intent": "general_query", "confidence": 0.4993, "correct_intent": null, "timestamp": 1790494673.875943, "occurrences": 1}
-{"utterance": "don't need to know about it", "predicted_intent": "smalltalk", "confidence": 0.5995, "correct_intent": null, "timestamp": 1790927611.5474982, "occurrences": 12}
-{"utterance": "Let's change the topic", "predicted_intent": "followup", "confidence": 0.4983, "correct_intent": null, "timestamp": 1790927611.6137729, "occurrences": 14}
-{"utterance": "say it one more time", "predicted_intent": "get_time", "confidence": 0.6347, "correct_intent": null, "timestamp": 1790927611.735641, "occurrences": 11}
-{"utterance": "Let's get back to that", "predicted_intent": "prev_track", "confidence": 0.5347, "correct_intent": null, "timestamp": 1790927611.8658886, "occurrences": 12}
+{"utterance": "don't need to know about it", "predicted_intent": "get_time", "confidence": 0.3345, "correct_intent": null, "timestamp": 1790932407.6315148, "occurrences": 13}
+{"utterance": "Let's change the topic", "predicted_intent": "dismissal", "confidence": 0.5088, "correct_intent": null, "timestamp": 1790932407.7142193, "occurrences": 15}
+{"utterance": "say it one more time", "predicted_intent": "dismissal", "confidence": 0.3772, "correct_intent": null, "timestamp": 1790932407.872606, "occurrences": 12}
+{"utterance": "Let's get back to that", "predicted_intent": "dismissal", "confidence": 0.3208, "correct_intent": null, "timestamp": 1790932408.0197206, "occurrences": 13}
 {"utterance": "i need to know the time", "predicted_intent": "general_query", "confidence": 0.5167, "correct_intent": null, "timestamp": 1790494675.9535878, "occurrences": 1}
 {"utterance": "Are you based on human knowledge", "predicted_intent": "identity", "confidence": 0.528, "correct_intent": null, "timestamp": 1790927613.6245494, "occurrences": 10}
 {"utterance": "Something to tickle my funny bone", "predicted_intent": "joke", "confidence": 0.5793, "correct_intent": null, "timestamp": 1790927613.685216, "occurrences": 5}
-{"utterance": "im done with this for now lock it", "predicted_intent": "lock_screen", "confidence": 0.4996, "correct_intent": null, "timestamp": 1790927613.9120028, "occurrences": 14}
+{"utterance": "im done with this for now lock it", "predicted_intent": "lock_screen", "confidence": 0.5, "correct_intent": null, "timestamp": 1790932410.6856742, "occurrences": 15}
 {"utterance": "Can you give me a quick boost", "predicted_intent": "identity", "confidence": 0.6415, "correct_intent": null, "timestamp": 1790927614.0320818, "occurrences": 8}
-{"utterance": "note what's on my mind", "predicted_intent": "note_write", "confidence": 0.5642, "correct_intent": null, "timestamp": 1790855798.0988142, "occurrences": 11}
-{"utterance": "can you relate to burnout", "predicted_intent": "opinion", "confidence": 0.4995, "correct_intent": null, "timestamp": 1790927615.8192255, "occurrences": 7}
+{"utterance": "note what's on my mind", "predicted_intent": "note_view", "confidence": 0.4991, "correct_intent": null, "timestamp": 1790932412.3159046, "occurrences": 12}
+{"utterance": "can you relate to burnout", "predicted_intent": "opinion", "confidence": 0.5694, "correct_intent": null, "timestamp": 1790932413.169031, "occurrences": 8}
 {"utterance": "how about a giggle", "predicted_intent": "general_query", "confidence": 0.5, "correct_intent": null, "timestamp": 1790927616.00664, "occurrences": 12}
 {"utterance": "find out what's the best vpn for streaming", "predicted_intent": "unknown", "confidence": 0.4181, "correct_intent": null, "timestamp": 1790927616.398911, "occurrences": 12}
-{"utterance": "I'm not really sure what I want to eat", "predicted_intent": "confirm", "confidence": 0.5059, "correct_intent": null, "timestamp": 1790927617.3882806, "occurrences": 13}
-{"utterance": "what's my system specs", "predicted_intent": "followup", "confidence": 0.4702, "correct_intent": null, "timestamp": 1790830714.2712781, "occurrences": 3}
-{"utterance": "what should i do now", "predicted_intent": "smalltalk", "confidence": 0.4869, "correct_intent": null, "timestamp": 1790927625.9618025, "occurrences": 10}
-{"utterance": "can you clarify that", "predicted_intent": "confirm", "confidence": 0.4603, "correct_intent": null, "timestamp": 1790855813.9086206, "occurrences": 10}
+{"utterance": "I'm not really sure what I want to eat", "predicted_intent": "confirm", "confidence": 0.4907, "correct_intent": null, "timestamp": 1790932415.265127, "occurrences": 14}
+{"utterance": "what's my system specs", "predicted_intent": "system_info", "confidence": 0.6249, "correct_intent": null, "timestamp": 1790932415.7428894, "occurrences": 4}
+{"utterance": "what should i do now", "predicted_intent": "help", "confidence": 0.5003, "correct_intent": null, "timestamp": 1790932426.667673, "occurrences": 11}
+{"utterance": "can you clarify that", "predicted_intent": "thanks", "confidence": 0.4844, "correct_intent": null, "timestamp": 1790932427.6582525, "occurrences": 11}
 {"utterance": "yeah that is correct", "predicted_intent": "confirm", "confidence": 0.5946, "correct_intent": null, "timestamp": 1790852307.3748636, "occurrences": 4}
 {"utterance": "what commands do you support", "predicted_intent": "general_query", "confidence": 0.5585, "correct_intent": null, "timestamp": 1790494685.8211904, "occurrences": 1}
-{"utterance": "Verify what I heard", "predicted_intent": "smalltalk", "confidence": 0.3992, "correct_intent": null, "timestamp": 1790927627.824592, "occurrences": 7}
+{"utterance": "Verify what I heard", "predicted_intent": "confirm", "confidence": 0.5595, "correct_intent": null, "timestamp": 1790932429.4011896, "occurrences": 8}
 {"utterance": "Yeah I'm positive about that", "predicted_intent": "smalltalk", "confidence": 0.4998, "correct_intent": null, "timestamp": 1790927627.8948197, "occurrences": 11}
-{"utterance": "Can you tie it all together", "predicted_intent": "farewell", "confidence": 0.5214, "correct_intent": null, "timestamp": 1790927628.1840239, "occurrences": 14}
-{"utterance": "That didn't make sense", "predicted_intent": "followup", "confidence": 0.5141, "correct_intent": null, "timestamp": 1790855816.0472193, "occurrences": 7}
-{"utterance": "You said what now", "predicted_intent": "confirm", "confidence": 0.5029, "correct_intent": null, "timestamp": 1790927628.302975, "occurrences": 12}
+{"utterance": "Can you tie it all together", "predicted_intent": "dismissal", "confidence": 0.4712, "correct_intent": null, "timestamp": 1790932429.9673328, "occurrences": 15}
+{"utterance": "That didn't make sense", "predicted_intent": "followup", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790932430.057671, "occurrences": 8}
+{"utterance": "You said what now", "predicted_intent": "confirm", "confidence": 0.5, "correct_intent": null, "timestamp": 1790932430.1604497, "occurrences": 13}
 {"utterance": "Can you expand on that", "predicted_intent": "followup", "confidence": 0.6397, "correct_intent": null, "timestamp": 1790519533.9603205, "occurrences": 2}
-{"utterance": "what's the smallest country in the world", "predicted_intent": "unknown", "confidence": 0.3173, "correct_intent": null, "timestamp": 1790927628.67201, "occurrences": 13}
+{"utterance": "what's the smallest country in the world", "predicted_intent": "get_weather", "confidence": 0.4948, "correct_intent": null, "timestamp": 1790932430.7718105, "occurrences": 14}
 {"utterance": "day of the week", "predicted_intent": "general_query", "confidence": 0.563, "correct_intent": null, "timestamp": 1790494688.2902486, "occurrences": 1}
-{"utterance": "is it gonna rain", "predicted_intent": "general_query", "confidence": 0.5055, "correct_intent": null, "timestamp": 1790494688.9475768, "occurrences": 1}
+{"utterance": "is it gonna rain", "predicted_intent": "get_weather", "confidence": 0.5104, "correct_intent": null, "timestamp": 1790933572.2404213, "occurrences": 3}
 {"utterance": "Are you based on some famous person", "predicted_intent": "opinion", "confidence": 0.4982, "correct_intent": null, "timestamp": 1790855818.3652081, "occurrences": 6}
 {"utterance": "Can you make me crack a smile?", "predicted_intent": "perform_action", "confidence": 0.4494, "correct_intent": null, "timestamp": 1790853655.0861337, "occurrences": 9}
-{"utterance": "I need a mood lift", "predicted_intent": "motivate", "confidence": 0.4894, "correct_intent": null, "timestamp": 1790927630.3550723, "occurrences": 9}
-{"utterance": "be quiet for a sec", "predicted_intent": "unknown", "confidence": 0.3576, "correct_intent": null, "timestamp": 1790927630.4732943, "occurrences": 14}
-{"utterance": "I'm done with that note", "predicted_intent": "smalltalk", "confidence": 0.6483, "correct_intent": null, "timestamp": 1790539321.810293, "occurrences": 5}
+{"utterance": "I need a mood lift", "predicted_intent": "joke", "confidence": 0.3303, "correct_intent": null, "timestamp": 1790932433.0887692, "occurrences": 10}
+{"utterance": "be quiet for a sec", "predicted_intent": "mute", "confidence": 0.4572, "correct_intent": null, "timestamp": 1790932433.2366118, "occurrences": 15}
+{"utterance": "I'm done with that note", "predicted_intent": "note_delete", "confidence": 0.5918, "correct_intent": null, "timestamp": 1790932433.590072, "occurrences": 6}
 {"utterance": "do you like getting surprise gifts", "predicted_intent": "general_query", "confidence": 0.553, "correct_intent": null, "timestamp": 1790494692.0452766, "occurrences": 1}
-{"utterance": "count down from one hour", "predicted_intent": "get_time", "confidence": 0.4599, "correct_intent": null, "timestamp": 1790927633.3089633, "occurrences": 13}
-{"utterance": "my favorite show is on tonight", "predicted_intent": "opinion", "confidence": 0.5155, "correct_intent": null, "timestamp": 1790927633.8793259, "occurrences": 11}
+{"utterance": "count down from one hour", "predicted_intent": "prev_track", "confidence": 0.4375, "correct_intent": null, "timestamp": 1790932437.1992738, "occurrences": 14}
+{"utterance": "my favorite show is on tonight", "predicted_intent": "identity", "confidence": 0.4751, "correct_intent": null, "timestamp": 1790932437.9051712, "occurrences": 12}
 {"utterance": "are you done with work", "predicted_intent": "opinion", "confidence": 0.4995, "correct_intent": null, "timestamp": 1790927633.94636, "occurrences": 13}
-{"utterance": "you're a legend", "predicted_intent": "thanks", "confidence": 0.4581, "correct_intent": null, "timestamp": 1790855825.1630383, "occurrences": 11}
-{"utterance": "down a notch would be great", "predicted_intent": "smalltalk", "confidence": 0.4993, "correct_intent": null, "timestamp": 1790927635.0556755, "occurrences": 13}
+{"utterance": "you're a legend", "predicted_intent": "thanks", "confidence": 0.5013, "correct_intent": null, "timestamp": 1790932438.7142136, "occurrences": 12}
+{"utterance": "down a notch would be great", "predicted_intent": "unknown", "confidence": 0.3735, "correct_intent": null, "timestamp": 1790932439.2553442, "occurrences": 14}
 {"utterance": "open my note in notepad", "predicted_intent": "general_query", "confidence": 0.5072, "correct_intent": null, "timestamp": 1790494697.4197993, "occurrences": 1}
-{"utterance": "last track", "predicted_intent": "prev_track", "confidence": 0.3765, "correct_intent": null, "timestamp": 1790855788.4548965, "occurrences": 9}
-{"utterance": "that's awesome", "predicted_intent": "smalltalk", "confidence": 0.3881, "correct_intent": null, "timestamp": 1790927609.2614348, "occurrences": 12}
-{"utterance": "makes sense", "predicted_intent": "thanks", "confidence": 0.4667, "correct_intent": null, "timestamp": 1790927609.330099, "occurrences": 11}
+{"utterance": "last track", "predicted_intent": "next_track", "confidence": 0.4574, "correct_intent": null, "timestamp": 1790932403.371086, "occurrences": 10}
+{"utterance": "that's awesome", "predicted_intent": "confirm", "confidence": 0.4454, "correct_intent": null, "timestamp": 1790932404.9230924, "occurrences": 13}
+{"utterance": "makes sense", "predicted_intent": "open_target", "confidence": 0.5174, "correct_intent": null, "timestamp": 1790932405.0006714, "occurrences": 12}
 {"utterance": "kinda tired ngl", "predicted_intent": "play_music", "confidence": 0.4575, "correct_intent": null, "timestamp": 1790927609.5721927, "occurrences": 13}
-{"utterance": "and then what", "predicted_intent": "followup", "confidence": 0.4923, "correct_intent": null, "timestamp": 1790855791.2237475, "occurrences": 11}
+{"utterance": "and then what", "predicted_intent": "smalltalk", "confidence": 0.4185, "correct_intent": null, "timestamp": 1790932405.917395, "occurrences": 12}
 {"utterance": "double check that", "predicted_intent": "confirm", "confidence": 0.5191, "correct_intent": null, "timestamp": 1790927610.1883433, "occurrences": 3}
 {"utterance": "Not a priority", "predicted_intent": "dismissal", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790927611.4782193, "occurrences": 9}
 {"utterance": "Repeat the last bit", "predicted_intent": "followup", "confidence": 0.506, "correct_intent": null, "timestamp": 1790927611.9429538, "occurrences": 8}
 {"utterance": "date now", "predicted_intent": "get_date", "confidence": 0.5568, "correct_intent": null, "timestamp": 1790519516.7883654, "occurrences": 1}
 {"utterance": "weather alert in my location", "predicted_intent": "get_weather", "confidence": 0.5135, "correct_intent": null, "timestamp": 1790522322.399846, "occurrences": 2}
 {"utterance": "What's the story behind Maya", "predicted_intent": "identity", "confidence": 0.5003, "correct_intent": null, "timestamp": 1790927613.4378645, "occurrences": 4}
-{"utterance": "I'm deleting it", "predicted_intent": "dismissal", "confidence": 0.4517, "correct_intent": null, "timestamp": 1790927614.548958, "occurrences": 4}
+{"utterance": "I'm deleting it", "predicted_intent": "dismissal", "confidence": 0.5298, "correct_intent": null, "timestamp": 1790932411.4919918, "occurrences": 5}
 {"utterance": "stop this song", "predicted_intent": "pause_music", "confidence": 0.5655, "correct_intent": null, "timestamp": 1790522327.1474164, "occurrences": 3}
-{"utterance": "30 second timer", "predicted_intent": "set_timer", "confidence": 0.5795, "correct_intent": null, "timestamp": 1790927616.9522946, "occurrences": 4}
-{"utterance": "what's the haps", "predicted_intent": "followup", "confidence": 0.4128, "correct_intent": null, "timestamp": 1790927617.6249685, "occurrences": 13}
+{"utterance": "30 second timer", "predicted_intent": "set_timer", "confidence": 0.6254, "correct_intent": null, "timestamp": 1790932414.6086636, "occurrences": 5}
+{"utterance": "what's the haps", "predicted_intent": "get_time", "confidence": 0.4791, "correct_intent": null, "timestamp": 1790932415.4845662, "occurrences": 14}
 {"utterance": "make sound quieter", "predicted_intent": "volume_down", "confidence": 0.5678, "correct_intent": null, "timestamp": 1790927618.4751873, "occurrences": 5}
 {"utterance": "make the volume higher", "predicted_intent": "volume_down", "confidence": 0.4861, "correct_intent": null, "timestamp": 1790853641.1301851, "occurrences": 7}
-{"utterance": "you good", "predicted_intent": "greet", "confidence": 0.5774, "correct_intent": null, "timestamp": 1790853217.6934295, "occurrences": 5}
+{"utterance": "you good", "predicted_intent": "opinion", "confidence": 0.3552, "correct_intent": null, "timestamp": 1790932426.3109505, "occurrences": 6}
 {"utterance": "surviving I guess", "predicted_intent": "smalltalk", "confidence": 0.6265, "correct_intent": null, "timestamp": 1790853218.2971027, "occurrences": 3}
-{"utterance": "say something positive", "predicted_intent": "smalltalk", "confidence": 0.5701, "correct_intent": null, "timestamp": 1790927626.4758081, "occurrences": 11}
+{"utterance": "say something positive", "predicted_intent": "motivate", "confidence": 0.5038, "correct_intent": null, "timestamp": 1790932427.4349825, "occurrences": 12}
 {"utterance": "well", "predicted_intent": "dismissal", "confidence": 0.5229, "correct_intent": null, "timestamp": 1790927626.8775, "occurrences": 9}
 {"utterance": "no more timer", "predicted_intent": "cancel_timer", "confidence": 0.511, "correct_intent": null, "timestamp": 1790519532.0211654, "occurrences": 1}
-{"utterance": "can you clip this to the clipboard", "predicted_intent": "clipboard_read", "confidence": 0.4995, "correct_intent": null, "timestamp": 1790927627.704476, "occurrences": 10}
-{"utterance": "hey shut up", "predicted_intent": "dismissal", "confidence": 0.3297, "correct_intent": null, "timestamp": 1790927628.0128324, "occurrences": 11}
+{"utterance": "can you clip this to the clipboard", "predicted_intent": "clipboard_write", "confidence": 0.5352, "correct_intent": null, "timestamp": 1790932429.2094922, "occurrences": 11}
+{"utterance": "hey shut up", "predicted_intent": "dismissal", "confidence": 0.4857, "correct_intent": null, "timestamp": 1790932429.6928809, "occurrences": 12}
 {"utterance": "adios amigo", "predicted_intent": "farewell", "confidence": 0.5051, "correct_intent": null, "timestamp": 1790830728.8537562, "occurrences": 5}
-{"utterance": "Can you talk about your development team", "predicted_intent": "identity", "confidence": 0.5026, "correct_intent": null, "timestamp": 1790855818.523328, "occurrences": 6}
+{"utterance": "Can you talk about your development team", "predicted_intent": "identity", "confidence": 0.5382, "correct_intent": null, "timestamp": 1790932432.5887556, "occurrences": 7}
 {"utterance": "What's a joke that's really old?", "predicted_intent": "smalltalk", "confidence": 0.4996, "correct_intent": null, "timestamp": 1790539320.7278035, "occurrences": 3}
-{"utterance": "i need a note rundown", "predicted_intent": "note_write", "confidence": 0.4991, "correct_intent": null, "timestamp": 1790852311.7814205, "occurrences": 5}
+{"utterance": "i need a note rundown", "predicted_intent": "note_write", "confidence": 0.5873, "correct_intent": null, "timestamp": 1790932434.035376, "occurrences": 6}
 {"utterance": "open google calendar", "predicted_intent": "open_target", "confidence": 0.5226, "correct_intent": null, "timestamp": 1790519539.6393962, "occurrences": 1}
 {"utterance": "do a laugh", "predicted_intent": "opinion", "confidence": 0.4565, "correct_intent": null, "timestamp": 1790521390.430379, "occurrences": 2}
 {"utterance": "one hour countdown", "predicted_intent": "set_timer", "confidence": 0.5364, "correct_intent": null, "timestamp": 1790855823.2461774, "occurrences": 8}
 {"utterance": "power down", "predicted_intent": "shutdown", "confidence": 0.6401, "correct_intent": null, "timestamp": 1790521393.0705247, "occurrences": 2}
 {"utterance": "i'm not really sure what's going on", "predicted_intent": "confirm", "confidence": 0.4784, "correct_intent": null, "timestamp": 1790927634.0705886, "occurrences": 5}
-{"utterance": "are you around now", "predicted_intent": "opinion", "confidence": 0.5615, "correct_intent": null, "timestamp": 1790927634.1467474, "occurrences": 9}
-{"utterance": "cancel all timers", "predicted_intent": "cancel_timer", "confidence": 0.5106, "correct_intent": null, "timestamp": 1790855789.2935646, "occurrences": 6}
+{"utterance": "are you around now", "predicted_intent": "opinion", "confidence": 0.5573, "correct_intent": null, "timestamp": 1790932438.176147, "occurrences": 10}
+{"utterance": "cancel all timers", "predicted_intent": "cancel_timer", "confidence": 0.5411, "correct_intent": null, "timestamp": 1790932404.1817012, "occurrences": 7}
 {"utterance": "stop audio", "predicted_intent": "mute", "confidence": 0.5023, "correct_intent": null, "timestamp": 1790521360.7047644, "occurrences": 1}
-{"utterance": "note list please", "predicted_intent": "note_view", "confidence": 0.5768, "correct_intent": null, "timestamp": 1790830709.5594711, "occurrences": 4}
-{"utterance": "turn the laptop off", "predicted_intent": "cancel_timer", "confidence": 0.4326, "correct_intent": null, "timestamp": 1790852298.3965256, "occurrences": 3}
+{"utterance": "note list please", "predicted_intent": "note_view", "confidence": 0.5, "correct_intent": null, "timestamp": 1790932411.6636875, "occurrences": 5}
+{"utterance": "turn the laptop off", "predicted_intent": "shutdown", "confidence": 0.4093, "correct_intent": null, "timestamp": 1790932414.9499078, "occurrences": 4}
 {"utterance": "what's poppin", "predicted_intent": "greet", "confidence": 0.6025, "correct_intent": null, "timestamp": 1790927617.4518225, "occurrences": 4}
-{"utterance": "start playing", "predicted_intent": "open_target", "confidence": 0.503, "correct_intent": null, "timestamp": 1790855810.697946, "occurrences": 5}
+{"utterance": "start playing", "predicted_intent": "open_target", "confidence": 0.3999, "correct_intent": null, "timestamp": 1790932424.479875, "occurrences": 6}
 {"utterance": "list my timers", "predicted_intent": "timer_status", "confidence": 0.5154, "correct_intent": null, "timestamp": 1790852305.5773537, "occurrences": 4}
 {"utterance": "are you sad", "predicted_intent": "opinion", "confidence": 0.5287, "correct_intent": null, "timestamp": 1790521375.1165712, "occurrences": 1}
-{"utterance": "are you chatgpt", "predicted_intent": "opinion", "confidence": 0.5126, "correct_intent": null, "timestamp": 1790855813.533107, "occurrences": 4}
-{"utterance": "not gonna lie", "predicted_intent": "dismissal", "confidence": 0.4966, "correct_intent": null, "timestamp": 1790927626.9446108, "occurrences": 8}
+{"utterance": "are you chatgpt", "predicted_intent": "opinion", "confidence": 0.5924, "correct_intent": null, "timestamp": 1790932427.2719824, "occurrences": 5}
+{"utterance": "not gonna lie", "predicted_intent": "dismissal", "confidence": 0.5238, "correct_intent": null, "timestamp": 1790932428.040092, "occurrences": 9}
 {"utterance": "save to clipboard not notes", "predicted_intent": "clipboard_write", "confidence": 0.5265, "correct_intent": null, "timestamp": 1790521380.0874827, "occurrences": 1}
 {"utterance": "delete the whole thing", "predicted_intent": "note_delete", "confidence": 0.544, "correct_intent": null, "timestamp": 1790521387.1158154, "occurrences": 1}
 {"utterance": "turn on the music", "predicted_intent": "play_music", "confidence": 0.6351, "correct_intent": null, "timestamp": 1790521390.6586862, "occurrences": 1}
-{"utterance": "google how to write a resume", "predicted_intent": "search_web", "confidence": 0.5817, "correct_intent": null, "timestamp": 1790927632.9254763, "occurrences": 3}
-{"utterance": "find info on the best android smartphones", "predicted_intent": "unknown", "confidence": 0.3688, "correct_intent": null, "timestamp": 1790927633.0562541, "occurrences": 8}
+{"utterance": "google how to write a resume", "predicted_intent": "search_web", "confidence": 0.516, "correct_intent": null, "timestamp": 1790932436.6596048, "occurrences": 4}
+{"utterance": "find info on the best android smartphones", "predicted_intent": "play_music", "confidence": 0.4708, "correct_intent": null, "timestamp": 1790932436.8139148, "occurrences": 9}
 {"utterance": "Is that the right thing", "predicted_intent": "followup", "confidence": 0.4989, "correct_intent": null, "timestamp": 1790927611.4023442, "occurrences": 6}
 {"utterance": "Give me a riddle that's hard", "predicted_intent": "joke", "confidence": 0.5232, "correct_intent": null, "timestamp": 1790539302.9103243, "occurrences": 2}
 {"utterance": "also jot that down", "predicted_intent": "note_write", "confidence": 0.5069, "correct_intent": null, "timestamp": 1790927615.0488935, "occurrences": 2}
 {"utterance": "which is more powerful", "predicted_intent": "opinion", "confidence": 0.4394, "correct_intent": null, "timestamp": 1790927625.2877748, "occurrences": 9}
-{"utterance": "are you awake", "predicted_intent": "smalltalk", "confidence": 0.5804, "correct_intent": null, "timestamp": 1790830023.806624, "occurrences": 4}
+{"utterance": "are you awake", "predicted_intent": "smalltalk", "confidence": 0.5835, "correct_intent": null, "timestamp": 1790932426.3943293, "occurrences": 5}
 {"utterance": "day right now", "predicted_intent": "pause_music", "confidence": 0.486, "correct_intent": null, "timestamp": 1790927628.9132526, "occurrences": 6}
 {"utterance": "How did you become so smart", "predicted_intent": "opinion", "confidence": 0.4994, "correct_intent": null, "timestamp": 1790522341.545624, "occurrences": 1}
 {"utterance": "I just need something to get me going", "predicted_intent": "motivate", "confidence": 0.5189, "correct_intent": null, "timestamp": 1790539321.088907, "occurrences": 2}
 {"utterance": "shut the music", "predicted_intent": "pause_music", "confidence": 0.4974, "correct_intent": null, "timestamp": 1790830031.4565113, "occurrences": 3}
 {"utterance": "i wanna see my notes", "predicted_intent": "note_view", "confidence": 0.6428, "correct_intent": null, "timestamp": 1790522343.4221516, "occurrences": 1}
-{"utterance": "google what's the weather like in paris", "predicted_intent": "get_weather", "confidence": 0.5, "correct_intent": null, "timestamp": 1790855823.086855, "occurrences": 8}
+{"utterance": "google what's the weather like in paris", "predicted_intent": "get_weather", "confidence": 0.5002, "correct_intent": null, "timestamp": 1790932436.9000008, "occurrences": 9}
 {"utterance": "Just got my hair cut yesterday", "predicted_intent": "smalltalk", "confidence": 0.5007, "correct_intent": null, "timestamp": 1790853660.6743987, "occurrences": 4}
 {"utterance": "say something funny", "predicted_intent": "joke", "confidence": 0.5006, "correct_intent": null, "timestamp": 1790855790.8275554, "occurrences": 3}
-{"utterance": "You lost me there", "predicted_intent": "followup", "confidence": 0.5506, "correct_intent": null, "timestamp": 1790852293.1298018, "occurrences": 3}
+{"utterance": "You lost me there", "predicted_intent": "followup", "confidence": 0.5245, "correct_intent": null, "timestamp": 1790932408.1726635, "occurrences": 4}
 {"utterance": "what's the temperature supposed to be", "predicted_intent": "get_weather", "confidence": 0.5633, "correct_intent": null, "timestamp": 1790539301.6850595, "occurrences": 1}
-{"utterance": "What kind of AI am I talking to", "predicted_intent": "identity", "confidence": 0.5014, "correct_intent": null, "timestamp": 1790927613.5580273, "occurrences": 8}
-{"utterance": "one hour timer", "predicted_intent": "timer_status", "confidence": 0.4952, "correct_intent": null, "timestamp": 1790927624.7802877, "occurrences": 8}
+{"utterance": "What kind of AI am I talking to", "predicted_intent": "smalltalk", "confidence": 0.3255, "correct_intent": null, "timestamp": 1790932410.2308774, "occurrences": 9}
+{"utterance": "one hour timer", "predicted_intent": "timer_status", "confidence": 0.4987, "correct_intent": null, "timestamp": 1790932424.9984052, "occurrences": 9}
 {"utterance": "ok i'm ready", "predicted_intent": "confirm", "confidence": 0.63, "correct_intent": null, "timestamp": 1790853649.996874, "occurrences": 3}
 {"utterance": "how many languages are spoken in the world", "predicted_intent": "general_query", "confidence": 0.5034, "correct_intent": null, "timestamp": 1790852309.1171682, "occurrences": 2}
 {"utterance": "stop the music right now", "predicted_intent": "pause_music", "confidence": 0.5001, "correct_intent": null, "timestamp": 1790539324.3473938, "occurrences": 1}
-{"utterance": "turn the PC off and back on", "predicted_intent": "prev_track", "confidence": 0.5007, "correct_intent": null, "timestamp": 1790927632.6529033, "occurrences": 10}
+{"utterance": "turn the PC off and back on", "predicted_intent": "shutdown", "confidence": 0.5013, "correct_intent": null, "timestamp": 1790932436.3457353, "occurrences": 11}
 {"utterance": "i'm not really feeling well today", "predicted_intent": "smalltalk", "confidence": 0.502, "correct_intent": null, "timestamp": 1790927634.210413, "occurrences": 4}
 {"utterance": "how's my timer doing", "predicted_intent": "timer_status", "confidence": 0.5936, "correct_intent": null, "timestamp": 1790539328.3016748, "occurrences": 1}
 {"utterance": "lower the decibel", "predicted_intent": "volume_down", "confidence": 0.6139, "correct_intent": null, "timestamp": 1790830038.783218, "occurrences": 3}
 {"utterance": "all good", "predicted_intent": "farewell", "confidence": 0.4851, "correct_intent": null, "timestamp": 1790927609.6378293, "occurrences": 6}
-{"utterance": "i'm trying to decide what to eat for dinner", "predicted_intent": "unknown", "confidence": 0.5004, "correct_intent": null, "timestamp": 1790852298.570529, "occurrences": 4}
-{"utterance": "i'm so sorry i'm late again", "predicted_intent": "thanks", "confidence": 0.498, "correct_intent": null, "timestamp": 1790927617.6876345, "occurrences": 8}
-{"utterance": "check system info", "predicted_intent": "system_info", "confidence": 0.5, "correct_intent": null, "timestamp": 1790855802.0817707, "occurrences": 6}
-{"utterance": "i copied something but forgot what it was", "predicted_intent": "smalltalk", "confidence": 0.5008, "correct_intent": null, "timestamp": 1790927619.0517936, "occurrences": 8}
-{"utterance": "move along", "predicted_intent": "dismissal", "confidence": 0.5838, "correct_intent": null, "timestamp": 1790855804.3156538, "occurrences": 6}
-{"utterance": "catch you on the flip side", "predicted_intent": "followup", "confidence": 0.4939, "correct_intent": null, "timestamp": 1790927619.4314306, "occurrences": 8}
-{"utterance": "can you guide me", "predicted_intent": "identity", "confidence": 0.4093, "correct_intent": null, "timestamp": 1790927619.9448001, "occurrences": 8}
-{"utterance": "can you share a funny story", "predicted_intent": "perform_action", "confidence": 0.5384, "correct_intent": null, "timestamp": 1790853643.285532, "occurrences": 6}
-{"utterance": "get it off my list", "predicted_intent": "note_write", "confidence": 0.3045, "correct_intent": null, "timestamp": 1790927620.8846977, "occurrences": 9}
-{"utterance": "i need some background noise", "predicted_intent": "help", "confidence": 0.4101, "correct_intent": null, "timestamp": 1790927621.4064167, "occurrences": 7}
-{"utterance": "what's playing right now", "predicted_intent": "play_music", "confidence": 0.4789, "correct_intent": null, "timestamp": 1790853644.335369, "occurrences": 5}
+{"utterance": "i'm trying to decide what to eat for dinner", "predicted_intent": "unknown", "confidence": 0.5326, "correct_intent": null, "timestamp": 1790932415.182129, "occurrences": 5}
+{"utterance": "i'm so sorry i'm late again", "predicted_intent": "smalltalk", "confidence": 0.5302, "correct_intent": null, "timestamp": 1790932415.573838, "occurrences": 9}
+{"utterance": "check system info", "predicted_intent": "system_info", "confidence": 0.5004, "correct_intent": null, "timestamp": 1790932415.8327868, "occurrences": 7}
+{"utterance": "i copied something but forgot what it was", "predicted_intent": "motivate", "confidence": 0.4965, "correct_intent": null, "timestamp": 1790932417.526197, "occurrences": 9}
+{"utterance": "move along", "predicted_intent": "dismissal", "confidence": 0.5695, "correct_intent": null, "timestamp": 1790932417.910265, "occurrences": 7}
+{"utterance": "catch you on the flip side", "predicted_intent": "unknown", "confidence": 0.4988, "correct_intent": null, "timestamp": 1790932418.0818067, "occurrences": 9}
+{"utterance": "can you guide me", "predicted_intent": "opinion", "confidence": 0.2973, "correct_intent": null, "timestamp": 1790932418.965813, "occurrences": 9}
+{"utterance": "can you share a funny story", "predicted_intent": "joke", "confidence": 0.5567, "correct_intent": null, "timestamp": 1790932419.97638, "occurrences": 7}
+{"utterance": "get it off my list", "predicted_intent": "note_write", "confidence": 0.4991, "correct_intent": null, "timestamp": 1790932420.3476846, "occurrences": 10}
+{"utterance": "i need some background noise", "predicted_intent": "help", "confidence": 0.3685, "correct_intent": null, "timestamp": 1790932420.9312234, "occurrences": 8}
+{"utterance": "what's playing right now", "predicted_intent": "pause_music", "confidence": 0.4023, "correct_intent": null, "timestamp": 1790932421.0204868, "occurrences": 6}
 {"utterance": "i think my wifi is down", "predicted_intent": "unknown", "confidence": 0.6358, "correct_intent": null, "timestamp": 1790853645.753363, "occurrences": 5}
-{"utterance": "i just remembered i have to pick up milk", "predicted_intent": "motivate", "confidence": 0.4901, "correct_intent": null, "timestamp": 1790927622.8443775, "occurrences": 5}
-{"utterance": "what's the thing on the wall called", "predicted_intent": "smalltalk", "confidence": 0.4949, "correct_intent": null, "timestamp": 1790927622.916878, "occurrences": 9}
-{"utterance": "make it higher", "predicted_intent": "dismissal", "confidence": 0.4832, "correct_intent": null, "timestamp": 1790927623.0565212, "occurrences": 9}
-{"utterance": "just vibing over here", "predicted_intent": "smalltalk", "confidence": 0.4999, "correct_intent": null, "timestamp": 1790927625.8423352, "occurrences": 9}
+{"utterance": "i just remembered i have to pick up milk", "predicted_intent": "motivate", "confidence": 0.4995, "correct_intent": null, "timestamp": 1790932422.7672355, "occurrences": 6}
+{"utterance": "what's the thing on the wall called", "predicted_intent": "smalltalk", "confidence": 0.4971, "correct_intent": null, "timestamp": 1790932422.8496509, "occurrences": 10}
+{"utterance": "make it higher", "predicted_intent": "volume_up", "confidence": 0.6056, "correct_intent": null, "timestamp": 1790932423.0259283, "occurrences": 10}
+{"utterance": "just vibing over here", "predicted_intent": "smalltalk", "confidence": 0.4962, "correct_intent": null, "timestamp": 1790932426.4789422, "occurrences": 10}
 {"utterance": "what's the average lifespan of a human", "predicted_intent": "identity", "confidence": 0.4999, "correct_intent": null, "timestamp": 1790853222.367312, "occurrences": 4}
-{"utterance": "is it raining anywhere", "predicted_intent": "get_weather", "confidence": 0.6255, "correct_intent": null, "timestamp": 1790927629.3055425, "occurrences": 4}
+{"utterance": "is it raining anywhere", "predicted_intent": "smalltalk", "confidence": 0.4171, "correct_intent": null, "timestamp": 1790932431.684159, "occurrences": 5}
 {"utterance": "is it raining in the uk", "predicted_intent": "get_weather", "confidence": 0.6175, "correct_intent": null, "timestamp": 1790855817.7446914, "occurrences": 6}
 {"utterance": "i think i copied something", "predicted_intent": "clipboard_read", "confidence": 0.4791, "correct_intent": null, "timestamp": 1790927635.5606043, "occurrences": 8}
-{"utterance": "that's boring", "predicted_intent": "farewell", "confidence": 0.466, "correct_intent": null, "timestamp": 1790927635.850472, "occurrences": 8}
+{"utterance": "that's boring", "predicted_intent": "confirm", "confidence": 0.4466, "correct_intent": null, "timestamp": 1790932440.1789818, "occurrences": 9}
 {"utterance": "i need a hand", "predicted_intent": "perform_action", "confidence": 0.4821, "correct_intent": null, "timestamp": 1790853663.8759367, "occurrences": 4}
-{"utterance": "what makes you tick", "predicted_intent": "opinion", "confidence": 0.4983, "correct_intent": null, "timestamp": 1790855828.6511788, "occurrences": 5}
-{"utterance": "can you be my motivation coach", "predicted_intent": "unknown", "confidence": 0.4963, "correct_intent": null, "timestamp": 1790927637.3663285, "occurrences": 8}
+{"utterance": "what makes you tick", "predicted_intent": "opinion", "confidence": 0.5001, "correct_intent": null, "timestamp": 1790932441.4601455, "occurrences": 6}
+{"utterance": "can you be my motivation coach", "predicted_intent": "motivate", "confidence": 0.3095, "correct_intent": null, "timestamp": 1790932442.0128374, "occurrences": 9}
 {"utterance": "i just need a distraction", "predicted_intent": "motivate", "confidence": 0.5124, "correct_intent": null, "timestamp": 1790853665.04639, "occurrences": 4}
-{"utterance": "what's the latest news on the corona vaccine", "predicted_intent": "search_web", "confidence": 0.589, "correct_intent": null, "timestamp": 1790927638.7334332, "occurrences": 8}
-{"utterance": "okay i think thats it", "predicted_intent": "confirm", "confidence": 0.649, "correct_intent": null, "timestamp": 1790927638.9339716, "occurrences": 4}
-{"utterance": "i think im done with it", "predicted_intent": "shutdown", "confidence": 0.6437, "correct_intent": null, "timestamp": 1790830045.4041395, "occurrences": 2}
-{"utterance": "im thankful", "predicted_intent": "thanks", "confidence": 0.4177, "correct_intent": null, "timestamp": 1790927639.0853083, "occurrences": 7}
+{"utterance": "what's the latest news on the corona vaccine", "predicted_intent": "general_query", "confidence": 0.4928, "correct_intent": null, "timestamp": 1790932443.7484503, "occurrences": 9}
+{"utterance": "okay i think thats it", "predicted_intent": "confirm", "confidence": 0.4627, "correct_intent": null, "timestamp": 1790932443.9893517, "occurrences": 5}
+{"utterance": "i think im done with it", "predicted_intent": "shutdown", "confidence": 0.5157, "correct_intent": null, "timestamp": 1790932444.076952, "occurrences": 3}
+{"utterance": "im thankful", "predicted_intent": "thanks", "confidence": 0.5334, "correct_intent": null, "timestamp": 1790932444.1638906, "occurrences": 8}
 {"utterance": "im trying to remember what i was doing yesterday", "predicted_intent": "confirm", "confidence": 0.4793, "correct_intent": null, "timestamp": 1790830045.7633138, "occurrences": 2}
-{"utterance": "i dont know how to use snapchat", "predicted_intent": "smalltalk", "confidence": 0.4997, "correct_intent": null, "timestamp": 1790853667.8342907, "occurrences": 4}
-{"utterance": "what's the thingy called", "predicted_intent": "followup", "confidence": 0.6358, "correct_intent": null, "timestamp": 1790927639.3610399, "occurrences": 8}
-{"utterance": "im trying to get this stain out of my carpet", "predicted_intent": "unknown", "confidence": 0.4531, "correct_intent": null, "timestamp": 1790927639.435749, "occurrences": 7}
-{"utterance": "i cant remember my password", "predicted_intent": "unknown", "confidence": 0.634, "correct_intent": null, "timestamp": 1790927639.507345, "occurrences": 8}
-{"utterance": "i need to return this book but i lost the receipt", "predicted_intent": "followup", "confidence": 0.4973, "correct_intent": null, "timestamp": 1790855832.1241264, "occurrences": 6}
-{"utterance": "some ambiguous phrase", "predicted_intent": "get_time", "confidence": 0.5, "correct_intent": null, "timestamp": 1790928179.168717, "occurrences": 14}
-{"utterance": "completely unrelated gibberish text", "predicted_intent": "unknown", "confidence": 0.4, "correct_intent": null, "timestamp": 1790928179.1906374, "occurrences": 14}
-{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "smalltalk", "confidence": 0.5075, "correct_intent": null, "timestamp": 1790929003.60353, "occurrences": 84}
-{"utterance": "no 5 apples please", "predicted_intent": "mute", "confidence": 0.4685, "correct_intent": null, "timestamp": 1790929177.0879877, "occurrences": 45}
-{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.4774, "correct_intent": null, "timestamp": 1790928811.5132418, "occurrences": 43}
+{"utterance": "i dont know how to use snapchat", "predicted_intent": "general_query", "confidence": 0.4625, "correct_intent": null, "timestamp": 1790932444.4530423, "occurrences": 5}
+{"utterance": "what's the thingy called", "predicted_intent": "get_date", "confidence": 0.5938, "correct_intent": null, "timestamp": 1790932444.5332205, "occurrences": 9}
+{"utterance": "im trying to get this stain out of my carpet", "predicted_intent": "note_write", "confidence": 0.3617, "correct_intent": null, "timestamp": 1790932444.6172826, "occurrences": 8}
+{"utterance": "i cant remember my password", "predicted_intent": "thanks", "confidence": 0.4099, "correct_intent": null, "timestamp": 1790932444.7068257, "occurrences": 9}
+{"utterance": "i need to return this book but i lost the receipt", "predicted_intent": "get_time", "confidence": 0.3214, "correct_intent": null, "timestamp": 1790932444.8595116, "occurrences": 7}
+{"utterance": "some ambiguous phrase", "predicted_intent": "get_time", "confidence": 0.5, "correct_intent": null, "timestamp": 1790932765.2372427, "occurrences": 16}
+{"utterance": "completely unrelated gibberish text", "predicted_intent": "unknown", "confidence": 0.4, "correct_intent": null, "timestamp": 1790932765.2608616, "occurrences": 16}
+{"utterance": "I have 5 minutes to kill before my meeting", "predicted_intent": "set_timer", "confidence": 0.4883, "correct_intent": null, "timestamp": 1790933559.0037289, "occurrences": 88}
+{"utterance": "no 5 apples please", "predicted_intent": "note_delete", "confidence": 0.4417, "correct_intent": null, "timestamp": 1790933561.4567485, "occurrences": 49}
+{"utterance": "it is so quiet in here today", "predicted_intent": "smalltalk", "confidence": 0.5007, "correct_intent": null, "timestamp": 1790933580.1842742, "occurrences": 47}
 {"utterance": "could you pull up spotify for me", "predicted_intent": "smalltalk", "confidence": 0.4969, "correct_intent": null, "timestamp": 1790930211.9378324, "occurrences": 72}
-{"utterance": "turn the radio to a country station", "predicted_intent": "prev_track", "confidence": 0.4964, "correct_intent": null, "timestamp": 1790929181.7640326, "occurrences": 31}
-{"utterance": "the youtube app crashed on my tv again", "predicted_intent": "smalltalk", "confidence": 0.5, "correct_intent": null, "timestamp": 1790929183.4451344, "occurrences": 16}
+{"utterance": "turn the radio to a country station", "predicted_intent": "unknown", "confidence": 0.5049, "correct_intent": null, "timestamp": 1790933568.4251678, "occurrences": 33}
+{"utterance": "the youtube app crashed on my tv again", "predicted_intent": "smalltalk", "confidence": 0.6048, "correct_intent": null, "timestamp": 1790933570.1773024, "occurrences": 19}
 {"utterance": "hey could you jot a quick memo that the dentist is at three", "predicted_intent": "joke", "confidence": 0.4292, "correct_intent": null, "timestamp": 1790930212.0121913, "occurrences": 88}
 {"utterance": "i'm really grateful", "predicted_intent": "thanks", "confidence": 0.5975, "correct_intent": null, "timestamp": 1790927618.1481185, "occurrences": 3}
 {"utterance": "what do i need to do to copy to clipboard", "predicted_intent": "clipboard_write", "confidence": 0.6304, "correct_intent": null, "timestamp": 1790853641.813614, "occurrences": 4}
 {"utterance": "what's the oldest joke you know", "predicted_intent": "joke", "confidence": 0.4998, "correct_intent": null, "timestamp": 1790853643.0125926, "occurrences": 4}
-{"utterance": "u r amazing", "predicted_intent": "thanks", "confidence": 0.6443, "correct_intent": null, "timestamp": 1790927622.388914, "occurrences": 2}
-{"utterance": "i love this song can you play it", "predicted_intent": "play_music", "confidence": 0.4912, "correct_intent": null, "timestamp": 1790927622.5874104, "occurrences": 6}
-{"utterance": "there's a huge pile of paperwork i need to sort through", "predicted_intent": "motivate", "confidence": 0.5652, "correct_intent": null, "timestamp": 1790855808.9180467, "occurrences": 6}
+{"utterance": "u r amazing", "predicted_intent": "thanks", "confidence": 0.5017, "correct_intent": null, "timestamp": 1790932422.2324946, "occurrences": 3}
+{"utterance": "i love this song can you play it", "predicted_intent": "play_music", "confidence": 0.5029, "correct_intent": null, "timestamp": 1790932422.4642353, "occurrences": 7}
+{"utterance": "there's a huge pile of paperwork i need to sort through", "predicted_intent": "unknown", "confidence": 0.5059, "correct_intent": null, "timestamp": 1790932422.6800292, "occurrences": 7}
 {"utterance": "i should lock up the shop before i go", "predicted_intent": "unknown", "confidence": 0.4881, "correct_intent": null, "timestamp": 1790925655.638686, "occurrences": 27}
 {"utterance": "the weather app on my laptop was awful", "predicted_intent": "unknown", "confidence": 0.5178, "correct_intent": null, "timestamp": 1790927623.3429475, "occurrences": 6}
-{"utterance": "change the time on the microwave", "predicted_intent": "get_time", "confidence": 0.5057, "correct_intent": null, "timestamp": 1790927623.4856246, "occurrences": 7}
+{"utterance": "change the time on the microwave", "predicted_intent": "unknown", "confidence": 0.502, "correct_intent": null, "timestamp": 1790932423.4984477, "occurrences": 8}
 {"utterance": "hey what's shakin", "predicted_intent": "greet", "confidence": 0.5671, "correct_intent": null, "timestamp": 1790830731.3349059, "occurrences": 1}
 {"utterance": "you heard me right", "predicted_intent": "confirm", "confidence": 0.4625, "correct_intent": null, "timestamp": 1790855826.9607117, "occurrences": 5}
 {"utterance": "it was nice chatting", "predicted_intent": "smalltalk", "confidence": 0.5109, "correct_intent": null, "timestamp": 1790927636.0850124, "occurrences": 5}
-{"utterance": "just go ahead and delete", "predicted_intent": "note_delete", "confidence": 0.4383, "correct_intent": null, "timestamp": 1790855829.4848034, "occurrences": 5}
+{"utterance": "just go ahead and delete", "predicted_intent": "followup", "confidence": 0.3277, "correct_intent": null, "timestamp": 1790932442.29348, "occurrences": 6}
 {"utterance": "stop the current song", "predicted_intent": "pause_music", "confidence": 0.6249, "correct_intent": null, "timestamp": 1790927637.9396873, "occurrences": 3}
 {"utterance": "the weather was so nice yesterday", "predicted_intent": "unknown", "confidence": 0.3463, "correct_intent": null, "timestamp": 1790830746.4773655, "occurrences": 1}
-{"utterance": "my old phone was terrible", "predicted_intent": "smalltalk", "confidence": 0.4999, "correct_intent": null, "timestamp": 1790855832.4225504, "occurrences": 6}
-{"utterance": "what a time to be here", "predicted_intent": "get_weather", "confidence": 0.4995, "correct_intent": null, "timestamp": 1790927640.0643916, "occurrences": 6}
-{"utterance": "change the channel to the news", "predicted_intent": "unknown", "confidence": 0.4985, "correct_intent": null, "timestamp": 1790927640.1429493, "occurrences": 7}
-{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5, "correct_intent": null, "timestamp": 1790925645.8732626, "occurrences": 22}
+{"utterance": "my old phone was terrible", "predicted_intent": "smalltalk", "confidence": 0.5165, "correct_intent": null, "timestamp": 1790932445.149611, "occurrences": 7}
+{"utterance": "what a time to be here", "predicted_intent": "get_time", "confidence": 0.5431, "correct_intent": null, "timestamp": 1790932445.2289128, "occurrences": 7}
+{"utterance": "change the channel to the news", "predicted_intent": "unknown", "confidence": 0.4874, "correct_intent": null, "timestamp": 1790932445.3874004, "occurrences": 8}
+{"utterance": "I'd like you to shut the machine down", "predicted_intent": "shutdown", "confidence": 0.5955, "correct_intent": null, "timestamp": 1790933246.6393864, "occurrences": 23}
 {"utterance": "wipe whatever I copied", "predicted_intent": "clipboard_clear", "confidence": 0.5487, "correct_intent": null, "timestamp": 1790925483.0642874, "occurrences": 14}
 {"utterance": "I should lock up the house before I leave", "predicted_intent": "smalltalk", "confidence": 0.5, "correct_intent": null, "timestamp": 1790925320.1022177, "occurrences": 12}
-{"utterance": "the weather app on my old phone was terrible", "predicted_intent": "unknown", "confidence": 0.4448, "correct_intent": null, "timestamp": 1790929011.1792376, "occurrences": 3}
+{"utterance": "the weather app on my old phone was terrible", "predicted_intent": "smalltalk", "confidence": 0.5594, "correct_intent": null, "timestamp": 1790933409.358345, "occurrences": 5}
 {"utterance": "what's it like outside right now", "predicted_intent": "get_weather", "confidence": 0.5224, "correct_intent": null, "timestamp": 1790930211.8662617, "occurrences": 45}
 {"utterance": "you seem excited", "predicted_intent": "opinion", "confidence": 0.6185, "correct_intent": null, "timestamp": 1790852290.524634, "occurrences": 1}
 {"utterance": "say that again", "predicted_intent": "followup", "confidence": 0.5312, "correct_intent": null, "timestamp": 1790927610.030595, "occurrences": 5}
 {"utterance": "hey you good", "predicted_intent": "greet", "confidence": 0.5237, "correct_intent": null, "timestamp": 1790852298.5123699, "occurrences": 1}
-{"utterance": "i need you to break it down", "predicted_intent": "followup", "confidence": 0.4959, "correct_intent": null, "timestamp": 1790927619.4990647, "occurrences": 5}
-{"utterance": "something to put a smile on my face", "predicted_intent": "perform_action", "confidence": 0.493, "correct_intent": null, "timestamp": 1790927620.3405185, "occurrences": 6}
-{"utterance": "im done need to lock", "predicted_intent": "lock_screen", "confidence": 0.5688, "correct_intent": null, "timestamp": 1790927620.4054072, "occurrences": 5}
-{"utterance": "stop the talking", "predicted_intent": "pause_music", "confidence": 0.4982, "correct_intent": null, "timestamp": 1790927620.7595806, "occurrences": 6}
-{"utterance": "the radio played jazz all morning", "predicted_intent": "smalltalk", "confidence": 0.4946, "correct_intent": null, "timestamp": 1790927623.198292, "occurrences": 3}
-{"utterance": "turn on the radio in the kitchen", "predicted_intent": "unknown", "confidence": 0.3126, "correct_intent": null, "timestamp": 1790927623.4062116, "occurrences": 6}
-{"utterance": "record a short memo that the keys are in the drawer", "predicted_intent": "note_write", "confidence": 0.5009, "correct_intent": null, "timestamp": 1790927623.5523274, "occurrences": 6}
+{"utterance": "i need you to break it down", "predicted_intent": "followup", "confidence": 0.5039, "correct_intent": null, "timestamp": 1790932418.1654696, "occurrences": 6}
+{"utterance": "something to put a smile on my face", "predicted_intent": "restart", "confidence": 0.2523, "correct_intent": null, "timestamp": 1790932419.619201, "occurrences": 7}
+{"utterance": "im done need to lock", "predicted_intent": "lock_screen", "confidence": 0.5148, "correct_intent": null, "timestamp": 1790932419.6997898, "occurrences": 6}
+{"utterance": "stop the talking", "predicted_intent": "mute", "confidence": 0.4205, "correct_intent": null, "timestamp": 1790932420.1969802, "occurrences": 7}
+{"utterance": "the radio played jazz all morning", "predicted_intent": "farewell", "confidence": 0.4064, "correct_intent": null, "timestamp": 1790932423.1817613, "occurrences": 4}
+{"utterance": "turn on the radio in the kitchen", "predicted_intent": "smalltalk", "confidence": 0.3278, "correct_intent": null, "timestamp": 1790932423.4128075, "occurrences": 7}
+{"utterance": "record a short memo that the keys are in the drawer", "predicted_intent": "search_web", "confidence": 0.5076, "correct_intent": null, "timestamp": 1790932423.5849798, "occurrences": 7}
 {"utterance": "it took me thirty minutes to cook dinner tonight", "predicted_intent": "set_timer", "confidence": 0.6043, "correct_intent": null, "timestamp": 1790927623.6740205, "occurrences": 4}
-{"utterance": "turn the heating up a few degrees", "predicted_intent": "joke", "confidence": 0.4633, "correct_intent": null, "timestamp": 1790927623.8428826, "occurrences": 6}
+{"utterance": "turn the heating up a few degrees", "predicted_intent": "restart", "confidence": 0.4833, "correct_intent": null, "timestamp": 1790932423.9569163, "occurrences": 7}
 {"utterance": "turn off the laptop", "predicted_intent": "shutdown", "confidence": 0.6387, "correct_intent": null, "timestamp": 1790852314.4714155, "occurrences": 1}
 {"utterance": "im in a hurry can you lock it", "predicted_intent": "lock_screen", "confidence": 0.5, "correct_intent": null, "timestamp": 1790927637.3004062, "occurrences": 5}
 {"utterance": "set the air conditioner to twenty two degrees", "predicted_intent": "unknown", "confidence": 0.5008, "correct_intent": null, "timestamp": 1790852320.668486, "occurrences": 1}
-{"utterance": "erase the text i copied a minute ago", "predicted_intent": "prev_track", "confidence": 0.4978, "correct_intent": null, "timestamp": 1790927640.2700639, "occurrences": 6}
-{"utterance": "close all of my browser tabs", "predicted_intent": "set_timer", "confidence": 0.5615, "correct_intent": null, "timestamp": 1790927640.6856992, "occurrences": 4}
-{"utterance": "the meeting is 30 minutes long", "predicted_intent": "set_timer", "confidence": 0.5002, "correct_intent": null, "timestamp": 1790929184.5883312, "occurrences": 42}
-{"utterance": "turn off the porch light please", "predicted_intent": "unknown", "confidence": 0.4997, "correct_intent": null, "timestamp": 1790929189.6281815, "occurrences": 42}
+{"utterance": "erase the text i copied a minute ago", "predicted_intent": "clipboard_write", "confidence": 0.4126, "correct_intent": null, "timestamp": 1790932445.5503297, "occurrences": 7}
+{"utterance": "close all of my browser tabs", "predicted_intent": "open_target", "confidence": 0.49, "correct_intent": null, "timestamp": 1790932445.9984407, "occurrences": 5}
+{"utterance": "the meeting is 30 minutes long", "predicted_intent": "smalltalk", "confidence": 0.4998, "correct_intent": null, "timestamp": 1790933572.8776839, "occurrences": 45}
+{"utterance": "turn off the porch light please", "predicted_intent": "unknown", "confidence": 0.4991, "correct_intent": null, "timestamp": 1790933583.9090037, "occurrences": 45}
 {"utterance": "who are you", "predicted_intent": "identity", "confidence": 0.5871, "correct_intent": null, "timestamp": 1790853194.6114805, "occurrences": 1}
 {"utterance": "I need more details", "predicted_intent": "followup", "confidence": 0.5657, "correct_intent": null, "timestamp": 1790927611.7964313, "occurrences": 3}
 {"utterance": "what causes the phases of the moon", "predicted_intent": "general_query", "confidence": 0.6068, "correct_intent": null, "timestamp": 1790853198.4112558, "occurrences": 1}
 {"utterance": "she talked for ninety minutes without stopping", "predicted_intent": "smalltalk", "confidence": 0.4921, "correct_intent": null, "timestamp": 1790853214.7962563, "occurrences": 1}
 {"utterance": "what causes the tides", "predicted_intent": "general_query", "confidence": 0.5025, "correct_intent": null, "timestamp": 1790853221.9967875, "occurrences": 1}
 {"utterance": "can we skip", "predicted_intent": "dismissal", "confidence": 0.5887, "correct_intent": null, "timestamp": 1790855827.1810267, "occurrences": 4}
-{"utterance": "turn off the system", "predicted_intent": "farewell", "confidence": 0.4816, "correct_intent": null, "timestamp": 1790927638.7998586, "occurrences": 4}
+{"utterance": "turn off the system", "predicted_intent": "shutdown", "confidence": 0.45, "correct_intent": null, "timestamp": 1790932443.82892, "occurrences": 5}
 {"utterance": "the meeting ran forty five minutes over today", "predicted_intent": "smalltalk", "confidence": 0.409, "correct_intent": null, "timestamp": 1790855832.9816983, "occurrences": 3}
 {"utterance": "make it a bit louder", "predicted_intent": "volume_up", "confidence": 0.5386, "correct_intent": null, "timestamp": 1790853622.4419897, "occurrences": 3}
 {"utterance": "what's the time mate", "predicted_intent": "get_time", "confidence": 0.6244, "correct_intent": null, "timestamp": 1790853633.1106834, "occurrences": 1}
@@ -228,20 +228,20 @@
 {"utterance": "can you do anything to help", "predicted_intent": "help", "confidence": 0.5639, "correct_intent": null, "timestamp": 1790853664.109713, "occurrences": 1}
 {"utterance": "hey whats the story behind your name", "predicted_intent": "identity", "confidence": 0.5861, "correct_intent": null, "timestamp": 1790853664.354702, "occurrences": 1}
 {"utterance": "remove it from my list", "predicted_intent": "note_delete", "confidence": 0.5001, "correct_intent": null, "timestamp": 1790855829.6104622, "occurrences": 3}
-{"utterance": "I think it might snow later", "predicted_intent": "farewell", "confidence": 0.5659, "correct_intent": null, "timestamp": 1790927610.319986, "occurrences": 3}
+{"utterance": "I think it might snow later", "predicted_intent": "confirm", "confidence": 0.4132, "correct_intent": null, "timestamp": 1790932406.1313102, "occurrences": 4}
 {"utterance": "who invented the alarm clock", "predicted_intent": "general_query", "confidence": 0.6062, "correct_intent": null, "timestamp": 1790855809.2991755, "occurrences": 2}
-{"utterance": "hey whats up", "predicted_intent": "greet", "confidence": 0.5176, "correct_intent": null, "timestamp": 1790855828.0684583, "occurrences": 2}
+{"utterance": "hey whats up", "predicted_intent": "greet", "confidence": 0.4994, "correct_intent": null, "timestamp": 1790932440.9800723, "occurrences": 3}
 {"utterance": "take a photo of it", "predicted_intent": "screenshot", "confidence": 0.5853, "correct_intent": null, "timestamp": 1790927638.6115098, "occurrences": 3}
 {"utterance": "shout when twenty minutes are up", "predicted_intent": "smalltalk", "confidence": 0.4998, "correct_intent": null, "timestamp": 1790855832.8909838, "occurrences": 2}
-{"utterance": "the clock tower in town square is beautiful", "predicted_intent": "unknown", "confidence": 0.5109, "correct_intent": null, "timestamp": 1790855833.0672762, "occurrences": 2}
+{"utterance": "the clock tower in town square is beautiful", "predicted_intent": "unknown", "confidence": 0.3258, "correct_intent": null, "timestamp": 1790932445.846179, "occurrences": 3}
 {"utterance": "the clock on my microwave is always wrong", "predicted_intent": "smalltalk", "confidence": 0.5222, "correct_intent": null, "timestamp": 1790927640.6138804, "occurrences": 3}
-{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.5204, "correct_intent": null, "timestamp": 1790925642.040379, "occurrences": 27}
+{"utterance": "the clock on the stove is ten minutes fast", "predicted_intent": "smalltalk", "confidence": 0.6027, "correct_intent": null, "timestamp": 1790933566.73601, "occurrences": 29}
 {"utterance": "stop the music for a second", "predicted_intent": "pause_music", "confidence": 0.5914, "correct_intent": null, "timestamp": 1790929007.6270976, "occurrences": 12}
-{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "smalltalk", "confidence": 0.5505, "correct_intent": null, "timestamp": 1790928817.3242364, "occurrences": 19}
+{"utterance": "that clock in the lobby is gorgeous", "predicted_intent": "smalltalk", "confidence": 0.543, "correct_intent": null, "timestamp": 1790933252.0272892, "occurrences": 20}
 {"utterance": "hit me up in twelve minutes", "predicted_intent": "set_timer", "confidence": 0.6499, "correct_intent": null, "timestamp": 1790925653.6768577, "occurrences": 43}
-{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.4998, "correct_intent": null, "timestamp": 1790929181.3696609, "occurrences": 26}
-{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5951, "correct_intent": null, "timestamp": 1790929187.1362202, "occurrences": 18}
-{"utterance": "my alarm clock radio is way too loud in the morning", "predicted_intent": "smalltalk", "confidence": 0.5194, "correct_intent": null, "timestamp": 1790929181.5053139, "occurrences": 12}
+{"utterance": "can you set my alarm clock radio to jazz", "predicted_intent": "unknown", "confidence": 0.5159, "correct_intent": null, "timestamp": 1790933565.029519, "occurrences": 28}
+{"utterance": "what a time to be alive", "predicted_intent": "smalltalk", "confidence": 0.5389, "correct_intent": null, "timestamp": 1790933581.8551998, "occurrences": 20}
+{"utterance": "my alarm clock radio is way too loud in the morning", "predicted_intent": "smalltalk", "confidence": 0.4999, "correct_intent": null, "timestamp": 1790933239.9796927, "occurrences": 13}
 {"utterance": "weather in tokyo", "predicted_intent": "get_weather", "confidence": 0.5545, "correct_intent": null, "timestamp": 1790925479.264838, "occurrences": 8}
 {"utterance": "the google search results were useless today", "predicted_intent": "search_web", "confidence": 0.5184, "correct_intent": null, "timestamp": 1790925493.7956598, "occurrences": 6}
 {"utterance": "I'm stuck and need some encouragement", "predicted_intent": "motivate", "confidence": 0.641, "correct_intent": null, "timestamp": 1790927614.097859, "occurrences": 1}
@@ -250,3 +250,7 @@
 {"utterance": "set an alert for 1 hour from now", "predicted_intent": "set_timer", "confidence": 0.5214, "correct_intent": null, "timestamp": 1790927633.1834745, "occurrences": 1}
 {"utterance": "search Google for today's weather", "predicted_intent": "search_web", "confidence": 0.5005, "correct_intent": null, "timestamp": 1790928070.4709911, "occurrences": 3}
 {"utterance": "i googled my own name last night", "predicted_intent": "smalltalk", "confidence": 0.5354, "correct_intent": null, "timestamp": 1790928817.4528, "occurrences": 1}
+{"utterance": "how are you", "predicted_intent": "smalltalk", "confidence": 0.529, "correct_intent": null, "timestamp": 1790932426.1484137, "occurrences": 1}
+{"utterance": "Clipboard please", "predicted_intent": "clipboard_read", "confidence": 0.5137, "correct_intent": null, "timestamp": 1790932428.7306523, "occurrences": 1}
+{"utterance": "note down that we are out of coffee", "predicted_intent": "note_write", "confidence": 0.5495, "correct_intent": null, "timestamp": 1790932445.6257937, "occurrences": 1}
+{"utterance": "what's going on outside", "predicted_intent": "timer_status", "confidence": 0.5619, "correct_intent": null, "timestamp": 1790932548.6318638, "occurrences": 1}
