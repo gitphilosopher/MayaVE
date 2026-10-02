@@ -24,6 +24,13 @@ Stabilization + BATCH 1 fixes:
   UNKNOWN IR (reason "internal_error") and is logged with traceback.
 - semantic_thresholds=None defaults to ConfidenceThresholds().
 - self.stats counts stage hits/errors for eval_ir.py.
+
+Routing-gate fix: an untrusted but plausible conversational classifier label
+(response_mode "llm", conf >= 0.5) no longer skips escalation outright. It now
+gets one round of semantic retrieval, using the existing semantic thresholds,
+so a confident command match can compete with it before the conversational
+result is accepted. The LLM fallback is NOT consulted for that case (it is
+still used exactly as before for every other escalating path).
 """
 from __future__ import annotations
 
@@ -106,11 +113,15 @@ class CommandUnderstander:
         if trusted:
             return self._from_intent_name(intent, conf, margin, src, target, **base)
 
-        # not trusted -> escalate, unless it is a plausible conversational label
-        if not (mode == "llm" and conf >= 0.5):
-            ir = await self._escalate(text, target, **base)
-            if ir is not None:
-                return ir
+        # Not trusted -> escalate. A plausible conversational label used to
+        # skip escalation entirely, so it could block a semantically strong
+        # command. It now always gets semantic retrieval as competing
+        # evidence; the LLM fallback stays off for that case only, so the
+        # existing LLM behaviour and latency are unchanged elsewhere.
+        plausible_chat = mode == "llm" and conf >= 0.5
+        ir = await self._escalate(text, target, allow_llm=not plausible_chat, **base)
+        if ir is not None:
+            return ir
         if mode == "llm":
             return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
                              reason="conversational", legacy_intent=intent, **base)
@@ -161,7 +172,7 @@ class CommandUnderstander:
                              prompt=q + "?", reason="missing_required_entity", **common)
         return CommandIR(Status.READY, **common)
 
-    async def _escalate(self, text, target, **base) -> CommandIR | None:
+    async def _escalate(self, text, target, *, allow_llm: bool = True, **base) -> CommandIR | None:
         if self._semantic:
             from brain.router.confidence import Decision, evaluate
             try:
@@ -180,7 +191,7 @@ class CommandUnderstander:
                             f"second={d['second_command']}({d['second_score']:.2f}) margin={d['margin']:.2f} text={text!r}")
             if dec is Decision.CONFIDENT:
                 return self._from_spec(r.top1.spec, r.top1_similarity, r.margin, "semantic", target, **base)
-        if self._llm:
+        if self._llm and allow_llm:
             return await self._from_llm(text, target, **base)
         return None
 

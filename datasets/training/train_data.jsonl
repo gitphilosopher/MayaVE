@@ -2391,3 +2391,15 @@
 {"text": "call my mom on the phone", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "set the oven to three fifty degrees", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "book a table for two tonight", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "i set a timer for my kids once and they loved it", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "she talked for ninety minutes", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i used a timer yesterday", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i should lock up the house before i leave", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i should lock up the shop before i go", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i need to lock the shop before closing", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i locked the door before leaving", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "my google search history is embarrassing", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "the google search results were useless today", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "i looked at my google search history", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+{"text": "those search results were terrible", "intent": "smalltalk", "source": "hand_written:hard_negative", "verified": true, "variant": "hard_negative"}
+

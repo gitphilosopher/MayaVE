@@ -527,3 +527,185 @@ def test_escalated_target_uses_selected_spec_intent():
     u = CommandUnderstander(L({}), FakeRegistry([web]), guard_fn=_guard_check, semantic=semantic)
     ir = run(u.understand("could you pull up spotify"))
     assert ir.status is Status.READY and ir.entities["target"] == "spotify" and "open_target" in seen
+
+
+# ── 15. LLM fallback boundary regression tests ──────────────────────────────
+
+def test_llm_fallback_prompt_contains_boundary_rules():
+    from brain.router.llm_fallback import _build_prompt
+    prompt = _build_prompt(
+        "turn off the porch light please",
+        ["system", "timer", "web"],
+        {"system": ["lock", "shutdown"], "timer": ["create"], "web": ["search"]},
+        [],
+    )
+    assert "STRICT ROUTING RULES:" in prompt
+    assert "ACTIVE COMMAND REQUIREMENT" in prompt
+    assert "COMPUTER SCOPE VS PHYSICAL WORLD" in prompt
+    assert "NO NEAREST-NEIGHBOR GUESSING" in prompt
+    assert "PRESERVE LEGITIMATE COMMANDS" in prompt
+    assert "system.shutdown" in prompt
+    assert "system.lock" in prompt
+
+
+@pytest.mark.parametrize("utterance", [
+    "I set a timer for my kids once and they loved it",
+    "turn off the porch light please",
+    "i should lock up the shop before i go",
+    "the google search results were useless today",
+    # Representative negatives:
+    "she talked for ninety minutes",
+    "I locked the door before leaving",
+    "turn off the TV",
+    "unlock the door",
+    "my Google search results were useless",
+    "I used a timer yesterday",
+    "I need to lock up the shop",
+    "turning off the light is easy",
+])
+def test_llm_fallback_boundary_must_remain_unknown(utterance):
+    import httpx
+    from brain.router.llm_fallback import route
+    from brain.router.registry import CommandRegistry, load_specs
+    from config.settings import config
+
+    try:
+        r = httpx.get(f"{config.llm.base_url.rstrip('/')}/api/tags", timeout=1.0)
+        if r.status_code != 200:
+            pytest.skip("Ollama not running")
+    except Exception:
+        pytest.skip("Ollama not running")
+
+    reg = CommandRegistry(load_specs())
+    domains = reg.domains()
+    ops = {d: reg.operations_for(d) for d in domains}
+
+    result = run(route(utterance, domains, ops, []))
+    assert result is not None
+    # Must route to unknown domain/operation, or be low confidence (< 0.5)
+    is_unknown = (
+        result.get("domain") in ("unknown", None)
+        or result.get("operation") in ("unknown", None)
+        or float(result.get("confidence", 0.0)) < 0.5
+    )
+    assert is_unknown, f"Expected unknown/unexecutable for '{utterance}', got {result}"
+
+
+@pytest.mark.parametrize("utterance,expected_domain,expected_op", [
+    ("set a timer for 10 minutes", "timer", "create"),
+    ("search Google for today's weather", "web", "search"),
+    ("lock my computer", "system", "lock"),
+    ("lock the screen", "system", "lock"),
+    ("shut down my computer", "system", "shutdown"),
+])
+def test_llm_fallback_boundary_positive_controls(utterance, expected_domain, expected_op):
+    import httpx
+    from brain.router.llm_fallback import route
+    from brain.router.registry import CommandRegistry, load_specs
+    from config.settings import config
+
+    try:
+        r = httpx.get(f"{config.llm.base_url.rstrip('/')}/api/tags", timeout=1.0)
+        if r.status_code != 200:
+            pytest.skip("Ollama not running")
+    except Exception:
+        pytest.skip("Ollama not running")
+
+    reg = CommandRegistry(load_specs())
+    domains = reg.domains()
+    ops = {d: reg.operations_for(d) for d in domains}
+
+    result = run(route(utterance, domains, ops, []))
+    assert result is not None
+    assert result.get("domain") == expected_domain, f"Wrong domain for '{utterance}': {result}"
+    assert result.get("operation") == expected_op, f"Wrong operation for '{utterance}': {result}"
+    assert float(result.get("confidence", 0.0)) >= 0.5, f"Low confidence for '{utterance}': {result}"
+
+
+# ── 16. L1 classifier, keyword, and target-extraction boundary tests ──────────
+
+@pytest.mark.parametrize("utterance", [
+    "I set a timer for my kids once and they loved it",
+    "she talked for ninety minutes",
+    "I used a timer yesterday",
+    "i should lock up the shop before i go",
+    "I should lock up the house before I leave",
+    "I need to lock the shop before closing",
+    "I locked the door before leaving",
+    "my google search history is embarrassing",
+    "the google search results were useless today",
+    "I looked at my Google search history",
+    "those search results were terrible",
+])
+def test_l1_contrastive_negatives_route_to_unknown(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status} ({ir.domain}.{ir.operation})"
+    assert ir.domain is None, f"Expected domain=None for '{utterance}', got {ir.domain}"
+    assert ir.operation is None, f"Expected operation=None for '{utterance}', got {ir.operation}"
+
+
+@pytest.mark.parametrize("utterance,expected_domain,expected_op", [
+    ("set a timer for 10 minutes", "timer", "create"),
+    ("lock my computer", "system", "lock"),
+    ("lock the screen", "system", "lock"),
+    ("search Google for quantum computing", "web", "search"),
+    ("google quantum computing", "web", "search"),
+    ("search for quantum computing", "web", "search"),
+    ("look up recipes for pasta", "web", "search"),
+])
+def test_l1_contrastive_positive_controls_preserved(utterance, expected_domain, expected_op):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
+    assert ir.domain == expected_domain, f"Wrong domain for '{utterance}': {ir.domain}"
+    assert ir.operation == expected_op, f"Wrong operation for '{utterance}': {ir.operation}"
+
+
+def test_l1_extract_target_search_web_mentions_vs_queries():
+    from brain.intent_engine import IntentEngine
+    engine = IntentEngine()
+    # Non-search mentions must NOT yield query targets
+    assert engine._extract_target("my google search history is embarrassing", "search_web") == ""
+    assert engine._extract_target("the google search results were useless today", "search_web") == ""
+    assert engine._extract_target("i looked at my google search history", "search_web") == ""
+    assert engine._extract_target("those search results were terrible", "search_web") == ""
+
+    # Real search commands must extract query cleanly
+    assert engine._extract_target("google today's weather", "search_web") == "today's weather"
+    assert engine._extract_target("search for quantum computing", "search_web") == "quantum computing"
+    assert engine._extract_target("search google for local cafes", "search_web") == "local cafes"
+    assert engine._extract_target("google search pasta recipes", "search_web") == "pasta recipes"
+    assert engine._extract_target("look up quantum mechanics", "search_web") == "quantum mechanics"
+    assert engine._extract_target("please google weather forecast", "search_web") == "weather forecast"
+    assert engine._extract_target("can you google best movies of 2024", "search_web") == "best movies of 2024"
+
+
+def test_l1_keyword_fallback_timer_narrative_vs_imperative():
+    from brain.intent_engine import IntentEngine
+    engine = IntentEngine()
+    # Narrative past statements must not match set_timer keyword fallback
+    intent, conf, _ = engine._keyword_fallback("I set a timer for my kids once and they loved it")
+    assert intent != "set_timer", f"Narrative should not match set_timer keyword, got {intent}"
+    intent, conf, _ = engine._keyword_fallback("she set a timer for dinner")
+    assert intent != "set_timer"
+    intent, conf, _ = engine._keyword_fallback("we set a timer earlier")
+    assert intent != "set_timer"
+
+    # Imperative commands must match
+    intent, conf, _ = engine._keyword_fallback("set a timer for 10 minutes")
+    assert intent == "set_timer" and conf == 1.0
+    intent, conf, _ = engine._keyword_fallback("please set a timer for 10 minutes")
+    assert intent == "set_timer" and conf == 1.0
+    intent, conf, _ = engine._keyword_fallback("can you set a timer")
+    assert intent == "set_timer" and conf == 1.0
+    intent, conf, _ = engine._keyword_fallback("timer for 15 minutes")
+    assert intent == "set_timer" and conf == 1.0

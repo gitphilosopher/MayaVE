@@ -1,430 +1,446 @@
-**Source of truth:** This document describes the currently implemented architecture. If it conflicts with the actual source code, the code wins — verify against source before making changes.
+**Source of truth:** This document describes the currently implemented architecture. If it conflicts with the source code, the code wins — verify against source before changing anything.
 
-# MayaVE (Maya) — Technical Architecture
+# MayaVE (VE11) — Technical Architecture
 
-**Basis:** static inspection of the repository; **no runtime was available**. Claims describe code paths, not runtime observations. Binary assets (`.vrm`, `.vrma`, `.vroid`) are Git LFS-managed, so their runtime contents are unverified here.
+**Basis:** static inspection of the repository snapshot (source, tests, configs, datasets metadata, eval logs). **Nothing was runtime-tested for this revision.** Claims describe code paths; statements about measured behavior cite `logs/` evidence and are marked as snapshots. Binary assets (`.vrm`, `.vrma`, `.vroid`) are Git LFS-managed and their contents are unverified. Datasets under `datasets/training/*.jsonl` and `config/command_domains.json` were inspected through their consumers and reports, not row by row.
 
-Development rules and session context: `docs/CONTRIBUTING.md`.
+Development rules and session context: `docs/CONTRIBUTING.md`. History: `docs/CHANGELOG.md`. MayaVE⇄MayaNode wire contract: `docs/PROTOCOL_CONTRACT.md`.
 
 ---
 
-## 1. System Overview
+## 1. System overview
 
-Maya is a local-first, single-user, Windows-first desktop voice assistant with a transparent always-on-top 3D VRM avatar. Persona: FRIDAY-like; addresses the user as `config.user_name` (`"senpai"`). Two cooperating processes:
+MayaVE ("Maya") is a local-first, single-user, Windows-first desktop voice assistant with a transparent, always-on-top 3D VRM avatar. Persona: FRIDAY-like; addresses the user as `config.user_name` (`"senpai"`).
 
-- **Backend** — Python 3.11+ `asyncio` application (`main.py` + `core/`, `brain/`, `services/`, `skills/`, `config/`). Owns audio capture, wake word/VAD, STT, intent classification, skill dispatch, LLM orchestration, TTS synthesis, mood/context/memory state, and a WebSocket server.
-- **Frontend** — Electron/Vite/Three.js VRM avatar (`frontend/`). Pure WebSocket client: no access to backend state; reacts only to messages it receives.
+Two cooperating processes:
 
-They communicate over one WebSocket (`ws://localhost:8765`, `config.ws_host`/`config.ws_port`). There is no REST API.
+- **Backend** — Python 3.11+ `asyncio` application (`main.py`, `core/`, `brain/`, `services/`, `skills/`, `config/`). Owns audio capture, wake word/VAD, STT, intent understanding, skill dispatch, LLM orchestration, TTS, mood/context/memory, and the WebSocket server.
+- **Frontend** — Electron + Vite + Three.js VRM avatar (`frontend/`). Pure WebSocket client; no access to backend state.
 
-**datasets/services:** Ollama chat (`config.llm.model`) + Ollama embeddings (`nomic-embed-text`); Kokoro TTS (local, 24 kHz, CPU by default); Silero VAD (`torch.hub`); Google STT via `SpeechRecognition` (**online**, used for utterances *and* the wake word); intent classifier = PyTorch BiLSTM + TensorFlow CNN ensemble; SQLite semantic memory.
+They communicate over a single WebSocket (`ws://localhost:8765`). There is no REST API. An optional third party, **MayaNode** (separate repository), is reached over HTTP by `services/node/`.
+
+### Principles demonstrably present in the code
+
+| Principle | Where |
+|---|---|
+| Local-first inference (Ollama, Kokoro, local SQLite); only STT, Open-Meteo and `ip-api.com` leave the machine | `llm_service.py`, `core/speaker.py`, `core/transcriber.py`, `skills/web/weather.py` |
+| Configuration-driven taxonomy: intents/keywords/response modes/guard vocabularies come from `datasets/intents.json`; commands/entities/seeds from `config/command_domains.json` | `brain/intent_engine.py`, `brain/router/registry.py` |
+| Deterministic boundaries before probabilistic ones: guards → keyword rules → ML → semantic retrieval → LLM, each gated by confidence | `brain/router/understand.py` |
+| Fail-closed execution: only an *executable* `CommandIR` can reach a skill; LLM output is never trusted until validated against the registry | `brain/router/ir.py`, `validate.py`, `dispatch.py`, `skills/base.py` |
+| Skills own their own parsing and confirmations; the router only selects and extracts | `skills/*`, `brain/router/entities.py` |
+| Best-effort side systems never break the voice loop (Node sync, semantic memory, diagnostics, expression library) | `services/node/*`, `brain/conversation.py` |
+| Single serialization point for turns; single FSM | `core/queue_manager.py`, `core/state.py` |
+
+---
+
+## 2. High-level architecture
 
 ```mermaid
 flowchart LR
-    subgraph OS["Windows Desktop"]
+    subgraph OS["Windows desktop"]
         Mic[("Microphone")] --> Listener
         Speakers[("Speakers (local mode)")]
     end
 
     subgraph Backend["Python asyncio backend (main.py)"]
-        Listener["core/listener.py\nSilero VAD + wake word"]
-        Transcriber["core/transcriber.py\nGoogle STT"]
-        Queue["core/queue_manager.py\nasyncio.Queue"]
-        Processor["core/processor.py"]
-        Intent["brain/intent_engine.py\nPyTorch+TF ensemble"]
-        Router["brain/router/dispatch.py"]
+        Listener["core/listener.py\nSilero VAD + wake-word feed"]
+        Wake["core/wake_word.py\nGoogle STT, sleeping only"]
+        Trans["core/transcriber.py\nGoogle STT"]
+        Queue["core/queue_manager.py"]
+        Proc["core/processor.py"]
+        Understand["brain/router/understand.py\nCommandUnderstander (backend=hybrid)"]
+        Legacy["brain/intent_engine.py\nBiLSTM + CNN + keywords + guards"]
+        Router["brain/router/dispatch.py\nRouter"]
         Skills["skills/*"]
-        LLM["services/llm/llm_service.py\nOllama streaming"]
-        Lifecycle["services/llm/ollama_lifecycle.py\nkeep_alive + turn diagnostics"]
-        Context["brain/conversation.py\nContextManager"]
-        VectorStore["brain/vector_store.py\nSQLite"]
+        LLM["services/llm/llm_service.py\nOllama streaming + Kokoro"]
+        Ctx["brain/conversation.py\nContextManager"]
+        VS["brain/vector_store.py\nSQLite memories"]
         Mood["core/mood.py"]
-        Behavior["core/behavior_engine.py"]
-        ExprLib["core/expression_library.py\nexpressions.json"]
-        Speaker["core/speaker.py\nKokoro TTS"]
-        WS["services/ws_server.py\nwebsockets server"]
-        State["core/state.py\nFSM"]
+        Beh["core/behavior_engine.py\n+ expression_library.py"]
+        Spk["core/speaker.py\nKokoro TTS"]
+        WS["services/ws_server.py"]
+        FSM["core/state.py"]
+        Node["services/node/*\nMayaNode client + outbox"]
     end
 
-    subgraph FrontendJS["Frontend (Electron + Three.js)"]
-        WSClient["frontend/js/websocket.js"]
-        Avatar["frontend/js/avatar.js"]
-        ExprComposer["frontend/js/expression-composer.js"]
-        Gaze["frontend/js/gaze-controller.js"]
-        LifeMotion["frontend/js/life-motion-controller.js"]
-        AnimCtrl["frontend/js/animation-controller.js"]
-        ExprCtrl["frontend/js/expression-controller.js"]
+    subgraph Front["Frontend (Electron + Three.js)"]
+        WSC["js/websocket.js"] --> Avatar["js/avatar.js"]
+        WSC --> Expr["js/expression-composer.js"]
     end
 
-    Mic --> Listener --> Transcriber --> Queue --> Processor
-    Processor --> Intent --> Router
-    Router --> Skills
+    Mic --> Listener --> Trans --> Queue --> Proc
+    Listener --> Wake
+    Proc --> Understand --> Legacy
+    Proc -. legacy backend .-> Legacy
+    Proc --> Router --> Skills
     Router --> LLM
-    LLM --> Lifecycle
-    LLM <--> Context
-    Context <--> VectorStore
+    LLM <--> Ctx <--> VS
     LLM --> Mood
-    Skills --> Speaker
-    LLM --> Speaker
-    Speaker --> Behavior --> WS
-    LLM --> Behavior
-    Behavior --> ExprLib
-    WS <-->|WebSocket JSON + base64 audio| WSClient
-    WSClient --> Avatar
-    WSClient --> ExprComposer --> ExprCtrl
-    Avatar --> AnimCtrl
-    Avatar --> Gaze
-    Avatar --> LifeMotion
-    Speaker -.-> Speakers
+    Skills --> Spk
+    LLM --> Spk
+    Spk --> Beh --> WS
+    LLM --> Beh
+    WS <-->|JSON + base64 WAV| WSC
+    Proc -->|turn_completed event| Node
+    Ctx -->|user-stated memories| Node
+    Node -->|remote memories| Ctx
+    Spk -.-> Speakers
 ```
 
 ---
 
-## 2. Startup and Runtime Flow
+## 3. Runtime flow
 
-### 2.1 Startup (`main.py::main`)
-1. `os.makedirs(config.log_dir)` before logging setup. `ws_task = asyncio.create_task(ws_server.serve())` (reference kept; failure logged via `_on_ws_done`). Construct `Speaker()`, `Transcriber()`, `Processor(speaker)` → `IntentEngine()` load/auto-train (*synchronous, blocks the loop*), `ConversationManager`, `Router(speaker)` (which also injects the speaker into `timer.py` via `set_timer_speaker`).
-2. Start the optional `node_sync_manager.run()` background task alongside the WebSocket task; it returns immediately when Node integration is disabled and isolates connection failures from voice processing. Register `state.register_stop_callback(_hard_stop_audio)`.
-3. Warmups (gathered): `_warmup_ollama` (1-token chat with `keep_alive=chat_keep_alive()`), `_warmup_embeddings` (`keep_alive:"30m"`), `llm_service.warmup` (Kokoro, executor), `speaker.warmup` (executor). Then `describe_ollama_models()` diagnostic.
-4. `state.set(IDLE)` (Maya starts awake), then startup greeting: `ws_server.broadcast_animation("wave")` + `await speaker.speak(...)` — **before** the Listener exists.
-5. `asyncio.TaskGroup`: `Listener.start()` + `queue_manager.run()` (**requires Python ≥3.11**).
+### 3.1 Startup (`main.py::main`)
+1. `HF_HUB_OFFLINE=1` is set before any import that can load kokoro/huggingface_hub; `logs/` is created; rotating log (5 MB × 3).
+2. Register the state observer (LISTENING watchdog), start `ws_server.serve()` and `node_sync_manager.run()` as background tasks (the latter returns immediately when `config.node.enabled` is `False`).
+3. Construct `Speaker()`, `Transcriber()`, `Processor(speaker)` — which loads/auto-trains `IntentEngine`, builds `Router(speaker)` (also injects the speaker into `timer.py`), and builds the optional `CommandUnderstander`.
+4. Register `state.register_stop_callback(_hard_stop_audio)`, then warm up in parallel: Ollama chat (1 token, `keep_alive`), embeddings, Kokoro in `llm_service`, Kokoro in `Speaker`.
+5. FSM → IDLE, broadcast `wave`, speak the greeting (before the Listener exists).
+6. `asyncio.TaskGroup`: `Listener.start()` + `queue_manager.run()` (**Python ≥ 3.11**).
 
-### 2.2 Voice command path
+### 3.2 One voice turn
 
 ```
-sounddevice callback thread → Listener._process_frame
-   ├─ WakeWordDetector.feed_frame (every frame; active only while SLEEPING)
-   └─ Silero VAD → utterance → run_coroutine_threadsafe(main.on_speech)
-on_speech → [if not busy: FSM LISTENING + WS "listening"] → Transcriber.transcribe (Google STT, executor)
-   → empty: back to IDLE (+WS idle, baseline behavior)
-   → barge-in check (was_speaking snapshot + contains_wake_word) / sleep-command check (is_sleep_command)
-   → queue_manager.put(text)                 [maxsize=10, drops when full]
-QueueManager.run → Processor.handle          [FSM → PROCESSING + WS "processing"]
-   → IntentEngine.classify (sync) → context_manager.observe_user_turn
-   → Router.dispatch   [pending power confirmation resolved FIRST]
-        ├─ skill → returns "[tag] text" → Speaker.speak (Kokoro → WS; FSM SPEAKING → IDLE)
-        └─ llm_service.query → returns ALREADY_SPOKEN (speaks itself)
-   → WS state idle + mood-baseline behavior
-ws_server → frontend/js/websocket.js → avatar.js (audio/lip-sync), expression-composer.js, animations
+mic callback thread → Listener._process_frame
+  ├─ WakeWordDetector.feed_frame (every frame; acts only while SLEEPING)
+  └─ Silero VAD → utterance → main.on_speech
+on_speech: [LISTENING + WS "listening" if not busy] → Transcriber (Google STT, executor)
+  → empty: back to IDLE
+  → barge-in check (was_speaking snapshot + contains_wake_word) / sleep command
+  → queue_manager.put (maxsize 10; full → dropped, LISTENING reset)
+QueueManager → Processor.handle
+  PROCESSING + WS "processing" + transcript
+  → add_user (rolling window)
+  → _classify:  hybrid → CommandUnderstander.understand → to_legacy_intent(ir)   (intent["_ir"])
+                 else   → IntentEngine.classify (executor)
+  → context_manager.observe_user_turn (whole-utterance target blanked)
+  → Router.dispatch
+        1. pending confirmations: power → reminder duration → note delete
+        2. IR safety net (see §4.4)
+        3. handler: skill → "[tag] text"   |   LLM → streams and speaks itself (ALREADY_SPOKEN)
+  → Speaker.speak (skill replies) → turn_lifecycle.rest() → record_event("mayave.turn_completed")
 ```
 
-### 2.3 Capture → transcription
-1. `core/listener.py` captures mono audio through `sounddevice`; its callback runs off the asyncio loop and submits work with `run_coroutine_threadsafe`.
-2. While sleeping, frames feed the Google-STT wake-word path; while awake, Silero VAD segments speech into utterances. VAD also runs during playback; there is no echo cancellation.
-3. Completed utterances start independent `main.py::on_speech` tasks. Transcription uses Google STT in an executor and requires internet; commands then follow the state, barge-in, sleep, and queue flow in §2.2.
-
-### 2.4 Wake word
-`WakeWordDetector` listens only while the state is SLEEPING and uses Google STT to detect the configured wake phrase. The configured matcher is shared with the barge-in check; a wake callback returns the state to IDLE and speaks a greeting.
-
-### 2.5 Command queue
-`core/queue_manager.py` owns a bounded `asyncio.Queue` and one serial worker, preventing ordinary responses from overlapping. A full queue drops new items. Startup/wake/sleep speech and timer alerts use explicit direct paths.
-
-### 2.6 Processing a command (`core/processor.py::Processor.handle`)
-1. FSM → PROCESSING; broadcast `state:processing` + user transcript.
-2. `ConversationManager.add_user(text)` → `brain/memory.py` rolling window (`max_entries=50`).
-3. `IntentEngine.classify(text)` → `{intent, target, confidence, raw, model}`.
-4. `context_manager.observe_user_turn(text, intent)` — updates conversation state only; does not write history.
-5. `Router.dispatch(intent, text)`.
-6. If the response ≠ `ALREADY_SPOKEN`: `_strip_tags(response)` → tag-free text goes to `add_assistant` (skipped when the skill/LLM set `intent["_no_history"]`, i.e. `query()` error strings) and to the transcript broadcast; then `Speaker.speak` with the original tagged text. `on_audio_start` broadcasts `wave` for the `greet` intent, or the animation named by a skill-set `intent["action"]` (from `perform_action`).
-7. Always ends with WS `idle` + mood-baseline behavior; exceptions are logged and return to IDLE (no propagation to the queue worker).
-
-State sequence per command: `listening → processing → speaking → idle` (skill/LLM paths set FSM IDLE themselves).
+State sequence: `listening → processing → speaking → idle`. Skill/LLM paths finish through `core/turn_lifecycle.rest()`, which re-checks `state.is_sleeping()` so a concurrent "go to sleep" wins.
 
 ---
 
-## 3. Intent Classification (`brain/intent_engine.py`, `datasets/intents.json`)
+## 4. Intent understanding and routing
 
-`datasets/intents.json` declares intents, response modes, keyword rules, and guard vocabularies. `IntentEngine` validates it and supplies the routing metadata used by `brain/router/dispatch.py`; the training datasets and `brain/dataset_tools.py` / `brain/train_intent.py` support candidate review, retraining, and evaluation.
+Two classification backends exist, selected by `config.router.backend` (`"legacy"` default, `"hybrid"` opt-in). Both end in the same dict shape consumed by `Router.dispatch`.
 
-- **Classification:** PyTorch BiLSTM and TensorFlow CNN predictions are combined, with deterministic guards and keyword rules for short inputs and low-confidence results.
-- **Retraining:** a fingerprint of intent configuration and training data triggers retraining when those inputs change.
-- **Routing data:** classification returns an intent and target. Missing skill targets remain empty so the skill can ask for clarification; response modes select skill routing or the LLM.
-- **Reproducible training:** both models train from a fixed seed (`_SEED`), which is part of the retrain fingerprint.
+### 4.1 Legacy classifier — `brain/intent_engine.py` (always present)
+
+`IntentEngine.classify(text)` → `{intent, target, confidence, raw, model, response_mode, second_intent, second_confidence, margin}`.
+
+Order of decision (first match wins):
+
+1. **Guards** (deterministic, confidence 1.0): dismissal exact-phrase match (after filler/address trimming); presence/arrival regex → `smalltalk`; action-word regex (nod/giggl/sigh/shrug/wink/wynk) unless phrased as a question → `perform_action`.
+2. **Short-input keyword rule:** ≤ 3 tokens and not a comparison → a keyword match wins outright (`keyword_short_input`).
+3. **Ensemble:** PyTorch BiLSTM+attention and TensorFlow 1-D CNN, probabilities averaged. Confidence ≥ `_CONF_THRESH` (0.65) → accepted. Top-2 class and `margin` come from this same averaged distribution.
+4. **Keyword fallback** below 0.65 (`keyword_fallback`), then a chance-relative floor (`1/N × 8`, clamped 0.20–0.45) → `low_confidence_trusted`, else `unknown` (`low_confidence_fallback`).
+
+`margin`/`second_*` are `None` for guard and keyword decisions (no meaningful runner-up). Keywords are phrase-level, matched with `\b…\b` plus inflection suffix, in the order given by `keyword_rules_order` in `datasets/intents.json`. 41 intents are declared; `response_mode` (`skill`|`llm`) is read from that file, never hardcoded.
+
+`_extract_target` strips command phrases for `open_target`, `search_web`, `set_timer`; it returns `""` when a trigger matched with nothing after it, so skills ask for clarification.
+
+### 4.2 Hybrid pipeline — `brain/router/understand.py` (opt-in)
+
+`CommandUnderstander.understand(text) → CommandIR`. It never executes anything and never imports a skill.
+
+```mermaid
+flowchart TD
+    T["utterance"] --> C["ContextResolver\n(pending reply / timer correction → rewritten text)"]
+    C --> G{"guards.check\n(reuses IntentEngine guards +\ncanned greet/farewell/thanks/help)"}
+    G -- hit --> IR1["CommandIR from intent name"]
+    G -- miss --> CL["IntentEngine.classify (executor)"]
+    CL --> TR{"trusted?\nkeyword/guard source, or\nconf≥0.85 & margin≥0.25,\nor margin=None & conf≥0.93"}
+    TR -- yes --> IR1
+    TR -- no --> CV{"llm-mode label\nand conf≥0.5?"}
+    CV -- yes --> UNK1["UNKNOWN (conversational)"]
+    CV -- no --> SEM["Semantic retrieval\n(Ollama embeddings, command_vectors.sqlite3)"]
+    SEM --> SC{"CONFIDENT?\nsim≥0.80 & margin≥0.08"}
+    SC -- yes --> IR1
+    SC -- no --> LF["LLM fallback (llm_fallback.route)\nJSON, temp 0, 8 s timeout"]
+    LF --> V["validate_raw_llm_output → validate(registry)\nconf = min(llm, 0.7) ≥ 0.5"]
+    V -- ok --> IR1
+    V -- invalid --> REJ["REJECTED / UNKNOWN"]
+    LF -- down/timeout --> UNK2["UNKNOWN (low_confidence / conversational)"]
+```
+
+Notes:
+
+- A low-confidence **command** is never forced into an intent: it ends `UNKNOWN` with `legacy_intent="unknown"`. A low-confidence **conversational** label goes to the chat LLM.
+- Thresholds in `understand.py` (`MIN_CONF=0.85`, `MIN_MARGIN=0.25`, `MIN_CONF_NO_MARGIN=0.93`, `LLM_MIN_CONF=0.5`) and `config.router` (`min_similarity=0.80`, `min_margin=0.08`, `low_similarity_floor=0.55`) are **placeholders pending measurement** (see §15).
+- `understand()` cannot raise: any stage failure degrades to `UNKNOWN` (`reason="internal_error"`).
+- Per-run counters (`stats`) feed `eval_ir`.
+- Semantic similarity is command-level: every seed of a `domain.operation` is a vector; scores collapse to the best per command; margin = best − second-best *distinct* command (`schemas.aggregate_by_command`).
+
+### 4.3 `CommandIR` (`brain/router/ir.py`)
+
+| Status | Meaning | Reaches a skill? |
+|---|---|---|
+| `READY` | command identified, no missing required entities | yes (if `executable`) |
+| `NEEDS_CLARIFICATION` | required entity missing; `prompt` holds the question | no → `Router._clarify` |
+| `UNKNOWN` | conversational, out of scope, or too uncertain | no → LLM |
+| `REJECTED` | LLM output failed validation | no → LLM |
+
+`executable = READY ∧ no missing entities ∧ legacy_intent`. `to_legacy_intent(ir)` is the bridge to the dispatch contract; non-READY IRs keep a `legacy_intent` only when `reason == "conversational"`, otherwise `"unknown"`. Guarded/canned skills outside the registry (greet, help, farewell, thanks, perform_action, mute) become `READY` with `domain="legacy"`.
+
+### 4.4 Dispatch safety net (`brain/router/dispatch.py`)
+
+`Router._routes` is the single intent→handler map. With an IR attached: `NEEDS_CLARIFICATION` → `_clarify`; a non-executable IR is forced to `llm_query`; an executable IR with `requires_confirmation` whose handler does not self-confirm (`power.py`, `notepad.py`) **fails closed** with an apology. Skills receive `ir.effective_text` (context-rewritten); the LLM and pending-confirmation resolvers receive the user's original words.
+
+### 4.5 `HybridIntentEngine` (`brain/router/hybrid_engine.py`) — present, **not wired**
+
+A legacy-shaped wrapper (`classify` sync + `aclassify` async, shadow-mode comparison, `hybrid_domains` allow-list). No caller exists in `main.py`/`processor.py`; it is exercised by `brain/test_hybrid_router.py`. `config.router.shadow_mode` and `hybrid_domains` are consumed only by this class, not by `CommandUnderstander`.
+
+### 4.6 Deterministic vs probabilistic components
+
+| Component | Nature |
+|---|---|
+| Guards, keyword rules, regex entity extractors, `validate`, `ContextResolver`, confirmations | deterministic |
+| BiLSTM+CNN ensemble, embedding similarity | probabilistic (seeded training; fixed after training) |
+| LLM fallback | probabilistic; output is data to be validated, never an instruction |
+
+### 4.7 Context resolver (`brain/router/context.py`)
+
+Router-only context (not `ContextManager`). Rewrites an utterance into a standalone command: a pending clarification (`duration` only, 30 s TTL, consumed by the next turn) resolves only when the reply is *nothing but* a duration; a timer correction (600 s TTL, needs a marker like "actually"/"make it") resolves only to a duration or bare number. Corrections produce a new `set a timer for N …` command (no `timer.update` exists).
 
 ---
 
-## 4. Skill Routing and Skills (`brain/router/dispatch.py`, `skills/`)
+## 5. Entity system
 
-`Router.__init__` builds a static `dict[intent → coroutine]`; every labelled intent is routed and unknown/unrouted intents fall back to `llm_query`. Before intent routing, `dispatch` calls `skills.system.power.resolve_pending(raw_text)`: a pending shutdown/restart request is **consumed by the next utterance** (one-shot, 30 s TTL) — confirm phrase → OS action + spoken reply; deny phrase → "cancelled"; anything else → request dropped and the utterance routes normally. It then does the same for a reminder awaiting its duration (`timer.resolve_pending`). Skill exceptions return `"[sad] Sorry senpai, I ran into a problem with that."` (spoken but kept out of history via `_no_history`). The `farewell` intent only replies; it does not sleep.
-
-### 4.1 Hybrid router package
-Trace of the existing Processor.handle lifecycle. It sets PROCESSING, then classifies via IntentEngine.classify in an executor, then calls observe_user_turn, then Router.dispatch(intent, text). Router.dispatch already resolves pending confirmations first, already understands intent["_ir"], and already has a clarify route. The narrowest seam is therefore replacing the classify call with one that returns to_legacy_intent(ir). Nothing else moves.
-
-Final runtime flow (hybrid):
-
-STT and on_speech queue the text.
-Processor.handle sets PROCESSING and records the raw text via add_user.
-_classify calls CommandUnderstander.understand. It resolves context (effective_text), then runs guards, then the classifier's confidence/margin gate, then semantic retrieval, then the LLM fallback, then entity extraction. The result is a CommandIR, and to_legacy_intent turns it into an intent dict carrying _ir.
-observe_user_turn receives the raw text and the intent with a blanked whole-utterance target.
-Router.dispatch resolves power, reminder and note-delete confirmations first.
-NEEDS_CLARIFICATION goes to _clarify.
-Non-executable IRs (UNKNOWN/REJECTED) go to llm_query with the raw text.
-Executable IRs go to the skill with effective_text.
-A declared requires_confirmation fails closed unless the handler self-confirms.
-Speaker.speak or the LLM streaming pipeline speaks the reply.
-turn_rest runs and the mayave.turn_completed event is recorded.
-
-A failure in understand degrades to an UNKNOWN IR. A failure in _classify or at init falls back to the legacy classifier.
-
-**Convention:** skills implement `async execute(intent, text) -> str` and return tagged text. `perform_action` also supplies an action name for separate frontend dispatch. The LLM path speaks directly and returns `ALREADY_SPOKEN`.
-
-| Skill (file) | Intents | Behavior | Notes |
-|---|---|---|---|
-| Open target (`system/open_target.py`) | `open_target` | Resolves and opens a website or application; asks for clarification when the target is missing or invalid | Unified website/application route |
-| Google search (`web/google_search.py`) | `search_web` | Opens a Google results page for the supplied target | Does not fetch results |
-| Weather (`web/weather.py`) | `get_weather` | Retrieves current conditions and forecast through Open-Meteo, with location lookup | Returns tagged text for speech |
-| Lock screen (`system/lock_screen.py`) | `lock_screen` | Locks the Windows workstation | Windows-only; immediate action |
-| Power (`system/power.py`) | `shutdown`, `restart` | Uses a one-shot confirmation flow before requesting the OS action | Windows-only |
-| System info (`system/system_info.py`) | `system_info`, `screenshot` | Reports system status or saves a screenshot | Some status events also feed mood |
-| Clipboard (`system/clipboard.py`) | `clipboard_read/write/clear` | Reads, writes, or clears the system clipboard | Uses `pyperclip` |
-| Media (`media/play_music.py`) | `play_music`, `pause_music`, `next_track`, `prev_track`, `volume_up`, `volume_down`, `mute` | Sends media-control keys | Optional keyboard dependency |
-| Date/time (`utilities/datetime_skill.py`) | `get_time`, `get_date` | Returns local date and time | — |
-| Timer (`utilities/timer.py`) | `set_timer`, `cancel_timer`, `timer_status` | Manages asyncio timers and queued reminders | Alerts use the shared Speaker and command queue |
-| Notepad (`utilities/notepad.py`) | `note_write`, `note_view`, `note_delete` | Stores notes as text files and supports delete confirmation | Files live under `~/Maya/Notes` |
-| Perform action (`system/perform_action.py`) | `perform_action` | Selects an avatar action for the response | Processor dispatches it over the animation channel |
-| Built-ins (`router.py`) | `greet`, `farewell`, `thanks`, `help` | Returns canned responses; greeting triggers a wave | — |
-| LLM-routed | `confirm`, `dismissal`, `smalltalk`, `identity`, `joke`, `motivate`, `opinion`, `followup`, `general_query`, plus unrouted fallback | `services/llm/llm_service.py::query` | Router fallback for non-skill responses |
+- **Declaration:** per operation in `config/command_domains.json` (`entities: {name: {type, required, prompt}}`, `target_mode: "raw" | "entity:<name>"`).
+- **Extraction:** `brain/router/entities.py::EXTRACTORS`, keyed by entity name: `duration` (int seconds; mirrors `timer._parse_duration` — first match per unit, number words one…sixty; zero or "an hour" ⇒ none), `message` (mirrors `timer._extract_reminder`), `location` (mirrors `weather._extract_location`), `target`/`query` (the classifier's extracted target). Entities with no extractor (`content`) stay optional unless the LLM supplies them.
+- **Precedence:** deterministic value > LLM string. `extract_entities` returns `(entities, missing_required)`.
+- **Validation:** `validate.validate` — entity keys must be declared for the operation, values must be strings ≤ 500 chars, required entities present (skipped with `enforce_required=False`, used for identity-only checks on semantic/LLM picks because entities are extracted afterward).
+- **Downstream:** `CommandIR.entities`/`target`; skills still re-parse `effective_text` themselves (the extractors exist to decide READY vs clarify and to evaluate accuracy). `adapter.to_legacy_intent` (HybridIntentEngine path) applies `target_mode`.
+- **LLM role:** may propose entities under schema-defined keys only (the prompt lists allowed keys per operation). Invented keys are rejected by validation (see §15 findings).
+- **Failure:** missing required → `NEEDS_CLARIFICATION`; target re-derived for the *selected* spec's legacy intent when semantic/LLM disagree with the classifier.
 
 ---
 
-## 5. State Machine and Barge-in (`core/state.py`)
+## 6. Skills (`skills/`)
 
-`MayaState`: `SLEEPING`, `IDLE`, `LISTENING`, `PROCESSING`, `SPEAKING`, `INTERRUPTED`. Single `StateManager` singleton (`state`), guarded by an `asyncio.Lock` for async transitions (`set()`); `set_sync()` exists for the non-async sounddevice callback thread. `run_interruptible()` registers **one** `_current_task` and swallows `CancelledError`; `can_interrupt()` and `interrupt()` implement barge-in.
+Convention: `async execute(intent, text) -> str` returning tagged text (`"[happy] …"`). `perform_action` also sets `intent["action"]`; the Processor dispatches it over the animation channel in sync with audio start. `skills/base.py` defines `SkillResult`, `SkillRegistry` (native registrations + a live reference to `Router._routes`) and `LegacySkillAdapter`; it is not on the live dispatch path (`Router.dispatch` does not consult it).
 
-**Barge-in** — `interrupt()` runs when `can_interrupt()`: SPEAKING, or PROCESSING with a live registered speech task (an LLM turn, including its filler and the wait before the first phrase). Flow: state → INTERRUPTED; stop callback (`main.py::_hard_stop_audio`: `sd.stop()` + `broadcast_stop_audio`, which also sets `_audio_done_event`); cancel `_current_task`; state → LISTENING. After a voice barge-in the interrupting utterance is queued, so the FSM proceeds LISTENING → PROCESSING normally. A barge-in during an LLM turn leaves history with only the phrases whose playback started (§8).
-
-Tasks are registered via `run_interruptible` by `llm_service.query()`, the timer alert (`timer._alert`), `Processor.handle()`'s skill-response `Speaker.speak()` calls, and `main.py`'s startup greeting, wake-up line, and sleep goodbye line. A skill's own blocking dispatch work before it starts speaking (for example, `weather.py`'s HTTP call) is not interruptible until it reaches its own `Speaker.speak()` call.
-
-**Transition observers** — `StateManager.add_observer(cb)` fires `cb(old, new)` synchronously after every genuine transition (best-effort; a raising observer is logged and swallowed). `state.py` itself imports nothing about why — `main.py` registers a watchdog that resets a LISTENING state stuck for 15s with no follow-up back to IDLE (a dropped queued command, or a client-side `interrupt` with nothing queued after it).
-
-**Sleep race** — `core/turn_lifecycle.py`'s `rest(force_idle)` — used by `Processor.handle()`'s success/exception tails and `llm_service._play_worker`'s `_DONE` branch — checks `state.is_sleeping()` fresh at the moment a turn completes rather than assuming IDLE, broadcasting `"sleeping"` and skipping the FSM write if a concurrent "go to sleep" already won. `Processor.handle()` also bails out immediately if already asleep when a queued command reaches it. `Speaker.speak()`'s own finally computes `sleeping_now = was_sleeping or state.is_sleeping()` (was_sleeping is still needed for the goodbye line's own call, where state has been SPEAKING the whole time). `on_speech()` calls `state.interrupt()` before setting SLEEPING so the goodbye line doesn't race a still-in-flight turn for the shared audio pipeline. Residual gap: a skill already in its uninterruptible dispatch phase when sleep lands still speaks its reply once dispatch finishes (see `### Issues`).
-
-**Sleep:** `on_speech` sets SLEEPING *before* speaking the goodbye line (triggered by `is_sleep_command`, §2.3). `Speaker.speak()` preserves that state through playback and broadcasts `sleeping`; normal turns return to IDLE and broadcast `idle` plus baseline behavior. The frontend consumes the sleeping state to close the avatar's eyes (§10).
+| Skill | Intents | Notes |
+|---|---|---|
+| `system/open_target.py` | `open_target` | known sites → known apps → URL → app passthrough → bare-label site guess |
+| `web/google_search.py` | `search_web` | opens a results page only |
+| `web/weather.py` | `get_weather` | Open-Meteo + geocoding, `ip-api.com` fallback |
+| `system/power.py` | `shutdown`, `restart` | one-shot spoken confirmation (30 s), `shutdown /s|/r /t 10` |
+| `system/lock_screen.py` | `lock_screen` | immediate, no confirmation |
+| `system/system_info.py` | `system_info`, `screenshot` | psutil/pyautogui in executor; may report mood events |
+| `system/clipboard.py` | `clipboard_*` | `pyperclip` optional |
+| `media/play_music.py` | play/pause/next/prev/volume/mute | `keyboard` media keys; `mute` has no registry operation |
+| `utilities/datetime_skill.py` | `get_time`, `get_date` | |
+| `utilities/timer.py` | `set_timer`, `cancel_timer`, `timer_status` | alerts queued via `queue_manager.put_job`, spoken under `run_interruptible` |
+| `utilities/notepad.py` | `note_write/view/delete` | `~/Maya/Notes`; delete is confirmation-gated |
+| `system/perform_action.py` | `perform_action` | closed vocabulary nod/giggle/sigh/shrug/wink |
+| built-ins in `dispatch.py` | `greet`, `farewell`, `thanks`, `help`, `clarify` | |
+| LLM-routed | `confirm`, `dismissal`, `smalltalk`, `identity`, `joke`, `motivate`, `opinion`, `followup`, `general_query`, `unknown` | |
 
 ---
 
-## 6. Context and Memory (`brain/`)
+## 7. LLM architecture
+
+**The LLM does:** (a) generate conversational replies (`llm_service.query`, streamed, persona + mood + `ContextPackage` in the system prompt, expression/attitude/intensity/action tags); (b) act as the *last-resort routing fallback* in hybrid mode (`llm_fallback.route`: non-streaming, JSON, temperature 0, 8 s timeout, `keep_alive`); (c) optionally assist offline dataset auditing/generation (`brain/dataset_tools.py`, model `llama3.1`).
+
+**The LLM does NOT:** run skills, make execution decisions on its own output, extract entities that deterministic extractors can find, decide confirmations, or write memory (memory writes are regex-gated, §9). It has no tool-calling layer.
+
+Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/chat` stream → phrase-boundary splitter (`_next_boundary`, vocative-aware, decimals-safe) → `_parse_expression` → `synth_q` → Kokoro (`_run_kokoro`, daemon thread, 15 s timeout) → `play_q` → per phrase: actions → behavior → `speaking` → audio → browser `audio_done` → baseline behavior. Optional "thinking filler" only for `general_query`/`unknown` with ≥ 3 words from non-low-confidence sources. A barge-in cancels the whole pipeline; history records only phrases whose playback began (or a short interruption marker if none).
+
+---
+
+## 8. State machine and barge-in (`core/state.py`)
+
+`MayaState`: `SLEEPING, IDLE, LISTENING, PROCESSING, SPEAKING, INTERRUPTED`. One `StateManager` singleton; `run_interruptible()` registers **one** `_current_task`. `interrupt()` runs when SPEAKING or PROCESSING with a live speech task: stop callback (`sd.stop()` + `stop_audio`) → cancel task → LISTENING. Barge-in requires the wake word in the utterance; other speech over a reply is queued normally. Observers (`add_observer`) drive the 15 s LISTENING watchdog in `main.py`. Sleep wins races via `turn_lifecycle.rest()`, `Speaker.speak()`'s finally, and `Processor.handle()`'s early bail-out. Residual gap: a skill in its blocking dispatch phase is not interruptible.
+
+---
+
+## 9. Memory
 
 | Layer | Implementation | Persistence |
 |---|---|---|
-| Recent window | `brain/memory.py` rolling conversation history shared by processor, context manager, and LLM callers | In-process only |
-| Conversation state | `brain/conversation.py` `ContextManager` tracks topics, goals, constraints, entities, phase, and last intent | In-process |
-| Open loops | `ContextManager` tracks unresolved questions and deferred tasks | In-process |
-| Semantic long-term | `brain/vector_store.py` `SQLiteVectorStore` at `~/Maya/Memory/semantic_memory.sqlite3` (`config.context.memory_dir=None`) | SQLite |
-| Notes | `skills/utilities/notepad.py` `.txt` in `~/Maya/Notes` | Files |
+| Recent window | `brain/memory.py` (`max_entries=50`, evict callback) | process only |
+| Conversation state & open loops | `ContextManager` (topic/phase/goal/constraints/entities, open loops) | process only |
+| Semantic long-term | `SQLiteVectorStore` (`~/Maya/Memory/semantic_memory.sqlite3`, NumPy brute-force cosine), embeddings via `OllamaEmbedder` (`nomic-embed-text`) | SQLite |
+| Command vectors (router) | `CommandVectorStore` — **separate** SQLite file (`~/Maya/Router/command_vectors.sqlite3`) + `.fingerprint.json` sidecar | SQLite |
+| Notes | `~/Maya/Notes/*.txt` | files |
+| MayaNode outbox / cursor / device id | `~/Maya/Node/{outbox,sync_state}.json`, `device_id.txt` | JSON |
 
-### 6.1 Context intelligence (`brain/conversation.py::ContextManager`, singleton `context_manager`)
-- Tracks conversation phase and topic continuity, unresolved questions/deferred tasks, and lightweight entity/reference context.
-- `Processor` updates conversation state for each command. The LLM path builds a context package from recent history, conversation state, open loops, and relevant semantic memories; completed LLM turns update assistant history and context memory.
-
-### 6.2 Semantic memory
-- `brain/embeddings.py` obtains vectors from the local Ollama embeddings endpoint; `brain/vector_store.py` persists semantic memories in SQLite and ranks matches by cosine similarity.
-- Writes are deliberately limited to explicit remember cues and deduplicated against similar records. The LLM context path retrieves relevant older memories alongside the in-process recent window.
-- If embedding or store access is unavailable, context degrades to recent conversation only. Recent assistant history is tag-stripped; LLM error responses are not persisted.
+Write policy: only explicit cue phrases ("remember that", "my favorite", "I prefer", …) from non-noise intents become `user_stated` memories, deduped by similarity (0.92) and updated in place. Auto-compaction of evicted turns writes a keyword gist (`conversation_summary`, never synced). Retrieval is skipped for short followup/confirm/dismissal turns and for memories newer than 120 s. Any embedding/store failure degrades to recent-context only.
 
 ---
 
-## 7. Mood System (`core/mood.py`, singleton `mood_manager`)
+## 10. Mood and behavior
 
-The mood manager is event-driven: it combines user-text signals, explicit skill/system events, and expression tags from Maya's completed reply. User-text analysis runs on the LLM path; system events can also come directly from skills. Reply tags confirm pending mood events rather than creating a persistent mood on their own. Mood decays over turns and time; its baseline supplies resting expressions and prompt guidance, while the behavior engine reads the active mood when composing output.
+`core/mood.py` (singleton `mood_manager`): event-driven persistent mood (`angry`/`sad` only) plus transient teasing reaction; user-text regexes, skill/system `report_event`, and reply tags (confirmation only). Decays by distraction, time (3 %/min) and a 20-minute forget threshold. `core/behavior_engine.py::compose` turns `(expression, attitude, intensity, mood)` into a packet `{primary, secondary, intensity, attitude, gaze, actions, recipe}`; recipes come from `core/expression_library.py` (`frontend/assets/expressions.json`: cache-first, deterministic default composition, atomic single-writer persistence, refuses to overwrite an unreadable file). Closed vocabularies — emotion `happy|sad|angry|surprised|relaxed|neutral|excited`; attitude `sincere|playful|teasing|mock`; intensity `low|medium|high`; actions `nod|giggle|sigh|shrug|wink`; gaze `direct|soft|away` — are duplicated across files by design and are not expanded to reach stored recipes (edit points: `llm_service.py`, `speaker.py`, `behavior_engine.py`, `expression_library.py`; actions additionally `perform_action.py`, `intents.json` action words, `websocket.js`, `_VRMA_ASSETS`).
 
 ---
 
-## 8. LLM and TTS Pipeline
+## 11. Frontend (`frontend/`)
 
-### 8.1 LLM request and prompt (`services/llm/llm_service.py`)
-- **Request:** `llm_service` streams chat requests to the local Ollama endpoint and sets `keep_alive` on chat and warmup requests.
-- **Prompt assembly:** the system prompt is combined with mood guidance, a `ContextPackage`, and recent conversation history. The response format carries expression tags and optional action cues for the stream parser.
+Electron (transparent, frameless, always-on-top, click-through window) + Vite dev server + Three.js + `@pixiv/three-vrm(-animation)`. `main.js` owns scene/renderer and the single frame loop (render, `vrm.update`, VRMA mixers, gaze). `websocket.js` is the only backend link (reconnect 2 s; sends only `audio_done`). `handleState` is the single source of avatar sleep/wake; `ws.onclose` also sleeps the avatar.
 
-### 8.2 Streaming pipeline
-A 3-stage producer/consumer pipeline built to minimize time-to-first-audio (TTFA) by synthesizing before Ollama finishes.
+Arbitration: `expression-controller.js` (`BASE<EMOTION<ACTION<LIPSYNC<BLINK` per key); `animation-controller.js` (bone ownership `BASE<FIDGET<ACTION`, 350 ms handoff); `life-motion-controller.js` (breathing/posture/shoulders/hips, BASE tier); `gaze-controller.js` (attention state machine fed by `observeScreenActivity`, currently only via `window.maya` — no screen capture exists). `expression-composer.js` writes raw `Fcl_*` morph targets when the recipe resolves on the loaded model, else falls back to the six-key legacy path. Idle fidgets: 7–18 s scheduler gated by awake/idle/not speaking/5-minute calm period, per-fidget cooldowns, forced `waving` after 30 minutes idle. The Expression Lab (`expression-lab.html` + `js/expression-lab.js`) is a standalone calibration page (localStorage drafts, import/export `expressions.json`), not part of the runtime. Only dev-server mode is evidenced; `vite build` does not copy `assets/`.
 
-```mermaid
-sequenceDiagram
-    participant Q as query()
-    participant CM as context_manager
-    participant O as Ollama /api/chat (stream)
-    participant SQ as synth_q
-    participant K as Kokoro (_run_kokoro)
-    participant PQ as play_q
-    participant WS as ws_server
+---
 
-    Q->>CM: build_context_package(question)
-    CM-->>Q: ContextPackage
-    Q->>O: POST /api/chat (stream=true, keep_alive)
-    loop token stream
-        O-->>Q: token
-        Q->>Q: buffer; split at phrase boundary (_next_boundary)
-        Q->>Q: _parse_expression() -> [tag] [attitude] [intensity] *action*
-        Q->>SQ: put(phrase, expr, actions, is_final, attitude, intensity, continuation)
-    end
-    SQ->>K: _synthesise_blocking(enhanced_text, expression)
-    K-->>PQ: (audio, samplerate), expr, actions, attitude, intensity, phrase
-    PQ->>WS: broadcast_animation (per action)
-    PQ->>WS: broadcast_behavior(behavior_engine.compose(...))
-    PQ->>WS: broadcast_state("speaking")
-    PQ->>WS: broadcast_audio(wav_bytes, base64)
-    WS-->>PQ: wait_for_audio_done() (browser sends audio_done)
+## 12. WebSocket protocol (`services/ws_server.py` ⇄ `frontend/js/websocket.js`)
+
+Server → client: `audio` (base64 WAV), `stop_audio`, `state` (`listening|processing|speaking|idle|sleeping`; last state replayed on connect), `behavior` (sent before the phrase audio), `transcript` (ignored by UI), `animation` (`wave|nod|giggle|sigh|shrug|wink`), `expression` (legacy, unused). Client → server: `audio_done` (gates the next phrase), `interrupt` (handler exists; no frontend sender). Origins are restricted by `config.ws_allowed_origins`. `wait_for_audio_done` returns immediately with no client, otherwise 30 s timeout then continues.
+
+---
+
+## 13. MayaNode integration (`services/node/`, client side only)
+
+MayaNode is a **separate repository**; this repo implements only the client. Disabled by default (`config.node.enabled=False`).
+
+| Module | Responsibility |
+|---|---|
+| `discovery.py` | probe `base_url` then `discovery_candidates` with `GET /status` |
+| `client.py` | guarded `GET /health`, `POST /heartbeat`, `POST /sync`; `Authorization: Bearer` hook (not enforced server-side); validates outgoing events and the response (`SyncResult.from_response`) |
+| `protocol.py` | MayaVE's own implementation of the contract in `docs/PROTOCOL_CONTRACT.md`: `protocol_version=1`, event envelope validation, registry (`protocol.ping`, `mayave.turn_completed{intent}`), request builder, change-ordering check |
+| `identity.py` | stable `device_id` (`mayave-<uuid>`) persisted at `~/Maya/Node/device_id.txt` |
+| `sync_state.py` | monotonic cursor persisted atomically |
+| `outbox.py` | durable pending queue: events keyed by `event_uid` (idempotent), memory keyed by `key` (last-write-wins by `updated_at`); single background writer thread; removal only of items the server settled |
+| `events.py`, `memory_producer.py` | the only application-facing producers (`record_event`, `record_memory`); never block, never need Node |
+| `sync_manager.py` | loop: discover → heartbeat → `/sync` (pushes ≤ 200 events / ≤ 200 memory keys, advances cursor, reconciles outbox, then applies incoming memory) → sleep `sync_interval_s`; exponential backoff to `max_backoff_s`; never raises |
+
+Data actually flowing: `Processor` records `mayave.turn_completed` with **only** the intent id; `ContextManager._persist_memory` mirrors `user_stated` fact/preference memories as `semantic_memory:<row_id>` `{content, mem_type, topic, importance}` (never embeddings, never compaction summaries). Incoming: `apply_remote_memory_changes` accepts only `semantic_memory:*` keys, re-embeds locally, dedups against the local store, and inserts with `source="mayanode_sync"`. Incoming `changes["events"]` are deliberately not applied. `has_more` is logged but not looped (one page per interval). Server-side behavior (persistence, `seq` assignment, conflict resolution) is defined by the contract and is out of scope here.
+
+---
+
+## 14. Data and training pipeline
+
+| Artifact | Location | Role |
+|---|---|---|
+| Intent taxonomy | `datasets/intents.json` | ids, categories, descriptions, `min_examples`, keywords, `response_mode`, dismissal phrases, action words, keyword order |
+| Training splits | `datasets/training/{train,validation,test}_data.jsonl` | `{text, intent, source, verified, variant}`; strict intent-id validation |
+| Staging | `datasets/training/candidates.jsonl` (+ `candidates_rejected.jsonl`, `audit_report.json`) | untrusted candidates |
+| Router eval cases | `datasets/router_eval/cases.jsonl` (60 cases at time of inspection) | IR-level evaluation |
+| Command registry | `config/command_domains.json` | 25 `domain.operation` entries with entities, `target_mode`, `requires_confirmation`, semantic `seeds` |
+| Models | `datasets/intent_model/` (gitignored) | `pytorch_intent.pt`, `tf_intent.keras`, `vocab.json`, `labels.json`, `training_hash.txt` |
+
+Runtime model production: `IntentEngine._load_or_train` loads saved artifacts when the fingerprint (intents config + seed + train rows) matches `training_hash.txt`, otherwise retrains both models from scratch (`MAYA_SEED`, default 1337; seeded torch/numpy/python/DataLoader/TF) and rewrites the hash. `python -m brain.train_intent [--eval-only]` is the explicit retrain + evaluation report.
+
+Tooling (`brain/dataset_tools.py`): LLM candidate generation (Ollama `llama3.1`) → automatic deterministic **audit** (malformed, duplicate, contradiction, generic, keyword/vocabulary confusability, restored-intent checks, boundary phrases, templates, diversity; optional capped LLM judgment) → human `verified` marking → `candidates promote` (80/10/10 per intent, cross-split dedup) ; failure-log review/promotion (`logs/intent_failures.jsonl`, never auto-trained); `migrate-legacy-intents` (retired ids → `note_write`, `note_view`, `open_target`, `set_timer`). `datasets/stage_data.py` stages hand-written rows/cases with leak/near-duplicate checks (dry run by default); `datasets/review_candidates.py` writes a read-only review report.
+
+Router corpus: `python -m brain.router.eval_router --seed` embeds every seed into the command vector store; staleness is detected by a hash of `command_domains.json` and only warned about (never auto-reseeded).
+
+---
+
+## 15. Testing and evaluation
+
+| Layer | Files | Scope |
+|---|---|---|
+| Unit/contract tests (pytest style; fakes, no Ollama/torch/TF required unless noted) | `brain/test_hybrid_router.py`, `brain/router/test_ir.py`, `brain/router/test_router_boundaries.py`, `brain/router/test_intent_margin.py`, `brain/conftest.py` | registry/taxonomy drift, confidence policy, validation, adapter, vector store, LLM failure modes, `HybridIntentEngine` flow, `CommandUnderstander` stages, context rewrite, entity extraction, `SkillResult`/adapter, confirmation propagation, classifier margin (`IntentEngine.__new__` + fake model) |
+| Retrieval evaluation | `brain/router/eval_router.py` | per-split accuracy and (similarity, margin) threshold sweeps |
+| IR evaluation | `brain/router/eval_ir.py`, `datasets/router_eval/cases.jsonl` | false-execution rate (primary), wrong command/entity, OOS precision/recall, clarification recall, LLM fallback rate, latency, `per_case`, `model_digest` |
+| Cross-seed analysis | `brain/router/failure_matrix.py`, `diag.py` | failure frequency across seeds, classifier misses |
+| Classifier evaluation | `brain/train_intent.py` | per-intent P/R/F1 and confusions on validation/test |
+
+`tests/` is gitignored; tests live beside the code. **Snapshot evidence** (`logs/runs60/`, 3 seeds, semantic + LLM wired, 60 cases): routing accuracy 0.85 / 0.917 / 0.867; wrong-execution 0.0 on all seeds; OOS false execution 0.05 / 0 / 0; p50 latency ≈ 0.07–0.08 s, p95 ≈ 1.6–1.8 s; same seed reproduces identical model digest and outcomes. Failures that recur on all three seeds: "I set a timer for my kids once and they loved it" (clarification instead of unknown), "hey could you jot a quick memo that the dentist is at three" and "could you pull up spotify for me" (LLM below `LLM_MIN_CONF`). The LLM fallback frequently invents entity keys (e.g. `query` for `weather.current`), producing `REJECTED` on out-of-scope input (scored as a pass but listed as *overreach*, 4–6 of 60). These are measurements from past runs, not guarantees.
+
+Run (environment-dependent; needs the project dependencies and, for some tests, Ollama/trained models): `python -m pytest brain -q`; `python -m brain.router.eval_router --seed`; `python -m brain.router.eval_ir --semantic --llm`; `python -m brain.router.failure_matrix --dir logs/runs60`.
+
+---
+
+## 16. Configuration
+
+| Source | Authority over |
+|---|---|
+| `config/settings.py` (`config` singleton) | names, wake word, audio/STT/TTS/LLM/context/router/node settings, WS host/port/origins |
+| `datasets/intents.json` | intent taxonomy, keywords, response modes, guard vocabularies |
+| `config/command_domains.json` | routable commands, entities, confirmation flags, semantic seeds |
+| `frontend/assets/expressions.json` | expression recipes |
+| Env vars | `MAYA_SEED`, `MAYA_EMBEDDING_DEVICE`, `HF_HUB_OFFLINE`, `TF_CPP_MIN_LOG_LEVEL`, `VITE_DEV_SERVER_URL`, `OneDrive` |
+| `getattr`-only (not dataclass fields) | `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `60m`) |
+
+Key defaults: `RouterConfig.backend="legacy"`, `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False`, `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"` (must stay so while the frontend runs), `device="cpu"`; `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; dependencies are in `config/requirements.txt` (+ `frontend/package.json`).
+
+---
+
+## 17. Failure handling
+
+| Failure | Behavior |
+|---|---|
+| Ollama down (chat) | spoken apology, not stored in history |
+| Ollama/embedding down (router) | semantic tier inert → LLM fallback → `UNKNOWN`; embeddings `None` → recent-context only |
+| LLM fallback timeout/invalid JSON | `None` → `UNKNOWN`; invalid registry match → `REJECTED` (routes like unknown) |
+| Stage exception in `understand` | `UNKNOWN` (`internal_error`); `_classify` failure → legacy classifier |
+| Skill exception | spoken apology, `_no_history` |
+| Kokoro hang | 15 s timeout, pipeline rebuild (own pipeline only) |
+| Missing frontend / no `audio_done` | no-client returns immediately; 30 s timeout then continue |
+| MayaNode down/malformed | every call returns a failure value; backoff + rediscovery; outbox retains items |
+| Corrupt `expressions.json`, outbox, sync state | not overwritten / start fresh respectively |
+| Full command queue | command dropped, FSM reset to IDLE |
+| Stuck LISTENING | 15 s watchdog → IDLE |
+
+---
+
+## 18. Repository structure
+
+```
+MayaVE/
+├── main.py                   runtime entry point
+├── diag.py                   router eval diagnostics (dev tool)
+├── config/                   settings.py, command_domains.json, requirements.txt
+├── core/                     state, listener, wake_word, transcriber, speaker, queue_manager,
+│                             processor, turn_lifecycle, mood, behavior_engine, expression_library, confirmation
+├── brain/
+│   ├── intent_engine.py      legacy ML classifier + guards + keyword rules
+│   ├── router/               dispatch, understand (CommandUnderstander), ir, context, entities, validate,
+│   │                         registry, schemas, confidence, semantic_router, command_vector_store,
+│   │                         llm_fallback, guards, normalize, adapter, hybrid_engine, eval_* tools, tests
+│   ├── conversation.py, memory.py, embeddings.py, vector_store.py
+│   ├── dataset_tools.py, train_intent.py
+│   └── test_hybrid_router.py, conftest.py
+├── services/
+│   ├── llm/                  llm_service.py, ollama_lifecycle.py
+│   ├── ws_server.py
+│   └── node/                 MayaNode client, protocol, outbox, producers, sync manager
+├── skills/                   base.py, system/, web/, media/, utilities/
+├── datasets/                 intents.json, training/, router_eval/, intent_model/ (generated), tooling scripts
+├── frontend/                 electron/, js/, assets/ (VRM/VRMA via LFS), index.html, expression-lab.html
+├── docs/                     architecture.md, CHANGELOG.md, CONTRIBUTING.md, PROTOCOL_CONTRACT.md
+├── logs/                     runtime logs, eval outputs, failure log (generated)
+└── .github/workflows/        changelog-issues.yml (syncs CHANGELOG Issues/Fixes to GitHub Issues)
 ```
 
-- **Phrase pipeline:** the streamer splits output into phrases and parses expression/action metadata. A serial synthesis worker feeds a serial playback worker, allowing synthesis to overlap with model generation without overlapping playback.
-- **Playback order:** actions → behavior packet → `speaking` state → audio → browser `audio_done` → baseline behavior. Filler shares the audio handshake and is gated so it cannot collide with the first reply phrase.
-- **History and cancellation:** completed turns record the clean response; interrupted turns record only phrases whose playback began. Cancellation propagates through streaming, synthesis, and playback tasks. Mood observes user input before generation and the completed expression set after the stream.
-- **Latency path:** context preparation → Ollama generation → phrase synthesis → WebSocket delivery → browser decode and playback.
+---
 
-### 8.3 TTS engine (`core/speaker.py` + `llm_service` module pipeline)
-- **Pipelines:** `Speaker` and `llm_service` own separate Kokoro pipelines for direct responses and streamed LLM speech; both are warmed at startup.
-- **Synthesis isolation:** Kokoro runs through a timeout-bounded worker so a stuck native call does not block the asyncio loop. Audio is converted to WAV and base64 for the WebSocket transport.
-- **Output modes:** `"avatar"` (WebSocket), `"local"` (sounddevice), `"both"` (double-plays with the avatar). Must stay `"avatar"` while the frontend runs (not enforced in code).
-- **Playback handshake:** the browser reports phrase completion with `audio_done`; `stop_audio` halts playback and releases the server's pending wait. The server continues after a missing client or playback timeout rather than blocking indefinitely.
-- **Speaker path (`Speaker.speak`):** uses the first valid expression tag and synthesizes one response. For avatar output it sends behavior/state/audio and waits for the browser's `audio_done`; `on_audio_start` runs just before playback. At completion, a sleeping or concurrently-slept avatar stays SLEEPING and that state is broadcast; otherwise it returns to IDLE with baseline behavior.
+## 19. Invariants (do not break)
+
+**Ordering / async** — the command queue serializes ordinary turns (startup/wake/sleep speech and timer alerts are intentional direct or queued-job paths); per-phrase order is actions → behavior → `speaking` → audio → `audio_done` → baseline; callbacks cross into asyncio via thread-safe scheduling; blocking work goes to an executor; `StateManager` tracks one interruptible task and SLEEPING must survive turn completion (use `turn_lifecycle.rest()`); pending confirmations resolve before routing.
+
+**Contracts** — skills return tagged text, the LLM path returns `ALREADY_SPOKEN`; behavior travels separately from body animations; no skill may run from a non-executable IR; `requires_confirmation` is declared in the registry but enforced by the skill; extractors must accept only what the downstream skill can itself parse; closed vocabularies stay in sync; `ws_server` replays last state; frontend output mode stays `avatar`.
+
+**Memory / mood** — `Processor` records the user turn before context construction; mood sees user text before generation and the completed tag set after; MayaNode producers must never block or require Node.
+
+**Frontend** — bone writers respect `animationController`; recipe morphs bypass `expressionController`; vowel visemes are reserved for lip-sync; reconnect must not duplicate persistent loops.
 
 ---
 
-## 9. Behavior and Expression System
+## 20. Implementation status
 
-### 9.1 Vocabularies (closed)
-Emotion `happy|sad|angry|surprised|relaxed|neutral|excited`; attitude `sincere|playful|teasing|mock`; intensity `low|medium|high`; actions `nod|giggle|sigh|shrug|wink`; gaze `direct|soft|away`. Duplicated across files and **deliberately not expanded** to make stored recipes reachable. Locations to edit together: emotions — `llm_service.py`, `speaker.py`, `behavior_engine.py`, `expression_library.py` + prompt text; actions — `_ACTION_VOCABULARY`, `perform_action._ACTION_WORDS`, intent `_ACTION_WORD_RE`, prompt, `websocket.js` switch, `_VRMA_ASSETS`.
-
-### 9.2 Backend composition
-1. **`core/mood.py`** supplies persistent/transient emotional context (§7).
-2. **`BehaviorEngine.compose(expression, actions, source, attitude, intensity)`** combines that context with the response metadata into `{primary, secondary, intensity, attitude, gaze, actions, recipe}`. It loads a stored recipe or composes and persists a default; per-response variation is not persisted. The client separately mirrors personality values for its legacy expression path.
-3. **`ws_server.broadcast_behavior()`** sends `{"type":"behavior", ...}`. `broadcast_expression()` is a legacy path not used by the frontend.
-
-### 9.3 `expressions.json` and the Expression Lab
-- Recipes use the flat `{"emotion|attitude|intensity": {Fcl_*: weight}}` schema. Runtime requests use the supported emotion, attitude, and intensity vocabularies; absent recipes are composed from defaults and persisted. Extra Lab entries may be stored without being requested at runtime.
-- `expression_library` protects an unreadable library from backend overwrite and writes updates atomically. The backend persists generated recipes; Lab Export downloads a localStorage-based library that can replace the canonical file when installed.
-- **Expression Lab** (`frontend/expression-lab.html` + `js/expression-lab.js`): standalone dev tool, not a runtime or Vite build entry. Per-combination drafts live in versioned browser `localStorage`; Import merges a selected library, while Export downloads only locally stored recipes. Import the canonical file before exporting if backend-generated entries must be retained. Default composition mirrors `core/expression_library.py`.
-
-### 9.4 Expression Interfaces
-- Recipe values are raw mesh morph targets, verified against the loaded model before use; missing targets are skipped. Actual target availability is unverified because the model is an LFS asset.
-- The legacy expression-manager path is limited to `neutral, joy, fun, angry, sorrow, surprised`. Vowel visemes (`Fcl_MTH_A/I/U/E/O`) are reserved for lip-sync rather than recipes.
-
-### 9.5 Frontend rendering (`expression-composer.js`)
-`applyBehavior` uses the raw recipe path when at least one recipe morph exists on the loaded model, fading legacy weights out; otherwise it composes the six legacy weights through the EMOTION layer. Gaze is forwarded to `avatar.js`; body actions arrive on the separate animation channel. Lip-sync and blinking use `expressionController`'s higher-priority layers.
-
----
-
-## 10. Frontend and Avatar (`frontend/`)
-
-- **Runtime:** Electron + Vite host a Three.js renderer using `@pixiv/three-vrm` and `@pixiv/three-vrm-animation`; Vite supports development and packaged builds.
-- **Window (`electron/main.js`):** transparent, frameless, always-on-top, and click-through. Loads the Vite dev server or packaged frontend.
-- **Scene (`main.js`):** creates the scene, camera, and transparent renderer; the frame loop renders, updates the VRM and VRMA mixers, then updates gaze.
-- **VRM load (`avatar.js::loadAvatar`):** `assets/mayaaa.vrm`; `expressionController.attach`; eyes closed, arms posed, `startHeadMovement()` always running (also calls `lifeMotionController.update`). `window.vrm` and `window.maya.*` console helpers are exposed.
-- **Sleep/wake:** the backend broadcasts WS state `"sleeping"` once the go-to-sleep goodbye line finishes (`core/speaker.py`'s `Speaker.speak()`). `websocket.js`'s `handleState()` is the single source of truth for the avatar's visual sleep/wake: `"sleeping"` calls `sleepAvatar()`; every other state value calls `wakeAvatar()`. This also covers the state replayed by `ws_server.py` to a fresh connection. `ws.onclose` calls `sleepAvatar()` directly because the backend cannot broadcast after a dropped connection. Re-wake is idempotent: `startBlinking()` clears `_blinkTimeout`; `startEyeMovement()` runs once per page (`_eyeLoopStarted`).
-- **WS client (`websocket.js`):** reconnects every 2 s; URL hard-coded `ws://localhost:8765`; sends `audio_done` only (no `interrupt` sender exists in the frontend). `handleState` forwards every value to `setAvatarState` (fidget gate, `_idleSince`) and, for `listening`, sets `surprised` 0.3 via `setExpression`; the next `behavior` packet overwrites it. `_currentBackendState` is set from the `state` message replayed on connect.
-- **Arbitration layers:**
-  - `expression-controller.js`: `BASE < EMOTION < ACTION < LIPSYNC < BLINK` per key over `VRMExpressionManager.setValue()`; highest active layer wins; a key held by no layer resolves to 0, not a stale value.
-  - `animation-controller.js`: bone-ownership tiers `BASE < FIDGET < ACTION` (`canWrite/claim/release`) so VRMA mixers, procedural tweens and continuous idle motion don't fight; 350 ms `handoffProgress` ramp when a higher-priority owner releases a bone.
-  - `life-motion-controller.js`: BASE-tier breathing/posture/shoulders, periodic hip micro-adjustments; scaled down while speaking/observing; always yields to FIDGET/ACTION.
-  - `gaze-controller.js`: attention/boredom state machine (`IDLE|OBSERVING|SPEAKING|SLEEPING`) driven by externally supplied `observeScreenActivity({x,y,intensity,type})`; the only current entry point is `window.maya`. No screen capture/OCR is implemented. While observing, eyes hold a fixed horizontal pose and track target y.
-- **Lip-sync:** AnalyserNode (fft 256, 5 bands) → `aa/ee/ih/oh/ou` + `happy` on the LIPSYNC layer; token-guarded loop.
-- **VRMA:** clips are loaded and cached by URL, filtered to bone rotations and expression weights, and played with fades. Shoulder tracks are excluded to preserve the custom resting pose. Animation ownership prevents conflicts with continuous motion; deliberate actions stop active fidgets before taking over. Wink, head tilt, and shoulder roll are procedural animations.
-- **Wired automatically:** server `animation` messages (wave/nod/giggle/sigh/shrug/wink) and the fidget pool. Other registered clips are console-only via `window.maya`.
-- **Fidgets:** randomized scheduler (7–18 s) gated by `_canFidgetNow` (awake, not speaking, backend state `"idle"`, nothing else playing, past a 5-minute post-launch calm period). Per-fidget cooldowns, a forced `waving` after 30 minutes idle, screen-attention suppression (`_gazeFidgetFactor`) and a stuck-state clear are all in `avatar.js`.
-- **UI:** `index.html` exposes the WebSocket status indicator; the Expression Lab is a separate development page. No transcript UI is connected.
-- **State-transition observers:** `core/state.py` notifies registered observers after genuine state transitions; `main.py` uses this to manage the LISTENING watchdog without coupling the state manager to that policy.
-- **Shared post-turn reset helper** — `core/turn_lifecycle.py` provides `rest(force_idle=...)`, used by `Processor.handle()` and `llm_service._play_worker`'s `_DONE` branch, checking `state.is_sleeping()` at completion time before deciding whether to force `IDLE`.
----
-
-## 11. WebSocket Protocol (`services/ws_server.py` ⇄ `frontend/js/websocket.js`)
-
-Single `websockets` server, with allowed origins supplied by `config.ws_allowed_origins` (localhost development origins and connections without an Origin header by default). One handler per connection, tracked in a set; `_broadcast` iterates a copy. `_on_message` swallows all exceptions.
-
-**Server → client** (JSON `{"type": ...}`):
-
-| type | payload | sent by |
-|---|---|---|
-| `audio` | `{data: base64 WAV}` | `broadcast_audio` — every spoken phrase |
-| `stop_audio` | — | `broadcast_stop_audio` — barge-in (also sets `_audio_done_event`) |
-| `state` | `{value: "listening"\|"processing"\|"speaking"\|"idle"\|"sleeping"}` | `broadcast_state`; the last known value is also sent once to each new client on connect |
-| `behavior` | `{primary, secondary, intensity, attitude, gaze, actions, recipe}` | `broadcast_behavior` — sent **before** the phrase audio |
-| `expression` | `{name}` | `broadcast_expression` — **legacy/unused**; the frontend doesn't handle it |
-| `transcript` | `{text, role: "user"\|"maya"}` | `broadcast_transcript` — currently ignored by the frontend |
-| `animation` | `{name: "wave"\|"nod"\|"giggle"\|"sigh"\|"shrug"\|"wink"}` | `broadcast_animation` |
-
-**Client → server:**
-
-| type | meaning |
+| Area | Status |
 |---|---|
-| `interrupt` | manual stop-talking → `state.interrupt()` via `set_interrupt_handler` (no frontend sender exists today) |
-| `audio_done` | one phrase finished playing → sets `_audio_done_event`, gating the next `play_q` item |
-
-`ws_server` remembers the last broadcast state (`_last_state`, default `"idle"`, updated even with no clients) and replays it to each new client in `_handler`. `wait_for_audio_done()` returns False immediately when no client is connected; otherwise 30 s timeout, then warn and continue rather than deadlock.
-
----
-
-## 12. Configuration and Runtime Requirements
-
-- **`config/settings.py`** singleton `config` (`MayaConfig`): `name="Maya"`, `user_name="senpai"`, `wake_word="wake up Maya"`, `log_level="INFO"`, `log_dir="logs"`, `ws_host="localhost"`, `ws_port=8765`.
-  - `audio`: 16000 Hz, mono, `chunk_ms=30` (clamped up to 512 samples), `silence_ms=800`, `pre_roll_ms=200`, `device_index=None`.
-  - `stt`: `STTConfig` defines the Google STT language, defaulting to `"en"`.
-  - `tts`, `llm`: see §8. `context`: `recent_turns=6, max_open_loops=3, max_semantic_memories=3, similarity_threshold=0.75, dedup_threshold=0.92, semantic_recency_guard_seconds=120, embedding_model="nomic-embed-text", memory_dir=None`.
-- **Config boundaries:** `LLMConfig` points to the local Ollama model and endpoint; `TTSConfig` controls Kokoro synthesis and output routing; `STTConfig` supplies the Google STT language. Ollama does not require an API key in this local deployment.
-- **`getattr`-only settings** (not dataclass fields): `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `"60m"`).
-- **Config-derived patterns:** `core/wake_word.py` (sleep/wake regexes) and `brain/intent_engine.py` (`_DISMISSAL_TRIM_RE`) compile `config.name`/`config.user_name` (and `config.wake_word`) into module-level regexes at import, so those values are read once at startup.
-- **Env vars:** `MAYA_EMBEDDING_DEVICE` (`cpu` → embeddings `num_gpu=0`), `HF_HUB_OFFLINE` (`setdefault "1"` in `llm_service.py`), `TF_CPP_MIN_LOG_LEVEL` (`setdefault "3"`), `VITE_DEV_SERVER_URL` (Electron), `OneDrive` (screenshot path). No secrets in the repo.
-- **Ports/services:** WS 8765; Ollama 11434 with `llama3.2` and `nomic-embed-text` pulled; Vite dev server default 5173 (not set in config). External: Google STT, Open-Meteo (+ geocoding), `ip-api.com` (HTTP), `torch.hub` `snakers4/silero-vad`, HF cache for Kokoro voices.
-- **Runtime:** Python ≥3.11 (`asyncio.TaskGroup`); Node per Vite 8; Windows 11 (`os.startfile`, `keyboard`, `ctypes.windll`, `shutdown.exe`, `OneDrive`). GPU optional: used by Ollama; Kokoro runs on CPU unless `config.tts.device` changes.
-- **Dependencies (`config/requirements.txt`):** PyTorch/torchaudio and TensorFlow support intent classification and VAD; SpeechRecognition provides online Google STT; Kokoro provides local TTS; HTTP/WebSocket libraries support service and avatar communication. Platform utilities are used by selected skills.
-- **Paths:** `datasets/` (auto-created, gitignored), `logs/maya.log` (`logs/` auto-created, rotating, 5 MB × 3 backups), `~/Maya/Notes`, `~/Maya/Memory/semantic_memory.sqlite3`, `~/Pictures/Screenshots` or `%OneDrive%/Pictures/Screenshots`, and `frontend/assets/{mayaaa.vrm,expressions.json,vrmas/*.vrma}` (LFS via `.gitattributes`).
+| Voice loop, skills, LLM streaming, TTS, avatar, mood/behavior, semantic memory | implemented |
+| Legacy classifier (guards + keywords + ensemble) | implemented (default) |
+| Hybrid `CommandUnderstander` + IR + dispatch gates | implemented, **opt-in**, thresholds provisional |
+| `HybridIntentEngine` + shadow mode | implemented, **not wired** to runtime |
+| `skills/base.py` `SkillRegistry`/`SkillResult` | implemented, not on the live dispatch path |
+| MayaNode client (discovery, sync, outbox, events, memory both directions) | implemented, off by default; server-side not in repo |
+| Screen-attention gaze | input API only; no capture |
+| Offline STT, packaged build, echo cancellation | not implemented |
 
 ---
 
-## 13. Invariants (Do Not Break)
+## 21. Singletons
 
-**Ordering / async**
-- The command queue serializes ordinary requests; startup/wake/sleep speech and timer alerts are intentional direct paths.
-- Per-phrase playback order is actions → behavior → `speaking` state → audio → browser `audio_done` → baseline behavior. Keep playback serialized; `stop_audio` must stop the browser source and release the pending wait.
-- Sounddevice callbacks cross into asyncio through thread-safe scheduling. Kokoro synthesis runs behind a timeout boundary so native work cannot block the event loop.
-- `StateManager` tracks one interruptible task. Callers must serialize registrations, preserve SLEEPING across turn completion, and avoid replacing LISTENING/PROCESSING/SPEAKING with stale state.
-- Barge-in and sleep decisions use the state snapshot taken before transcription. Pending power/reminder confirmations are resolved before normal intent routing; timer alerts use the Speaker injected by `Router`.
-
-**Contracts**
-- Skills return tagged text; the LLM path speaks directly and returns `ALREADY_SPOKEN`. Behavior is sent separately from body-animation events.
-- Intent declarations, response modes, and guard vocabularies come from `datasets/intents.json`; wake and sleep matching share the configured matcher in `core/wake_word.py`.
-- Chat requests and warmup use Ollama `keep_alive`. `ws_server` persists and replays the last state so a reconnecting frontend receives the backend's current sleep/wake state.
-- The frontend output mode must remain `avatar` when the avatar client is expected to play speech; binary model assets remain Git LFS-managed.
-
-**Memory / mood**
-- `Processor` records the user turn before context construction. Mood observes user input before LLM generation and the completed expression set after the response; resting behavior uses the mood baseline.
-- Intent configuration and training data participate in model refresh; generated training/model artifacts should be changed through the dataset and training tools.
-
-**Expressions / frontend**
-- Continuous bone writers must respect `animationController` ownership and handoff; animation and gaze updates run from the shared frontend frame loop.
-- Recipe morphs bypass `expressionController`; expression-manager effects such as lip-sync and blinking use its priority layers. Vowel visemes remain reserved for lip-sync.
-- Replayed backend state controls avatar sleep/wake. Reconnect must not duplicate the persistent eye/blink loops; automatic fidgets remain gated by backend idle and active attention/animation state.
-
----
-
-## 14. Current Boundaries
-
-The runtime uses a local Ollama endpoint and Google STT; no cloud-provider abstraction, offline speech-recognition path, or tool-calling layer is implemented. Screen activity is an externally supplied gaze input; the application does not capture or analyze the screen.
-
----
-
-## 15. Glossary of Singletons
-
-| Singleton | Module | Role |
-|---|---|---|
-| `config` | `config/settings.py` | global settings |
-| `state` | `core/state.py` | FSM + interrupt plumbing |
-| `memory` | `brain/memory.py` | rolling recent-turn window |
-| `context_manager` | `brain/conversation.py` | topic/state/open-loop/semantic-memory orchestration |
-| `mood_manager` | `core/mood.py` | persistent + transient emotional state |
-| `behavior_engine` | `core/behavior_engine.py` | tag+mood → communicative-intent packet |
-| `queue_manager` | `core/queue_manager.py` | single-worker command queue |
-| `ws_server` | `services/ws_server.py` | WebSocket hub |
-| `expressionController` / `animationController` / `gazeController` / `lifeMotionController` | `frontend/js/*` | frontend arbitration singletons, one per avatar |
-
-## 16. MayaNode Integration
-
-`services/node/` is MayaVE's optional client-side integration with a separate MayaNode service. The current boundary is infrastructure-only: no MayaVE event, memory, mood, or intent data is pushed or applied to MayaVE state.
-
-- `NodeDiscovery` (`discovery.py`) — probes `config.node.base_url` (if set) then `config.node.discovery_candidates` in order via `GET /status` (cheap, no DB write, always 200 when the process is up).
-- `NodeClient` (`client.py`) — guarded `POST /heartbeat` and `POST /sync`; every method returns a failure value (`False`/`None`) rather than raising. Attaches `Authorization: Bearer <token>` when `config.node.auth_token` is set (MayaNode doesn't validate it yet — see its `api/sync.py` docstring).
-- `resolve_device_id` (`identity.py`) — persists a stable `device_id` at `~/Maya/Node/device_id.txt`; falls back to an ephemeral id if that can't be written.
-- `SyncStateStore` (`sync_state.py`) — persists the `/sync` cursor at `~/Maya/Node/sync_state.json` (atomic `.tmp` + replace, same pattern as `core/expression_library.py`); cursor never moves backwards.
-- `NodeSyncManager` / `node_sync_manager` (`sync_manager.py`) — background loop: discover → heartbeat ("connect") → `sync(events=[], memory=[])` → sleep `sync_interval_s`; on any failure, backs off exponentially (capped at `max_backoff_s`) and forces rediscovery on the next pass. Started as a `main.py` background task (`node-sync`), same pattern as `ws-server`; `config.node.enabled` defaults to `False`.
-
-**Invariant:** `run()` must never raise — every failure path inside it is caught and logged; a MayaNode outage must never affect the voice pipeline. The sync payload currently contains empty event and memory collections, and pulled changes are not applied to MayaVE state.
+`config` (settings) · `state` (FSM) · `memory` (recent window) · `context_manager` · `mood_manager` · `behavior_engine` · `queue_manager` · `ws_server` · `node_sync_manager` · `skill_registry` · frontend: `expressionController`, `animationController`, `gazeController`, `lifeMotionController`.

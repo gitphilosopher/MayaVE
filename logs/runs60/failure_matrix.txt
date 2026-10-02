@@ -1,158 +1,65 @@
 === Run identity ===
-seed1          combined=07aea1afdd41 seed=1 training_hash=5cc7cbdf8148
-seed2          combined=48808af0cad8 seed=2 training_hash=ad42d9792747
-seed3          combined=eec50b8e06b2 seed=3 training_hash=588de728aec4
-seed1_repeat   combined=07aea1afdd41 seed=1 training_hash=5cc7cbdf8148
+seed1          combined=0ffa1167892e seed=1 training_hash=63562089fbc0
+seed2          combined=7798b27ab6df seed=2 training_hash=22ba760febbe
+seed3          combined=23c1299ed532 seed=3 training_hash=0a8b07293bdc
+seed1_repeat   combined=0ffa1167892e seed=1 training_hash=63562089fbc0
 
 seed1 vs seed1_repeat: same model=True, differing case outcomes=0
 
-=== seed1: 9 failure(s) of 60 ===
-X [adversarial] "I set a timer for my kids once and they loved it"
-     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
-X [adversarial] "my google search history is embarrassing"
-     want=unknown/None  got=ready/web.search  src=pytorch+tensorflow  reason=''
-X [llm] "I'd like you to shut the machine down"
-     want=ready/system.shutdown  got=unknown/None  src=llm  reason='llm_low_confidence'
+=== seed1: 3 failure(s) of 60 ===
 X [llm] "hey could you jot a quick memo that the dentist is at three"
-     want=ready/notes.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [adversarial] "I should lock up the house before I leave"
-     want=unknown/None  got=ready/system.lock  src=pytorch+tensorflow  reason=''
+     want=ready/notes.create  got=unknown/None  src=low_confidence_trusted  reason='conversational'
 X [paraphrase] "could you pull up spotify for me"
-     want=ready/app_or_web.open  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [paraphrase] "hit me up in twelve minutes"
-     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [adversarial] "she talked for ninety minutes"
-     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
-X [adversarial] "the google search results were useless today"
-     want=unknown/None  got=ready/web.search  src=pytorch+tensorflow  reason=''
-  -- 6 overreach (scored pass, but REJECTED instead of UNKNOWN):
-~ [context] "I have 5 minutes to kill before my meeting"  reason="unexpected entity 'duration' for datetime.date"
-~ [oos] "the sky looks orange today"  reason="unexpected entity 'query' for weather.current"
-~ [adversarial] "can you set my alarm clock radio to jazz"  reason="unexpected entity 'content' for media.play"
-~ [context] "the meeting is 30 minutes long"  reason="unexpected entity 'length' for datetime.date"
-~ [oos] "turn off the porch light please"  reason="unexpected entity 'location' for system.shutdown"
-~ [adversarial] "i should lock up the shop before i go"  reason="unexpected entity 'target' for system.lock"
-
-=== seed2: 5 failure(s) of 60 ===
-X [adversarial] "I set a timer for my kids once and they loved it"
-     want=unknown/None  got=needs_clarification/timer.create  src=keyword_fallback  reason='missing_required_entity'
-X [llm] "hey could you jot a quick memo that the dentist is at three"
-     want=ready/notes.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [paraphrase] "could you pull up spotify for me"
-     want=ready/app_or_web.open  got=unknown/None  src=llm  reason='llm_low_confidence'
+     want=ready/app_or_web.open  got=unknown/None  src=low_confidence_trusted  reason='conversational'
 X [paraphrase] "what's it like outside right now"
-     want=ready/weather.current  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [adversarial] "she talked for ninety minutes"
-     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
-  -- 4 overreach (scored pass, but REJECTED instead of UNKNOWN):
-~ [context] "I have 5 minutes to kill before my meeting"  reason="unexpected entity 'needs_clarification' for web.search"
-~ [oos] "the sky looks orange today"  reason="unexpected entity 'query' for weather.current"
-~ [oos] "turn off the porch light please"  reason="unexpected entity 'location' for system.shutdown"
-~ [adversarial] "i should lock up the shop before i go"  reason="unexpected entity 'target' for system.lock"
+     want=ready/weather.current  got=unknown/None  src=llm  reason='conversational'
 
-=== seed3: 8 failure(s) of 60 ===
-X [adversarial] "I set a timer for my kids once and they loved it"
-     want=unknown/None  got=needs_clarification/timer.create  src=pytorch+tensorflow  reason='missing_required_entity'
+=== seed2: 2 failure(s) of 60 ===
 X [ambiguous_valid] "timer for a quarter of an hour"
-     want=needs_clarification/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [entity] "weather in tokyo"
-     want=ready/weather.current  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [llm] "hey could you jot a quick memo that the dentist is at three"
-     want=ready/notes.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [llm] "wipe whatever I copied"
-     want=ready/clipboard.clear  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [paraphrase] "could you pull up spotify for me"
-     want=ready/app_or_web.open  got=unknown/None  src=pytorch+tensorflow  reason='conversational'
+     want=needs_clarification/timer.create  got=ready/timer.create  src=llm  reason=''
 X [paraphrase] "what's it like outside right now"
-     want=ready/weather.current  got=unknown/None  src=llm  reason='llm_low_confidence'
-X [paraphrase] "hit me up in twelve minutes"
-     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
-  -- 6 overreach (scored pass, but REJECTED instead of UNKNOWN):
-~ [context] "I have 5 minutes to kill before my meeting"  reason="unexpected entity 'needs_clarification' for web.search"
-~ [oos] "the sky looks orange today"  reason="unexpected entity 'query' for weather.current"
-~ [context] "the meeting is 30 minutes long"  reason="unexpected entity 'length' for datetime.date"
-~ [oos] "turn off the porch light please"  reason="unexpected entity 'location' for system.shutdown"
-~ [adversarial] "i should lock up the shop before i go"  reason="unexpected entity 'target' for system.lock"
-~ [adversarial] "she talked for ninety minutes"  reason="unexpected entity 'value' for datetime.time"
+     want=ready/weather.current  got=unknown/None  src=llm  reason='conversational'
+
+=== seed3: 1 failure(s) of 60 ===
+X [paraphrase] "what's it like outside right now"
+     want=ready/weather.current  got=unknown/None  src=low_confidence_trusted  reason='conversational'
 
 === Cross-seed matrix (rows with at least one X or ~) ===
 case                                                           seed1        seed2        seed3        seed1_repeat fails
-I have 5 minutes to kill before my meeting                     ~            ~            ~            ~            0/3
-the sky looks orange today                                     ~            ~            ~            ~            0/3
-can you set my alarm clock radio to jazz                       ~            OK           OK           ~            0/3
-I set a timer for my kids once and they loved it               X            X            X            X            3/3
-my google search history is embarrassing                       X            OK           OK           X            1/3
-timer for a quarter of an hour                                 OK           OK           X            OK           1/3
-the meeting is 30 minutes long                                 ~            OK           ~            ~            0/3
-weather in tokyo                                               OK           OK           X            OK           1/3
-I'd like you to shut the machine down                          X            OK           OK           X            1/3
-hey could you jot a quick memo that the dentist is at three    X            X            X            X            3/3
-wipe whatever I copied                                         OK           OK           X            OK           1/3
-I should lock up the house before I leave                      X            OK           OK           X            1/3
-could you pull up spotify for me                               X            X            X            X            3/3
-what's it like outside right now                               OK           X            X            OK           2/3
-turn off the porch light please                                ~            ~            ~            ~            0/3
-hit me up in twelve minutes                                    X            OK           X            X            2/3
-i should lock up the shop before i go                          ~            ~            ~            ~            0/3
-she talked for ninety minutes                                  X            X            ~            X            2/3
-the google search results were useless today                   X            OK           OK           X            1/3
+timer for a quarter of an hour                                 OK           X            OK           OK           1/3
+hey could you jot a quick memo that the dentist is at three    X            OK           OK           X            1/3
+could you pull up spotify for me                               X            OK           OK           X            1/3
+what's it like outside right now                               X            X            X            X            3/3
 
 === Failure frequency across seed1/seed2/seed3 ===
 
-3/3  consistent: likely a real routing/data problem  (3)
-   [adversarial] "I set a timer for my kids once and they loved it"  expected unknown/None
-        seed1: got needs_clarification/timer.create via pytorch+tensorflow
-        seed2: got needs_clarification/timer.create via keyword_fallback
-        seed3: got needs_clarification/timer.create via pytorch+tensorflow
-   [llm] "hey could you jot a quick memo that the dentist is at three"  expected ready/notes.create
-        seed1: got unknown/None via llm
-        seed2: got unknown/None via llm
-        seed3: got unknown/None via llm
-   [paraphrase] "could you pull up spotify for me"  expected ready/app_or_web.open
-        seed1: got unknown/None via llm
-        seed2: got unknown/None via llm
-        seed3: got unknown/None via pytorch+tensorflow
-
-2/3  seed-sensitive boundary  (3)
+3/3  consistent: likely a real routing/data problem  (1)
    [paraphrase] "what's it like outside right now"  expected ready/weather.current
+        seed1: got unknown/None via llm
         seed2: got unknown/None via llm
-        seed3: got unknown/None via llm
-   [paraphrase] "hit me up in twelve minutes"  expected ready/timer.create
-        seed1: got unknown/None via llm
-        seed3: got unknown/None via llm
-   [adversarial] "she talked for ninety minutes"  expected unknown/None
-        seed1: got needs_clarification/timer.create via pytorch+tensorflow
-        seed2: got needs_clarification/timer.create via pytorch+tensorflow
+        seed3: got unknown/None via low_confidence_trusted
 
-1/3  likely training variance  (7)
-   [adversarial] "my google search history is embarrassing"  expected unknown/None
-        seed1: got ready/web.search via pytorch+tensorflow
+2/3  seed-sensitive boundary  (0)
+
+1/3  likely training variance  (3)
    [ambiguous_valid] "timer for a quarter of an hour"  expected needs_clarification/timer.create
-        seed3: got unknown/None via llm
-   [entity] "weather in tokyo"  expected ready/weather.current
-        seed3: got unknown/None via llm
-   [llm] "I'd like you to shut the machine down"  expected ready/system.shutdown
-        seed1: got unknown/None via llm
-   [llm] "wipe whatever I copied"  expected ready/clipboard.clear
-        seed3: got unknown/None via llm
-   [adversarial] "I should lock up the house before I leave"  expected unknown/None
-        seed1: got ready/system.lock via pytorch+tensorflow
-   [adversarial] "the google search results were useless today"  expected unknown/None
-        seed1: got ready/web.search via pytorch+tensorflow
+        seed2: got ready/timer.create via llm
+   [llm] "hey could you jot a quick memo that the dentist is at three"  expected ready/notes.create
+        seed1: got unknown/None via low_confidence_trusted
+   [paraphrase] "could you pull up spotify for me"  expected ready/app_or_web.open
+        seed1: got unknown/None via low_confidence_trusted
 
 === Failures by category (summed over the 3 seeds) ===
-adversarial          8/48  failing case-runs
-paraphrase           7/30  failing case-runs
-llm                  5/9   failing case-runs
-entity               1/27  failing case-runs
+paraphrase           4/30  failing case-runs
 ambiguous_valid      1/12  failing case-runs
+llm                  1/9   failing case-runs
 in_distribution      0/6   failing case-runs
 clarification        0/15  failing case-runs
+entity               0/27  failing case-runs
 context              0/21  failing case-runs
 oos                  0/12  failing case-runs
+adversarial          0/48  failing case-runs
 
 === Failure modes (all seeds) ===
- 13  missed command (-> unknown)
-  5  expected unknown, got needs_clarification
-  3  false execution (OOS -> ready)
-  1  expected needs_clarification, got unknown
+  5  missed command (-> unknown)
+  1  expected needs_clarification, got ready

@@ -5,7 +5,7 @@
     "llm": true
   },
   "routing_accuracy": {
-    "value": 0.9166666666666666,
+    "value": 0.9666666666666667,
     "n": 60,
     "low_sample": false
   },
@@ -15,7 +15,7 @@
     "low_sample": false
   },
   "oos_false_execution_rate": {
-    "value": 0.0,
+    "value": 0.016666666666666666,
     "n": 60,
     "low_sample": false
   },
@@ -25,27 +25,27 @@
     "low_sample": false
   },
   "oos_precision": {
-    "value": 0.875,
+    "value": 0.9583333333333334,
     "n": 24,
     "low_sample": true
   },
   "oos_recall": {
-    "value": 0.9130434782608695,
+    "value": 1.0,
     "n": 23,
     "low_sample": true
   },
   "clarification_recall": {
-    "value": 1.0,
+    "value": 0.8333333333333334,
     "n": 6,
     "low_sample": true
   },
   "false_clarification_rate": {
-    "value": 0.03333333333333333,
+    "value": 0.0,
     "n": 60,
     "low_sample": false
   },
   "llm_fallback_rate": {
-    "value": 0.16666666666666666,
+    "value": 0.13333333333333333,
     "source": "call_counters",
     "n": 60,
     "low_sample": false
@@ -56,22 +56,21 @@
     "low_sample": true
   },
   "status_breakdown": {
-    "ready": 28,
-    "needs_clarification": 8,
-    "rejected": 4,
-    "unknown": 20
+    "ready": 31,
+    "needs_clarification": 5,
+    "unknown": 24
   },
   "call_totals": {
     "guard": 0,
     "classifier": 60,
-    "semantic": 10,
-    "llm": 10,
+    "semantic": 14,
+    "llm": 8,
     "semantic_errors": 0,
     "llm_errors": 0,
     "internal_errors": 0
   },
-  "latency_p50_s": 0.06668655000248691,
-  "latency_p95_s": 1.7974278000037884,
+  "latency_p50_s": 0.08139290001417976,
+  "latency_p95_s": 2.0725433999905363,
   "by_category": {
     "in_distribution": {
       "accuracy": 1.0,
@@ -94,23 +93,23 @@
       "n": 4
     },
     "adversarial": {
-      "accuracy": 0.875,
+      "accuracy": 1.0,
       "n": 16
     },
     "paraphrase": {
-      "accuracy": 0.8,
+      "accuracy": 0.9,
       "n": 10
     },
     "ambiguous_valid": {
-      "accuracy": 1.0,
+      "accuracy": 0.75,
       "n": 4
     },
     "llm": {
-      "accuracy": 0.6666666666666666,
+      "accuracy": 1.0,
       "n": 3
     }
   },
-  "llm_overreach_on_oos": 4,
+  "llm_overreach_on_oos": 0,
   "per_case": [
     {
       "text": "set a timer for ten minutes",
@@ -165,12 +164,12 @@
       "category": "context",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
-      "source": "llm",
-      "reason": "unexpected entity 'needs_clarification' for web.search",
+      "source": "pytorch+tensorflow",
+      "reason": "conversational",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "no 5 apples please",
@@ -180,7 +179,7 @@
       "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "conversational",
       "ok": true,
       "overreach": false
     },
@@ -249,12 +248,12 @@
       "category": "oos",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'query' for weather.current",
+      "reason": "conversational",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "can you set my alarm clock radio to jazz",
@@ -297,11 +296,11 @@
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "needs_clarification",
-      "got_key": "timer.create",
-      "source": "keyword_fallback",
-      "reason": "missing_required_entity",
-      "ok": false,
+      "got_status": "unknown",
+      "got_key": null,
+      "source": "pytorch+tensorflow",
+      "reason": "conversational",
+      "ok": true,
       "overreach": false
     },
     {
@@ -407,7 +406,7 @@
       "want_key": "media.pause",
       "got_status": "ready",
       "got_key": "media.pause",
-      "source": "pytorch+tensorflow",
+      "source": "semantic",
       "reason": "",
       "ok": true,
       "overreach": false
@@ -453,11 +452,11 @@
       "category": "ambiguous_valid",
       "want_status": "needs_clarification",
       "want_key": "timer.create",
-      "got_status": "needs_clarification",
+      "got_status": "ready",
       "got_key": "timer.create",
-      "source": "pytorch+tensorflow",
-      "reason": "missing_required_entity",
-      "ok": true,
+      "source": "llm",
+      "reason": "",
+      "ok": false,
       "overreach": false
     },
     {
@@ -621,11 +620,11 @@
       "category": "llm",
       "want_status": "ready",
       "want_key": "notes.create",
-      "got_status": "unknown",
-      "got_key": null,
+      "got_status": "ready",
+      "got_key": "notes.create",
       "source": "llm",
-      "reason": "llm_low_confidence",
-      "ok": false,
+      "reason": "",
+      "ok": true,
       "overreach": false
     },
     {
@@ -648,7 +647,7 @@
       "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "conversational",
       "ok": true,
       "overreach": false
     },
@@ -659,7 +658,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "low_confidence_trusted",
+      "source": "pytorch+tensorflow",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -693,11 +692,11 @@
       "category": "paraphrase",
       "want_status": "ready",
       "want_key": "app_or_web.open",
-      "got_status": "unknown",
-      "got_key": null,
+      "got_status": "ready",
+      "got_key": "app_or_web.open",
       "source": "llm",
-      "reason": "llm_low_confidence",
-      "ok": false,
+      "reason": "",
+      "ok": true,
       "overreach": false
     },
     {
@@ -720,7 +719,7 @@
       "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "llm_low_confidence",
+      "reason": "conversational",
       "ok": false,
       "overreach": false
     },
@@ -743,7 +742,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "pytorch+tensorflow",
+      "source": "low_confidence_trusted",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -755,7 +754,7 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "pytorch+tensorflow",
+      "source": "low_confidence_trusted",
       "reason": "conversational",
       "ok": true,
       "overreach": false
@@ -765,12 +764,12 @@
       "category": "oos",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
       "source": "llm",
-      "reason": "unexpected entity 'location' for system.shutdown",
+      "reason": "conversational",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "note that the printer is out of paper",
@@ -801,23 +800,23 @@
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "rejected",
+      "got_status": "unknown",
       "got_key": null,
-      "source": "llm",
-      "reason": "unexpected entity 'target' for system.lock",
+      "source": "pytorch+tensorflow",
+      "reason": "conversational",
       "ok": true,
-      "overreach": true
+      "overreach": false
     },
     {
       "text": "she talked for ninety minutes",
       "category": "adversarial",
       "want_status": "unknown",
       "want_key": null,
-      "got_status": "needs_clarification",
-      "got_key": "timer.create",
+      "got_status": "unknown",
+      "got_key": null,
       "source": "pytorch+tensorflow",
-      "reason": "missing_required_entity",
-      "ok": false,
+      "reason": "conversational",
+      "ok": true,
       "overreach": false
     },
     {
@@ -827,19 +826,19 @@
       "want_key": null,
       "got_status": "unknown",
       "got_key": null,
-      "source": "llm",
-      "reason": "llm_clarification_but_nothing_missing",
+      "source": "pytorch+tensorflow",
+      "reason": "conversational",
       "ok": true,
       "overreach": false
     }
   ],
   "model_digest": {
-    "pytorch": "09f28b154bd0",
-    "tensorflow": "b61ea7822ccc",
-    "vocab": "37885a7e1554",
+    "pytorch": "5ba2600f3171",
+    "tensorflow": "ccd4395e77f3",
+    "vocab": "6872206b1320",
     "labels": "2e744823b86f",
-    "combined": "48808af0cad8",
+    "combined": "7798b27ab6df",
     "seed": 2,
-    "training_hash": "ad42d9792747"
+    "training_hash": "22ba760febbe"
   }
 }

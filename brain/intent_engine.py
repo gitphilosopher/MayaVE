@@ -239,8 +239,12 @@ def build_keyword_patterns(cfg: dict) -> list[tuple[str, re.Pattern]]:
         triggers = by_id[iid]["keywords"]
         if not triggers:
             continue
+        prefix_guard = ""
+        if iid == "set_timer":
+            # Guard against past-tense/narrative subjects preceding "set a timer"
+            prefix_guard = r"(?<!\bi\s)(?<!\bwe\s)(?<!\bshe\s)(?<!\bhe\s)(?<!\bthey\s)"
         pattern = re.compile(
-            r"\b(?:" + "|".join(re.escape(t.strip()) for t in triggers) + r")" + suffix + r"\b"
+            prefix_guard + r"\b(?:" + "|".join(re.escape(t.strip()) for t in triggers) + r")" + suffix + r"\b"
         )
         patterns.append((iid, pattern))
     return patterns
@@ -312,10 +316,11 @@ def _dataset_fingerprint(train_rows: list[dict], intents_cfg: dict) -> str:
 def log_classification_failure(utterance: str, predicted_intent: str, confidence: float,
                                 correct_intent: str | None = None) -> None:
     """
-    Append one failure record to logs/intent_failures.jsonl. Best-effort —
-    a logging failure must never break classification. Failures are NEVER
-    auto-trained on; brain/dataset_tools.py's review/promote workflow is
-    the only path from here into datasets/training/train_data.jsonl.
+    Upsert one failure record in logs/intent_failures.jsonl. Repeated
+    utterances refresh their latest prediction and increment occurrences.
+    Best-effort — a logging failure must never break classification. Failures
+    are NEVER auto-trained on; brain/dataset_tools.py's review/promote
+    workflow is the only path from here into datasets/training/train_data.jsonl.
     """
     record = {
         "utterance": utterance,
@@ -325,9 +330,47 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
         "timestamp": time.time(),
     }
     try:
-        with open(_FAILURES_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except OSError as e:
+        rows: list[dict] = []
+        row_indexes: dict[str, int] = {}
+
+        if _FAILURES_FILE.exists():
+            for line in _FAILURES_FILE.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                existing = json.loads(line)
+                key = " ".join(existing["utterance"].casefold().split())
+                existing["occurrences"] = max(1, int(existing.get("occurrences", 1)))
+                if key in row_indexes:
+                    index = row_indexes[key]
+                    previous = rows[index]
+                    existing["occurrences"] += previous["occurrences"]
+                    if not existing.get("correct_intent"):
+                        existing["correct_intent"] = previous.get("correct_intent")
+                    rows[index] = {**previous, **existing}
+                else:
+                    row_indexes[key] = len(rows)
+                    rows.append(existing)
+
+        key = " ".join(utterance.casefold().split())
+        if key in row_indexes:
+            index = row_indexes[key]
+            previous = rows[index]
+            record["occurrences"] = previous["occurrences"] + 1
+            if not correct_intent:
+                record["correct_intent"] = previous.get("correct_intent")
+            rows[index] = {**previous, **record}
+        else:
+            record["occurrences"] = 1
+            row_indexes[key] = len(rows)
+            rows.append(record)
+
+        temp_file = _FAILURES_FILE.with_suffix(".jsonl.tmp")
+        temp_file.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        temp_file.replace(_FAILURES_FILE)
+    except (OSError, ValueError, KeyError, TypeError) as e:
         logger.debug(f"Could not write intent failure log (non-fatal): {e}")
 
 
@@ -872,8 +915,25 @@ class IntentEngine:
         """Return the first matching configured keyword rule, if any."""
         t = text.lower()
         for intent, pattern in self._keyword_patterns:
-            if pattern.search(t):
-                return intent, 1.0, "keyword"
+            matches = list(pattern.finditer(t))
+            if not matches:
+                continue
+            if intent == "set_timer":
+                # Narrative / past guard: do not match imperative keywords like
+                # "set a timer" when preceded by narrative subjects (e.g. "I set a timer",
+                # "she set a timer", "we set a timer") or containing narrative past markers.
+                valid = False
+                for m in matches:
+                    prefix = t[:m.start()].strip()
+                    if re.search(r"\b(?:i|he|she|we|they|someone)\b", prefix):
+                        continue
+                    if re.search(r"\b(?:once|yesterday|earlier|ago|loved|liked|enjoyed|used to)\b", t):
+                        continue
+                    valid = True
+                    break
+                if not valid:
+                    continue
+            return intent, 1.0, "keyword"
         # The zero-confidence intent is a sentinel; callers use it only when
         # the paired confidence is positive.
         return "unknown", 0.0, "keyword"
@@ -887,20 +947,55 @@ class IntentEngine:
             # commands such as "go to" and "launch" are stripped correctly.
             "open_target": ["go to", "navigate to", "open website",
                              "launch", "start", "open"],
-            "search_web":  ["search for", "google", "look up", "search"],
+            "search_web":  ["search google for", "google search", "search for",
+                             "look up", "google", "search"],
             # A bare timer request has no trigger and keeps the complete
             # utterance as the target for the timer parser.
             "set_timer":   ["remind me to", "remind me", "set a timer for",
                              "set a reminder for", "timer for", "alarm for"],
         }
         trigger_hit = False
-        for trigger in trigger_map.get(intent, []):
-            if trigger in text:
-                trigger_hit = True
-                after = text.split(trigger, 1)[-1].strip()
-                after = re.sub(r"^(?:for|to|the|a|an|me)(?:\s+|$)", "", after)
-                if after:
-                    return after
+        triggers = trigger_map.get(intent, [])
+        for trigger in triggers:
+            m = re.search(r"\b" + re.escape(trigger) + r"\b", text)
+            if not m:
+                continue
+
+            prefix = text[:m.start()].strip()
+            after = text[m.end():].strip()
+
+            if intent == "search_web":
+                # Guard 1: Attributive / possessive noun phrases (e.g. "my google", "the search")
+                # are not search commands.
+                if re.search(r"\b(?:my|the|a|an|this|that|these|those|his|her|their|our|your|its)\b$", prefix):
+                    continue
+
+                # Guard 2: Followed by noun heads (e.g. "search history", "search results", "results", "bar")
+                # indicates discussion of search artifacts/features, not a query.
+                if re.search(r"^(?:search\s+)?(?:history|results?|bar|engine|feature|algorithm|account|page|homepage|app)\b", after):
+                    continue
+
+                # Guard 3: "google" as an action verb requires action syntax: imperative at utterance start,
+                # preceded by polite/request words, or preceded by a search verb.
+                if trigger == "google":
+                    is_action = (
+                        not prefix
+                        or bool(re.match(r"^(?:(?:please|can you|could you|would you|will you|hey maya|maya|just|help me)\s*)+$", prefix))
+                        or bool(re.search(r"\b(?:search|search on)\s*$", prefix))
+                    )
+                    if not is_action:
+                        continue
+
+            trigger_hit = True
+            after = re.sub(r"^(?:for|to|the|a|an|me)(?:\s+|$)", "", after)
+            if after:
+                return after
+
+        if intent == "search_web":
+            # For search_web, if no valid search action trigger matched, do not treat
+            # the entire non-command utterance as a search query.
+            return ""
+
         return "" if trigger_hit else text
 
 
