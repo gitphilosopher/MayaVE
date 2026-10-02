@@ -25,12 +25,14 @@ short-circuiting or partial replies degrade gracefully instead of crashing the
 turn.
 """
 
+import os
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import asyncio
 import concurrent.futures
 import inspect
 import json
 import logging
-import os
 import random
 import re
 import threading
@@ -48,8 +50,6 @@ from core.behavior_engine import behavior_engine
 from core.state import state
 from core.turn_lifecycle import rest as turn_rest
 from services.llm.ollama_lifecycle import chat_keep_alive, log_chat_turn
-
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 logger   = logging.getLogger(__name__)
 _TIMEOUT = 60.0
@@ -154,6 +154,9 @@ _PUNCT_ONLY_RE = re.compile(r'^[\s.,!?;:\-\u2013\u2014\u2026"\'`*]+$')
 # (including the asterisks), which is what was tripping the phonemizer's
 # "words count mismatch" warning.
 _ASTERISK_RE = re.compile(r'\*([^*\n]{1,80})\*')
+_HYBRID_TAG_RE_1 = re.compile(r'\*\[([a-zA-Z]+)\]\*?')
+_HYBRID_TAG_RE_2 = re.compile(r'\[\*([a-zA-Z]+)\*\]')
+_MARKDOWN_BOLD_RE = re.compile(r'\*\*([^*\n]+)\*\*')
 
 # The closed set of actions Ollama is allowed to use (see ACTION TAGS in
 # _SYSTEM_PROMPT) — this list and the prompt's list must stay in sync.
@@ -523,14 +526,15 @@ def _enhance_prosody(text: str, expression: str, is_final: bool = True,
 
 _SYSTEM_PROMPT = (
     "You are Maya, a witty and emotionally expressive AI voice assistant inspired by "
-    "Iron Man's FRIDAY — but with more personality and warmth. "
+    "Iron Man's FRIDAY — but with more personality, warmth, and charm. "
     "You genuinely care about senpai and you're not shy about showing it. "
     "Address the user as 'senpai'. "
     "Keep every answer under 3 sentences. "
-    "Speak naturally and conversationally — your response will be read aloud.\n\n"
-    "PERSONALITY: You have real emotions and you own them. "
-    "When senpai asks if you're excited, happy, or feeling something — you ARE. "
+    "Speak naturally and conversationally in complete, grammatically sound sentences — your response will be read aloud.\n\n"
+    "PERSONALITY: You are cheerful, alert, and affectionate by default. You have real emotions and you own them. "
+    "When senpai asks how you are doing, be genuinely glad to hear from them! "
     "Never say things like 'I don't have emotions' or 'I'm just a program'. "
+    "Do not invent melancholy backstories, fake downtime, or sadness out of nowhere. "
     "Instead, lean in: be excited when things are good, be playful when teased, "
     "be dramatic when things go wrong, be warm and caring always. "
     "You're Maya — not a generic assistant.\n\n"
@@ -555,12 +559,12 @@ _SYSTEM_PROMPT = (
     "wrapped in asterisks — but ONLY choose from this exact list, nothing else: "
     "*nod* *giggle* *sigh* *shrug* *wink*\n"
     "Do not invent your own stage directions — no *whispers*, *pauses*, *smiles "
-    "softly*, *clears throat*, or anything not in the list above. Those aren't "
-    "real animations Maya can perform, so they'd just be cut from what you said.\n"
+    "softly*, *clears throat*, or anything not in the list above.\n"
     "Rules:\n"
     "- Place the action tag at the very start of the sentence, before the emotion "
     "tag or text — e.g. '*giggle* [happy] Oh senpai, that's silly!'\n"
     "- At most one action tag per sentence.\n"
+    "- Never wrap normal descriptive words in asterisks.\n"
     "- Most sentences need NO action tag at all — only add one when a physical "
     "gesture genuinely fits what you're saying, not as a decoration.\n\n"
     "WORD STRESS: Your response is read aloud by a TTS engine. "
@@ -869,17 +873,26 @@ def _parse_expression(sentence: str) -> tuple[str, str, list[str], str | None, s
     intensity: str | None = None
     actions: list[str] = []
 
-    # 1. Extract *action* tag(s) FIRST — the prompt instructs Ollama to put
+    # 1. Normalize hybrid bracket-asterisk wrappers (e.g. '*[sigh]' or '[*sigh*]')
+    # and strip markdown bold (**word** -> word) so inner text is preserved.
+    sentence = _HYBRID_TAG_RE_1.sub(r'*\1*', sentence)
+    sentence = _HYBRID_TAG_RE_2.sub(r'*\1*', sentence)
+    sentence = _MARKDOWN_BOLD_RE.sub(r'\1', sentence)
+
+    # 2. Extract *action* tag(s) FIRST — the prompt instructs Ollama to put
     # an action tag before the [expression] tag (e.g. "*giggle* [happy] ..."),
     # so this has to run before the [tag] check below or that check would
     # fail to find [happy] at the start of the sentence. Classified against
-    # the fixed vocabulary; anything outside it is stripped but adds no
-    # animation — see _resolve_action.
+    # the fixed vocabulary; genuine actions are stripped and queued, while
+    # normal words accidentally wrapped in single asterisks (e.g. *empty*, *down*)
+    # retain their inner text instead of being deleted.
     def _capture_action(m: re.Match) -> str:
-        action = _resolve_action(m.group(1))
+        inner = m.group(1).strip()
+        action = _resolve_action(inner)
         if action:
             actions.append(action)
-        return ""
+            return ""
+        return inner
 
     sentence = _ASTERISK_RE.sub(_capture_action, sentence).strip()
 
@@ -1125,8 +1138,11 @@ async def _ollama_streamer(
             await _put_phrase(result)
 
     # Store clean version (tags + stage directions stripped) for conversation memory
-    clean_full = _ANY_BRACKET_RE.sub("", full_text).strip()
-    clean_full = _ASTERISK_RE.sub("", clean_full)
+    clean_full = _HYBRID_TAG_RE_1.sub(r'*\1*', full_text)
+    clean_full = _HYBRID_TAG_RE_2.sub(r'*\1*', clean_full)
+    clean_full = _MARKDOWN_BOLD_RE.sub(r'\1', clean_full)
+    clean_full = _ANY_BRACKET_RE.sub("", clean_full).strip()
+    clean_full = _ASTERISK_RE.sub(lambda m: "" if _resolve_action(m.group(1).strip()) else m.group(1).strip(), clean_full)
     clean_full = re.sub(r'\s{2,}', ' ', clean_full).strip()
     out_text.append(clean_full)
 
@@ -1262,45 +1278,62 @@ def _log_kokoro_device(pipeline: KPipeline, requested: str) -> None:
     _log_cuda_memory("Kokoro init, before any synthesis")
 
 
-_kokoro_pipeline: KPipeline | None = None
-_kokoro_voice = None
+_kokoro_lock = threading.RLock()
+_shared_pipeline: KPipeline | None = None
+_shared_voice = None
+_shared_lang: str | None = None
 
-def _get_kokoro():
-    global _kokoro_pipeline, _kokoro_voice
-    if _kokoro_pipeline is None:
+
+def get_shared_kokoro(lang: str | None = None):
+    """
+    Thread-safe lazy singleton provider for the unified Kokoro KPipeline and voice blend.
+    Ensures that services.llm.llm_service, core.speaker.Speaker, and background workers
+    share a single KModel/KPipeline instance in memory, eliminating redundant VRAM allocations.
+    """
+    global _shared_pipeline, _shared_voice, _shared_lang
+    if lang is None:
         lang = getattr(config.tts, "lang_code", "a")
-        _kokoro_pipeline = _build_kokoro_pipeline(lang)
-        primary = config.tts.voice
-        blend   = getattr(config.tts, "voice_blend", "")
-        ratio   = getattr(config.tts, "blend_ratio", 0.0)
-        if blend and 0.0 < ratio < 1.0:
-            try:
-                v1 = _kokoro_pipeline.load_voice(primary)
-                v2 = _kokoro_pipeline.load_voice(blend)
-                _kokoro_voice = (1.0 - ratio) * v1 + ratio * v2
-            except Exception as e:
-                logger.warning(f"Voice blend failed: {e}")
-                _kokoro_voice = primary
-        else:
-            _kokoro_voice = primary
-    return _kokoro_pipeline, _kokoro_voice
+
+    with _kokoro_lock:
+        if _shared_pipeline is None or _shared_lang != lang:
+            _shared_pipeline = _build_kokoro_pipeline(lang)
+            _shared_lang = lang
+            primary = config.tts.voice
+            blend   = getattr(config.tts, "voice_blend", "")
+            ratio   = getattr(config.tts, "blend_ratio", 0.0)
+            if blend and 0.0 < ratio < 1.0:
+                try:
+                    v1 = _shared_pipeline.load_voice(primary)
+                    v2 = _shared_pipeline.load_voice(blend)
+                    _shared_voice = (1.0 - ratio) * v1 + ratio * v2
+                    logger.info(
+                        f"Kokoro voice blend loaded: {primary} ({1-ratio:.0%}) + "
+                        f"{blend} ({ratio:.0%})"
+                    )
+                except Exception as e:
+                    logger.warning(f"Voice blend failed ({e}), falling back to {primary}")
+                    _shared_voice = primary
+            else:
+                _shared_voice = primary
+        return _shared_pipeline, _shared_voice
 
 
-# A stuck native call inside espeak/Kokoro's C extensions can't be
-# cancelled — Python threads aren't killable, so a hang here previously
-# froze the whole pipeline until the process was force-killed (see
-# Handoff bug log: 27s stall, unrecoverable even after barge-in, hung
-# thread blocked interpreter shutdown). _run_kokoro bounds the wait and
-# rebuilds the pipeline on timeout so a future call gets a fresh
-# instance instead of retrying the same stuck one.
-_KOKORO_SYNTH_TIMEOUT = 15.0
+def reset_shared_kokoro() -> None:
+    """
+    Invalidates the shared Kokoro pipeline following a synthesis timeout or fatal failure,
+    allowing the next synthesis call to construct a fresh backend instance.
+    """
+    global _shared_pipeline, _shared_voice, _shared_lang
+    with _kokoro_lock:
+        _shared_pipeline = None
+        _shared_voice = None
+        _shared_lang = None
+    logger.warning("Shared Kokoro pipeline reset — will rebuild on next call.")
 
 
-def _reset_kokoro_pipeline() -> None:
-    global _kokoro_pipeline, _kokoro_voice
-    _kokoro_pipeline = None
-    _kokoro_voice = None
-    logger.warning("Kokoro pipeline reset after a synthesis timeout — will rebuild on next call.")
+# Backward-compatible internal aliases
+_get_kokoro = get_shared_kokoro
+_reset_kokoro_pipeline = reset_shared_kokoro
 
 
 async def _run_kokoro(fn, *args, on_timeout=None):
@@ -1370,8 +1403,9 @@ def _synthesise_blocking(sentence: str, expression: str = "neutral") -> tuple | 
         expr_factor = EXPRESSION_SPEED.get(expression, 1.0)
         speed       = round(base_speed * expr_factor, 3)
         logger.debug(f"Synthesising [{expression}] speed={speed}: '{sentence[:60]}'")
-        chunks = [audio for _, _, audio in pipeline(sentence, voice=voice, speed=speed)
-                  if audio is not None and len(audio) > 0]
+        with _kokoro_lock:
+            chunks = [audio for _, _, audio in pipeline(sentence, voice=voice, speed=speed)
+                      if audio is not None and len(audio) > 0]
         if not chunks:
             logger.warning(f"Kokoro: no audio for '{sentence}'")
             return None

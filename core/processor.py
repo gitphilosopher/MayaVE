@@ -63,7 +63,7 @@ class Processor:
         self._router        = Router(speaker)   # also injects the speaker into timer.py
         self._intent_engine = IntentEngine()
         self._understander  = self._build_understander(self._intent_engine)
-        logger.info("Routing: %s", "hybrid CommandUnderstander" if self._understander else "legacy IntentEngine")
+        logger.info("Routing: %s", "Hybrid Router" if self._understander else "legacy IntentEngine")
 
     async def _classify(self, text: str) -> dict:
         """Legacy-shaped intent dict; carries intent["_ir"] on the hybrid path."""

@@ -149,7 +149,9 @@ class Router:
 
         if handler is None:
             logger.warning(f"No route for intent '{intent_name}' — falling back to LLM.")
-            return await llm_query(intent, raw_text)
+            handler = llm_query
+        handler_name = getattr(handler, "__name__", str(handler))
+        logger.info(f"Dispatch: intent='{intent_name}' handler={handler_name}")
 
         # Skills re-parse text themselves, so give them the context-rewritten
         # command when a CommandIR produced one; the LLM keeps the user's words.

@@ -14,9 +14,9 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 
 ### 🧠 Intelligence
 
-* Local LLM inference through **Ollama**
+* Local LLM inference through **Ollama** (`llama3.2`)
+* Hybrid semantic command router (default runtime path): deterministic guards, classifier margin gating, semantic retrieval, and validated LLM fallback
 * ML-based intent classification using **PyTorch + TensorFlow**
-* Optional hybrid command router (opt-in): deterministic guards, semantic retrieval, and validated LLM fallback
 * Context-aware conversation handling
 * Topic and conversational-state tracking
 * Short-term conversation memory
@@ -28,7 +28,7 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 * Name-gated barge-in interruption
 * Silero VAD for speech detection
 * Google Speech Recognition for transcription
-* Kokoro neural TTS
+* Kokoro neural TTS with automatic CUDA GPU acceleration (`device="auto"`, CPU fallback)
 * Streaming LLM responses
 * Phrase-level TTS pipelining
 
@@ -97,13 +97,22 @@ Microphone
 Silero VAD / Wake Word
     │
     ▼
-Speech Recognition
+Speech Recognition (STT)
     │
     ▼
-Intent Engine
+Processor (_classify)
     │
-    ├──────────────► Skills
+    ▼
+CommandUnderstander (VE11 Hybrid Router)
+[Guards ──► Classifier Gate ──► Semantic Retrieval ──► LLM Fallback]
     │
+    ▼
+CommandIR (READY / NEEDS_CLARIFICATION / UNKNOWN / REJECTED)
+    │
+    ▼
+Router.dispatch
+    ├──────────────► Voice Skills
+    ├──────────────► Clarification
     └──────────────► Ollama LLM
                          │
                          ▼
@@ -114,7 +123,7 @@ Intent Engine
                     ┌────┴────┐
                     ▼         ▼
                  Kokoro     VRM Avatar
-                   TTS      + Animation
+                CUDA TTS    + Animation
 ```
 
 The Python backend communicates with the browser-based avatar through a local WebSocket connection.
@@ -129,14 +138,15 @@ For the complete architecture and internal component breakdown, see **[`docs/arc
 
 * Python 3.11+
 * asyncio
-* Ollama
-* Kokoro TTS
+* Ollama (`llama3.2`, `nomic-embed-text`)
+* Kokoro TTS (GPU-accelerated via PyTorch CUDA)
 * Silero VAD
 * Google Speech Recognition
-* PyTorch
+* PyTorch (CUDA build)
 * TensorFlow / Keras
 * SQLite
 * NumPy
+* WebSockets
 * WebSockets
 
 ### Frontend

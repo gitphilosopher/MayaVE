@@ -899,6 +899,31 @@ class IntentEngine:
                     break
                 if not valid:
                     continue
+
+            if intent == "farewell":
+                # Conversational guard: Phrases like "see you" / "see ya" only function as a
+                # farewell at the start of an utterance or preceded solely by discourse markers
+                # (e.g. "ok see you", "well see you later", "bye see you"). They must NOT trigger
+                # farewell when part of a broader conversational clause (e.g. "happy to see you",
+                # "nice to see you", "can I see you later?", "I see you", "I want to see you").
+                valid = False
+                for m in matches:
+                    kw = m.group(0).lower()
+                    if kw in ("see you", "see ya"):
+                        prefix = t[:m.start()].strip()
+                        if prefix and not re.search(r"^(?:(?:ok|okay|well|alright|then|bye|goodbye|so)\s*)+$", prefix):
+                            continue
+                        if re.search(r"\b(?:happy|glad|great|nice|good|wonderful|lovely|pleased)\s+(?:to\s+)?$", prefix):
+                            continue
+                        if re.search(r"\b(?:want\s+to|wanna|hope\s+to|like\s+to|can|could|will|would|did|do|let\s+me)\s*$", prefix):
+                            continue
+                        if re.search(r"\b(?:i|we|you|they|he|she)\s*$", prefix):
+                            continue
+                    valid = True
+                    break
+                if not valid:
+                    continue
+
             return intent, 1.0, "keyword"
         # The zero-confidence intent is a sentinel; callers use it only when
         # the paired confidence is positive.

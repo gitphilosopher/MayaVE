@@ -28,6 +28,9 @@ pipeline only after a real timeout. The public API is intentionally small:
 state sync.
 """
 
+import os
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import asyncio
 import io
 import logging
@@ -36,14 +39,14 @@ import wave
 
 import numpy as np
 import sounddevice as sd
-from kokoro import KPipeline
 
 from config.settings import config
 from core.state import state, MayaState
 from core.mood import mood_manager
 from core.behavior_engine import behavior_engine
 from services.llm.llm_service import (
-    _enhance_prosody, _build_kokoro_pipeline, _log_cuda_memory, _run_kokoro,
+    _enhance_prosody, _log_cuda_memory, _run_kokoro,
+    get_shared_kokoro, reset_shared_kokoro, _kokoro_lock,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,25 +81,6 @@ def _strip_tags(text: str) -> tuple[str, str]:
     return clean, expression
 
 
-def _build_voice(pipeline: KPipeline):
-    primary = config.tts.voice
-    blend   = getattr(config.tts, "voice_blend", "")
-    ratio   = getattr(config.tts, "blend_ratio", 0.0)
-
-    if blend and 0.0 < ratio < 1.0:
-        try:
-            v1 = pipeline.load_voice(primary)
-            v2 = pipeline.load_voice(blend)
-            mixed = (1.0 - ratio) * v1 + ratio * v2
-            logger.info(
-                f"Kokoro voice blend: {primary} ({1-ratio:.0%}) + "
-                f"{blend} ({ratio:.0%})"
-            )
-            return mixed
-        except Exception as e:
-            logger.warning(f"Voice blend failed ({e}), falling back to {primary}")
-    return primary
-
 
 def _numpy_to_wav(audio: np.ndarray, sample_rate: int = _SAMPLE_RATE) -> bytes:
     """Convert float32 numpy array → WAV bytes (in-memory, no temp file)."""
@@ -121,8 +105,7 @@ class Speaker:
             f"blend='{getattr(config.tts, 'voice_blend', '')}'  "
             f"output='{self._output}'"
         )
-        self._pipeline = _build_kokoro_pipeline(lang)
-        self._voice    = _build_voice(self._pipeline)
+        self._pipeline, self._voice = get_shared_kokoro(lang)
         self._speed    = getattr(config.tts, "speed", 1.1)
         logger.info("Kokoro TTS ready — fully offline.")
 
@@ -223,8 +206,8 @@ class Speaker:
                 lang = getattr(config.tts, "lang_code", "a")
 
                 def _rebuild():
-                    pipeline = _build_kokoro_pipeline(lang)
-                    return pipeline, _build_voice(pipeline)
+                    reset_shared_kokoro()
+                    return get_shared_kokoro(lang)
 
                 self._pipeline, self._voice = await asyncio.get_running_loop().run_in_executor(None, _rebuild)
             except Exception as e:
@@ -234,11 +217,14 @@ class Speaker:
 
     def _synthesise(self, text: str) -> np.ndarray | None:
         """Blocking Kokoro synthesis — called in executor."""
-        chunks = [
-            audio for _, _, audio in
-            self._pipeline(text, voice=self._voice, speed=self._speed)
-            if audio is not None and len(audio) > 0
-        ]
+        with _kokoro_lock:
+            pipeline, voice = get_shared_kokoro()
+            self._pipeline, self._voice = pipeline, voice
+            chunks = [
+                audio for _, _, audio in
+                pipeline(text, voice=voice, speed=self._speed)
+                if audio is not None and len(audio) > 0
+            ]
         if not chunks:
             logger.warning("Kokoro returned no audio chunks.")
             return None

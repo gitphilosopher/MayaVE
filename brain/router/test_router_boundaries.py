@@ -788,12 +788,15 @@ def test_case_c_jot_memo_router():
 
 def test_conversational_gating_logic():
     # Test the gating predicate: plausible_chat = mode == "llm" and conf >= 0.70 and (margin is None or margin >= 0.15)
+    def is_plausible_chat(mode: str, conf: float, margin: float | None) -> bool:
+        return mode == "llm" and conf >= 0.70 and (margin is None or margin >= 0.15)
+
     # Weak/contested predictions must NOT be plausible_chat (must allow LLM escalation)
-    assert not ("llm" == "llm" and 0.52 >= 0.70 and (0.16 is None or 0.16 >= 0.15))
-    assert not ("llm" == "llm" and 0.75 >= 0.70 and (0.05 is None or 0.05 >= 0.15))
+    assert not is_plausible_chat("llm", 0.52, 0.16)
+    assert not is_plausible_chat("llm", 0.75, 0.05)
     # Confident and uncontested conversational predictions MUST be plausible_chat (skip LLM)
-    assert ("llm" == "llm" and 0.80 >= 0.70 and (0.20 is None or 0.20 >= 0.15))
-    assert ("llm" == "llm" and 0.72 >= 0.70 and (None is None or None >= 0.15))
+    assert is_plausible_chat("llm", 0.80, 0.20)
+    assert is_plausible_chat("llm", 0.72, None)
 
 
 # ── 18. Physical-world system boundary & clipboard.clear regression tests ─────
@@ -843,9 +846,10 @@ def test_system_legitimate_computer_positives_preserved(utterance, expected_op):
 def test_clipboard_clear_router(utterance):
     from brain.intent_engine import IntentEngine
     from brain.router.registry import CommandRegistry, load_specs
+    from brain.router.llm_fallback import route as llm_route
     engine = IntentEngine()
     reg = CommandRegistry(load_specs())
-    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check, llm_route=llm_route)
     ir = run(u.understand(utterance))
     assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
     assert ir.domain == "clipboard", f"Wrong domain for '{utterance}': {ir.domain}"
