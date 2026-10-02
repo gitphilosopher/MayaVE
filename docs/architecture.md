@@ -94,8 +94,8 @@ flowchart LR
 ### 3.1 Startup (`main.py::main`)
 1. `HF_HUB_OFFLINE=1` is set before any import that can load kokoro/huggingface_hub; `logs/` is created; rotating log (5 MB × 3).
 2. Register the state observer (LISTENING watchdog), start `ws_server.serve()` and `node_sync_manager.run()` as background tasks (the latter returns immediately when `config.node.enabled` is `False`).
-3. Construct `Speaker()`, `Transcriber()`, `Processor(speaker)` — which loads/auto-trains `IntentEngine`, builds `Router(speaker)` (also injects the speaker into `timer.py`), and builds the optional `CommandUnderstander`.
-4. Register `state.register_stop_callback(_hard_stop_audio)`, then warm up in parallel: Ollama chat (1 token, `keep_alive`), embeddings, Kokoro in `llm_service`, Kokoro in `Speaker`.
+3. Construct `Speaker()`, `Transcriber()`, `Processor(speaker)` — which loads/auto-trains `IntentEngine`, builds `Router(speaker)` (also injects the speaker into `timer.py`), and initializes `CommandUnderstander` (`config.router.backend == "hybrid"` by default).
+4. Register `state.register_stop_callback(_hard_stop_audio)`, then warm up in parallel: Ollama chat (1 token, `keep_alive`), embeddings, Kokoro in `llm_service`, Kokoro in `Speaker` (auto-detecting CUDA when available via `device="auto"`).
 5. FSM → IDLE, broadcast `wave`, speak the greeting (before the Listener exists).
 6. `asyncio.TaskGroup`: `Listener.start()` + `queue_manager.run()` (**Python ≥ 3.11**).
 
@@ -112,8 +112,8 @@ on_speech: [LISTENING + WS "listening" if not busy] → Transcriber (Google STT,
 QueueManager → Processor.handle
   PROCESSING + WS "processing" + transcript
   → add_user (rolling window)
-  → _classify:  hybrid → CommandUnderstander.understand → to_legacy_intent(ir)   (intent["_ir"])
-                 else   → IntentEngine.classify (executor)
+  → _classify:  hybrid (default) → CommandUnderstander.understand → to_legacy_intent(ir)   (intent["_ir"])
+                legacy           → IntentEngine.classify (executor)
   → context_manager.observe_user_turn (whole-utterance target blanked)
   → Router.dispatch
         1. pending confirmations: power → reminder duration → note delete
@@ -128,7 +128,7 @@ State sequence: `listening → processing → speaking → idle`. Skill/LLM path
 
 ## 4. Intent understanding and routing
 
-Two classification backends exist, selected by `config.router.backend` (`"legacy"` default, `"hybrid"` opt-in). Both end in the same dict shape consumed by `Router.dispatch`.
+Two classification backends exist, selected by `config.router.backend` (`"hybrid"` default, `"legacy"` fallback). In the active hybrid mode, `CommandUnderstander` generates a `CommandIR`, which is bridged to `Router.dispatch` via `to_legacy_intent(ir)`. Both paths end in the dict shape consumed by `Router.dispatch`.
 
 ### 4.1 Legacy classifier — `brain/intent_engine.py` (always present)
 
@@ -136,7 +136,7 @@ Two classification backends exist, selected by `config.router.backend` (`"legacy
 
 Order of decision (first match wins):
 
-1. **Guards** (deterministic, confidence 1.0): dismissal exact-phrase match (after filler/address trimming); presence/arrival regex → `smalltalk`; action-word regex (nod/giggl/sigh/shrug/wink/wynk) unless phrased as a question → `perform_action`.
+1. **Guards** (deterministic, confidence 1.0): dismissal exact-phrase match (after filler/address trimming); presence/arrival regex → `smalltalk`; action-word regex (nod/giggl/sigh/shrug/wink/wynk) unless phrased as a question → `perform_action`; farewell canned guard with context-sensitive boundary check for "see you" / "see ya" to avoid misrouting conversational utterances (e.g., "happy to see you").
 2. **Short-input keyword rule:** ≤ 3 tokens and not a comparison → a keyword match wins outright (`keyword_short_input`).
 3. **Ensemble:** PyTorch BiLSTM+attention and TensorFlow 1-D CNN, probabilities averaged. Confidence ≥ `_CONF_THRESH` (0.65) → accepted. Top-2 class and `margin` come from this same averaged distribution.
 4. **Keyword fallback** below 0.65 (`keyword_fallback`), then a chance-relative floor (`1/N × 8`, clamped 0.20–0.45) → `low_confidence_trusted`, else `unknown` (`low_confidence_fallback`).
@@ -145,9 +145,9 @@ Order of decision (first match wins):
 
 `_extract_target` strips command phrases for `open_target`, `search_web`, `set_timer`; it returns `""` when a trigger matched with nothing after it, so skills ask for clarification.
 
-### 4.2 Hybrid pipeline — `brain/router/understand.py` (opt-in)
+### 4.2 Hybrid pipeline — `brain/router/understand.py` (active default)
 
-`CommandUnderstander.understand(text) → CommandIR`. It never executes anything and never imports a skill.
+`CommandUnderstander.understand(text) → CommandIR` is the active routing path in VE11. It never executes anything and never imports a skill.
 
 ```mermaid
 flowchart TD
@@ -172,7 +172,7 @@ flowchart TD
 Notes:
 
 - A low-confidence **command** is never forced into an intent: it ends `UNKNOWN` with `legacy_intent="unknown"`. A low-confidence **conversational** label goes to the chat LLM.
-- Thresholds in `understand.py` (`MIN_CONF=0.85`, `MIN_MARGIN=0.25`, `MIN_CONF_NO_MARGIN=0.93`, `LLM_MIN_CONF=0.5`) and `config.router` (`min_similarity=0.80`, `min_margin=0.08`, `low_similarity_floor=0.55`) are **placeholders pending measurement** (see §15).
+- Thresholds in `understand.py` (`MIN_CONF=0.85`, `MIN_MARGIN=0.25`, `MIN_CONF_NO_MARGIN=0.93`, `LLM_MIN_CONF=0.5`) and `config.router` (`min_similarity=0.80`, `min_margin=0.08`, `low_similarity_floor=0.55`) are calibrated against the test suite and eval cases.
 - `understand()` cannot raise: any stage failure degrades to `UNKNOWN` (`reason="internal_error"`).
 - Per-run counters (`stats`) feed `eval_ir`.
 - Semantic similarity is command-level: every seed of a `domain.operation` is a vector; scores collapse to the best per command; margin = best − second-best *distinct* command (`schemas.aggregate_by_command`).
@@ -186,7 +186,11 @@ Notes:
 | `UNKNOWN` | conversational, out of scope, or too uncertain | no → LLM |
 | `REJECTED` | LLM output failed validation | no → LLM |
 
-`executable = READY ∧ no missing entities ∧ legacy_intent`. `to_legacy_intent(ir)` is the bridge to the dispatch contract; non-READY IRs keep a `legacy_intent` only when `reason == "conversational"`, otherwise `"unknown"`. Guarded/canned skills outside the registry (greet, help, farewell, thanks, perform_action, mute) become `READY` with `domain="legacy"`.
+`executable = READY ∧ no missing entities ∧ legacy_intent`. `to_legacy_intent(ir)` bridges to the dispatch contract:
+- `READY` preserves the target skill's `legacy_intent` name and sets `response_mode="skill"`.
+- `UNKNOWN` with `reason="conversational"` preserves the classified conversational intent name (e.g. `smalltalk`, `joke`) with `response_mode="llm"`.
+- All other `UNKNOWN` and `REJECTED` cases collapse strictly to `intent="unknown"` and `response_mode="llm"` to prevent accidental execution of unvalidated skills.
+- Guarded/canned skills outside the registry (greet, help, farewell, thanks, perform_action, mute) become `READY` with `domain="legacy"`.
 
 ### 4.4 Dispatch safety net (`brain/router/dispatch.py`)
 
@@ -252,6 +256,10 @@ Convention: `async execute(intent, text) -> str` returning tagged text (`"[happy
 **The LLM does NOT:** run skills, make execution decisions on its own output, extract entities that deterministic extractors can find, decide confirmations, or write memory (memory writes are regex-gated, §9). It has no tool-calling layer.
 
 Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/chat` stream → phrase-boundary splitter (`_next_boundary`, vocative-aware, decimals-safe) → `_parse_expression` → `synth_q` → Kokoro (`_run_kokoro`, daemon thread, 15 s timeout) → `play_q` → per phrase: actions → behavior → `speaking` → audio → browser `audio_done` → baseline behavior. Optional "thinking filler" only for `general_query`/`unknown` with ≥ 3 words from non-low-confidence sources. A barge-in cancels the whole pipeline; history records only phrases whose playback began (or a short interruption marker if none).
+
+**Expression parsing & action validation (`_parse_expression`):** Valid physical actions (`nod`, `giggle`, `sigh`, `shrug`, `wink`) are extracted strictly against `_ACTION_VOCABULARY`. Non-action asterisks (such as markdown emphasis `*really*` or `**excited**`) are preserved verbatim as spoken prose rather than destructively removed.
+
+**GPU-accelerated Kokoro TTS:** PyTorch CUDA build accelerates Kokoro synthesis on GPU via `config.tts.device = "auto"`, falling back to CPU when CUDA is unavailable. On the tested reference configuration (NVIDIA GeForce RTX 3050 Laptop GPU, 4GB VRAM), Kokoro CUDA synthesis runs concurrently with Ollama `llama3.2` without CUDA out-of-memory errors, model eviction, or process contention under the tested workload.
 
 ---
 
@@ -338,15 +346,35 @@ Router corpus: `python -m brain.router.eval_router --seed` embeds every seed int
 
 | Layer | Files | Scope |
 |---|---|---|
-| Unit/contract tests (pytest style; fakes, no Ollama/torch/TF required unless noted) | `brain/test_hybrid_router.py`, `brain/router/test_ir.py`, `brain/router/test_router_boundaries.py`, `brain/router/test_intent_margin.py`, `brain/conftest.py` | registry/taxonomy drift, confidence policy, validation, adapter, vector store, LLM failure modes, `HybridIntentEngine` flow, `CommandUnderstander` stages, context rewrite, entity extraction, `SkillResult`/adapter, confirmation propagation, classifier margin (`IntentEngine.__new__` + fake model) |
+| Unit/contract tests (170 tests passing) | `brain/test_hybrid_router.py`, `brain/router/test_ir.py`, `brain/router/test_router_boundaries.py`, `brain/router/test_intent_margin.py`, `brain/test_failure_logging.py`, `services/llm/test_conversational_response.py`, `brain/conftest.py` | registry/taxonomy drift, confidence policy, validation, adapter, vector store, LLM failure modes, conversational expression parsing, `CommandUnderstander` stages, context rewrite, entity extraction, `SkillResult`/adapter, confirmation propagation, classifier margin (`IntentEngine.__new__` + fake model) |
 | Retrieval evaluation | `brain/router/eval_router.py` | per-split accuracy and (similarity, margin) threshold sweeps |
 | IR evaluation | `brain/router/eval_ir.py`, `datasets/router_eval/cases.jsonl` | false-execution rate (primary), wrong command/entity, OOS precision/recall, clarification recall, LLM fallback rate, latency, `per_case`, `model_digest` |
-| Cross-seed analysis | `brain/router/failure_matrix.py`, `diag.py` | failure frequency across seeds, classifier misses |
+| Cross-seed analysis | `brain/router/failure_matrix.py`, `diag.py` | failure frequency across seeds (60 benchmark cases), classifier misses |
 | Classifier evaluation | `brain/train_intent.py` | per-intent P/R/F1 and confusions on validation/test |
 
-`tests/` is gitignored; tests live beside the code. **Snapshot evidence** (`logs/runs60/`, 3 seeds, semantic + LLM wired, 60 cases): routing accuracy 0.85 / 0.917 / 0.867; wrong-execution 0.0 on all seeds; OOS false execution 0.05 / 0 / 0; p50 latency ≈ 0.07–0.08 s, p95 ≈ 1.6–1.8 s; same seed reproduces identical model digest and outcomes. Failures that recur on all three seeds: "I set a timer for my kids once and they loved it" (clarification instead of unknown), "hey could you jot a quick memo that the dentist is at three" and "could you pull up spotify for me" (LLM below `LLM_MIN_CONF`). The LLM fallback frequently invents entity keys (e.g. `query` for `weather.current`), producing `REJECTED` on out-of-scope input (scored as a pass but listed as *overreach*, 4–6 of 60). These are measurements from past runs, not guarantees.
+`tests/` is gitignored; tests live beside the code. Test execution: `pytest brain services/llm -q` (**170 passed, 44 warnings**; warnings are external TensorFlow/Keras and conversational test logger messages). All Python SyntaxWarnings (literal identity checks) have been eliminated.
 
-Run (environment-dependent; needs the project dependencies and, for some tests, Ollama/trained models): `python -m pytest brain -q`; `python -m brain.router.eval_router --seed`; `python -m brain.router.eval_ir --semantic --llm`; `python -m brain.router.failure_matrix --dir logs/runs60`.
+**Failure Matrix Benchmark** (`brain/router/failure_matrix.py` across 60 evaluation cases with semantic + LLM wired):
+- `seed1`: 0/60 failures
+- `seed2`: 1/60 failure (known ambiguous clarification variance on `"timer for a quarter of an hour"`)
+- `seed3`: 0/60 failures
+- `seed1_repeat`: 0/60 failures
+- Cross-seed consistency: 59/60 (98.3%) across tested seeds.
+
+*Note: This failure matrix represents a targeted 60-case regression evaluation suite across deterministic seeds, not a generalized accuracy metric.*
+
+Run (environment-dependent; needs the project dependencies and, for some tests, Ollama/trained models):
+- Test suite: `python -m pytest brain services/llm -q`
+- Seed command vector store: `python -m brain.router.eval_router --seed`
+- Single IR evaluation run: `python -m brain.router.eval_ir --semantic --llm`
+- Generate multi-seed benchmark runs (PowerShell):
+  ```powershell
+  foreach ($run in @(@(1,"seed1"), @(2,"seed2"), @(3,"seed3"), @(1,"seed1_repeat"))) {
+    $env:MAYA_SEED = $run[0]
+    python -m brain.router.eval_ir --semantic --llm 2>$null | Out-File -Encoding utf8 "logs/runs60/$($run[1]).json"
+  }
+  ```
+- Failure matrix summary: `python -m brain.router.failure_matrix --dir logs/runs60`
 
 ---
 
@@ -361,7 +389,7 @@ Run (environment-dependent; needs the project dependencies and, for some tests, 
 | Env vars | `MAYA_SEED`, `MAYA_EMBEDDING_DEVICE`, `HF_HUB_OFFLINE`, `TF_CPP_MIN_LOG_LEVEL`, `VITE_DEV_SERVER_URL`, `OneDrive` |
 | `getattr`-only (not dataclass fields) | `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `60m`) |
 
-Key defaults: `RouterConfig.backend="legacy"`, `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False`, `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"` (must stay so while the frontend runs), `device="cpu"`; `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; dependencies are in `config/requirements.txt` (+ `frontend/package.json`).
+Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False` (client-side only, disabled by default), `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"`, `device="auto"` (CUDA auto-detect with CPU fallback); `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; dependencies are in `config/requirements.txt` (+ `frontend/package.json`).
 
 ---
 
@@ -431,11 +459,12 @@ MayaVE/
 | Area | Status |
 |---|---|
 | Voice loop, skills, LLM streaming, TTS, avatar, mood/behavior, semantic memory | implemented |
-| Legacy classifier (guards + keywords + ensemble) | implemented (default) |
-| Hybrid `CommandUnderstander` + IR + dispatch gates | implemented, **opt-in**, thresholds provisional |
+| Legacy classifier (guards + keywords + ensemble) | implemented (available as fallback) |
+| Hybrid `CommandUnderstander` + IR + dispatch gates | implemented (**active default**, `backend="hybrid"`) |
+| Kokoro TTS GPU acceleration (`device="auto"`) | implemented (CUDA auto-detection, CPU fallback) |
 | `HybridIntentEngine` + shadow mode | implemented, **not wired** to runtime |
 | `skills/base.py` `SkillRegistry`/`SkillResult` | implemented, not on the live dispatch path |
-| MayaNode client (discovery, sync, outbox, events, memory both directions) | implemented, off by default; server-side not in repo |
+| MayaNode client (discovery, sync, outbox, events, memory both directions) | implemented, client-side only, off by default (`enabled=False`); server-side not in repo |
 | Screen-attention gaze | input API only; no capture |
 | Offline STT, packaged build, echo cancellation | not implemented |
 

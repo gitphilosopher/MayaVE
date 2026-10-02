@@ -62,11 +62,81 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+export let AVATAR_FPS = 60;
+window.setAvatarFps = function(fps) {
+    AVATAR_FPS = Number(fps) || 0;
+};
+window.getAvatarFps = function() {
+    return AVATAR_FPS;
+};
+
+const _perfSamples = [];
+let _perfLastTime = performance.now();
+let _lastRenderTime = performance.now();
+
+window.getPerfMetrics = function(reset = true) {
+    if (_perfSamples.length === 0) {
+        return {
+            fps: 0, avg_ms: 0, p95_ms: 0, p99_ms: 0, max_ms: 0, count: 0,
+            stalls_16ms: 0, stalls_33ms: 0, stalls_100ms: 0
+        };
+    }
+    const sorted = [..._perfSamples].sort((a, b) => a - b);
+    const count = sorted.length;
+    const sum = sorted.reduce((a, b) => a + b, 0);
+    const avg = sum / count;
+    const fps = 1000 / avg;
+    const p95 = sorted[Math.floor(count * 0.95)];
+    const p99 = sorted[Math.floor(count * 0.99)];
+    const max = sorted[count - 1];
+
+    let s16 = 0, s33 = 0, s100 = 0;
+    for (let i = 0; i < count; i++) {
+        const val = sorted[i];
+        if (val > 16.7) s16++;
+        if (val > 33.3) s33++;
+        if (val > 100.0) s100++;
+    }
+
+    if (reset) _perfSamples.length = 0;
+    return {
+        fps: Number(fps.toFixed(1)),
+        avg_ms: Number(avg.toFixed(2)),
+        p95_ms: Number((p95 || 0).toFixed(2)),
+        p99_ms: Number((p99 || 0).toFixed(2)),
+        max_ms: Number((max || 0).toFixed(2)),
+        count,
+        stalls_16ms: s16,
+        stalls_33ms: s33,
+        stalls_100ms: s100
+    };
+};
+
 /** Render the scene and advance avatar systems once per animation frame. */
-function animate() {
+function animate(timestamp) {
     requestAnimationFrame(animate);
+
+    const now = (typeof timestamp === "number" && timestamp > 0) ? timestamp : performance.now();
+
+    if (AVATAR_FPS > 0) {
+        const targetInterval = 1000 / AVATAR_FPS;
+        const elapsed = now - _lastRenderTime;
+        if (elapsed < targetInterval) {
+            return;
+        }
+        _lastRenderTime = now - (elapsed % targetInterval);
+    } else {
+        _lastRenderTime = now;
+    }
+
+    const dt = now - _perfLastTime;
+    _perfLastTime = now;
+    if (dt > 0 && dt < 1000) _perfSamples.push(dt);
+    if (_perfSamples.length > 3600) _perfSamples.shift();
+
     renderer.render(scene, camera);
-    const delta = clock.getDelta();
+    const rawDelta = clock.getDelta();
+    const delta = Math.min(rawDelta, 0.1);
     if (vrm) vrm.update(delta);
     updateVrmaAnimations(delta);
     updateGaze(delta);

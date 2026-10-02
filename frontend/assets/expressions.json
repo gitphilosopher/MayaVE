@@ -24,6 +24,13 @@
     "Fcl_MTH_Joy": 0.5,
     "Fcl_MTH_Up": 0.15
   },
+  "excited|sincere|medium": {
+    "Fcl_BRW_Joy": 0.453,
+    "Fcl_EYE_Joy": 0.316,
+    "Fcl_EYE_Surprised": 0.221,
+    "Fcl_MTH_Joy": 0.579,
+    "Fcl_MTH_Large": 0.17
+  },
   "happy|default|high": {
     "Fcl_BRW_Joy": 0.4,
     "Fcl_EYE_Joy": 0.7,

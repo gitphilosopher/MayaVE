@@ -3,7 +3,8 @@
  * Maya avatar window — upper body, transparent, bottom-left of screen.
  */
 
-import { app, BrowserWindow, screen } from "electron";
+import pkg from "electron";
+const { app, BrowserWindow, screen } = pkg;
 import { fileURLToPath } from "url";
 import path from "path";
 

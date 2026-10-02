@@ -81,6 +81,15 @@ function connect() {
                     case "wink":   playWinkAnimation();   break;
                 }
                 break;
+            case "query_perf":
+                if (typeof window.getPerfMetrics === "function") {
+                    ws.send(JSON.stringify({
+                        type: "perf_response",
+                        id: data.id,
+                        metrics: window.getPerfMetrics(data.reset !== false)
+                    }));
+                }
+                break;
         }
     };
 
