@@ -31,12 +31,16 @@ class ExpressionController {
     constructor() {
         this._manager = null;
         this._layers = new Map(); // layer -> Map(key -> value)
+        // this._warned = new Set(); // unknown manager keys, warned once
+        this._checked = new Set(); // keys already verified against the manager (warn at most once)
     }
 
     /** Called once the VRM's expressionManager exists (see loadAvatar()). */
     attach(expressionManager) {
         this._manager = expressionManager;
+        this._checked.clear();     // a new model may expose different expressions
     }
+    // setValue / clearValue unchanged
 
     /** Set `key` to `value` on `layer`, then re-resolve and apply that key. */
     setValue(layer, key, value) {
@@ -53,6 +57,12 @@ class ExpressionController {
 
     _apply(key) {
         if (!this._manager) return;
+        if (!this._checked.has(key)) {
+            this._checked.add(key);
+            if (typeof this._manager.getExpression === "function" && !this._manager.getExpression(key)) {
+                console.warn(`[Maya][expr] expression '${key}' does not exist on this VRM — writes are no-ops.`);
+            }
+        }
         for (const tier of _TIERS_DESC) {
             const map = this._layers.get(tier);
             if (map && map.has(key)) {
@@ -60,9 +70,6 @@ class ExpressionController {
                 return;
             }
         }
-        // No layer holds this key — resolve to baseline 0 rather than
-        // leaving whatever raw value was last written (e.g. a stale
-        // open-mouth shape after lip-sync's clearValue()).
         this._manager.setValue(key, 0);
     }
 }

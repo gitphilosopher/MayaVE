@@ -70,18 +70,20 @@ window.getAvatarFps = function() {
     return AVATAR_FPS;
 };
 
-const _perfSamples = [];
+const _PERF_CAP = 3600;
+const _perfBuf = new Float64Array(_PERF_CAP);
+let _perfHead = 0, _perfCount = 0;
 let _perfLastTime = performance.now();
 let _lastRenderTime = performance.now();
 
 window.getPerfMetrics = function(reset = true) {
-    if (_perfSamples.length === 0) {
+    if (_perfCount === 0) {
         return {
             fps: 0, avg_ms: 0, p95_ms: 0, p99_ms: 0, max_ms: 0, count: 0,
             stalls_16ms: 0, stalls_33ms: 0, stalls_100ms: 0
         };
     }
-    const sorted = [..._perfSamples].sort((a, b) => a - b);
+    const sorted = Array.from(_perfBuf.subarray(0, _perfCount)).sort((a, b) => a - b);
     const count = sorted.length;
     const sum = sorted.reduce((a, b) => a + b, 0);
     const avg = sum / count;
@@ -98,7 +100,7 @@ window.getPerfMetrics = function(reset = true) {
         if (val > 100.0) s100++;
     }
 
-    if (reset) _perfSamples.length = 0;
+    if (reset) { _perfCount = 0; _perfHead = 0; }
     return {
         fps: Number(fps.toFixed(1)),
         avg_ms: Number(avg.toFixed(2)),
@@ -131,8 +133,11 @@ function animate(timestamp) {
 
     const dt = now - _perfLastTime;
     _perfLastTime = now;
-    if (dt > 0 && dt < 1000) _perfSamples.push(dt);
-    if (_perfSamples.length > 3600) _perfSamples.shift();
+    if (dt > 0 && dt < 1000) {
+        _perfBuf[_perfHead] = dt;
+        _perfHead = (_perfHead + 1) % _PERF_CAP;
+        if (_perfCount < _PERF_CAP) _perfCount++;
+    }
 
     renderer.render(scene, camera);
     const rawDelta = clock.getDelta();

@@ -30,6 +30,9 @@ const WS_URL       = "ws://localhost:8765";
 const RECONNECT_MS = 2000;
 
 export let ws = null;
+let _lastState = null;       // last backend state applied; null after (re)connect
+let _statusEl = null;
+let _lastStatusText = null;
 
 // Report streamed-audio completion to the backend while the socket is open.
 setAudioDoneCallback(() => {
@@ -97,6 +100,7 @@ function connect() {
         console.warn("[Maya WS] Disconnected — retrying in", RECONNECT_MS, "ms");
         setStatus("disconnected");
         sleepAvatar();
+        _lastState = null;   // reconnect replays the server's last state; it must re-apply
         setTimeout(connect, RECONNECT_MS);
     };
 
@@ -105,6 +109,8 @@ function connect() {
 
 /** Sync fidget eligibility and the avatar's visual awake/sleep state. */
 function handleState(value) {
+    if (value === _lastState) return;
+    _lastState = value;
     // The scheduler needs every backend state, including "sleeping".
     setAvatarState(value);
 
@@ -126,8 +132,12 @@ function handleState(value) {
 }
 
 function setStatus(status) {
-    const el = document.getElementById("ws-status");
-    if (el) el.textContent = status === "connected" ? "" : "💤";
+    const text = status === "connected" ? "" : "💤";
+    if (text === _lastStatusText) return;
+    const el = _statusEl ?? (_statusEl = document.getElementById("ws-status"));
+    if (!el) return;
+    el.textContent = text;
+    _lastStatusText = text;
 }
 
 /** Decode an incoming base64 audio payload for avatar playback. */

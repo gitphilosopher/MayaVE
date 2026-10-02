@@ -106,7 +106,7 @@ export function applyBehavioralGaze(mode) {
 
 let _awake          = false;
 let _blinkingActive = false;  // true while the blink loop is scheduled
-let _blinkTimeout   = null;   // pending blink tick — cleared on re-wake to avoid duplicate loops
+let _blinkOpenTimeout = null; // pending 120 ms "eyes open" callback
 let _eyeLoopStarted = false;  // eye-movement loop is started once per page, not per wake
 
 /** Mark the avatar awake and start its idle, blink, and eye-motion behavior. */
@@ -132,6 +132,9 @@ export function sleepAvatar() {
     if (!_awake) return;
     _awake          = false;
     _blinkingActive = false;   // blink loop checks this and exits on next tick
+    clearTimeout(_blinkTimeout);
+    clearTimeout(_blinkOpenTimeout);
+    _blinkTimeout = _blinkOpenTimeout = null;
     gazeController.setAwake(false);
 
     stopIdleFidgets();
@@ -927,13 +930,16 @@ export function loadAvatar(scene) {
 function startBlinking() {
     _blinkingActive = true;
     clearTimeout(_blinkTimeout);   // a pending tick from before a reconnect would double the loop
+    clearTimeout(_blinkOpenTimeout);
 
     function blink() {
         if (!_blinkingActive || !vrm) return;  // exits loop when sleeping
 
         expressionController.setValue(EXPRESSION_LAYER.BLINK, "blink", 1);
-        setTimeout(() => {
-            if (!vrm) return;
+        clearTimeout(_blinkOpenTimeout);
+        _blinkOpenTimeout = setTimeout(() => {
+            _blinkOpenTimeout = null;
+            if (!_blinkingActive || !vrm) return;   // asleep/disabled: stay closed
             expressionController.setValue(EXPRESSION_LAYER.BLINK, "blink", 0);
         }, 120);
 
@@ -947,12 +953,16 @@ function startBlinking() {
 // shoulder life motion so those behaviors share this frame loop.
 function startHeadMovement() {
     let t = 0;
+    let boneVrm = null, neck = null, spine = null;
     function update() {
         requestAnimationFrame(update);
         if (!vrm) return;
         t += 0.01;
-        const neck  = vrm.humanoid.getNormalizedBoneNode("neck");
-        const spine = vrm.humanoid.getNormalizedBoneNode("spine");
+        if (boneVrm !== vrm) {
+            boneVrm = vrm;
+            neck  = vrm.humanoid.getNormalizedBoneNode("neck");
+            spine = vrm.humanoid.getNormalizedBoneNode("spine");
+        }
 
         const gaze = (gazeController.hasActiveTarget() && !isSpeaking)
             ? gazeController.getHeadOffset()

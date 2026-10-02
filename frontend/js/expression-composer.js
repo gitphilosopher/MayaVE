@@ -55,6 +55,11 @@ const KEY_RATE = { neutral: 1.3, joy: 1.0, fun: 0.9, angry: 0.75, sorrow: 1.25, 
 let _current  = new Map(RENDERABLE.map((k) => [k, 0]));
 let _rafToken = 0;
 
+// Debug logging is opt-in so no strings are built per packet.
+// Enable from the console: window.__MAYA_DEBUG_EXPR__ = true
+const _debugExpr = () => globalThis.__MAYA_DEBUG_EXPR__ === true;
+const _warnedMorphs = new Set();
+
 function _clamp01(v) {
     return Math.max(0, Math.min(1, v));
 }
@@ -137,7 +142,21 @@ function _durationFor(key) {
 
 /** Interpolate legacy weights, cancelling any older in-flight transition. */
 function _animateTo(target) {
-    const token = ++_rafToken;
+    const token = ++_rafToken;   // always supersede any in-flight transition
+    let needsWork = false;
+    for (const key of RENDERABLE) {
+        if (Math.abs((_current.get(key) ?? 0) - (target.get(key) ?? 0)) > 1e-4) { needsWork = true; break; }
+    }
+    if (!needsWork) {
+        // At target: no rAF loop, but still write once so the EMOTION layer stays
+        // authoritative (clears e.g. avatar.js's listening setExpression("surprised", 0.3)).
+        for (const key of RENDERABLE) {
+            const v = target.get(key) ?? 0;
+            _current.set(key, v);
+            expressionController.setValue(EXPRESSION_LAYER.EMOTION, key, v);
+        }
+        return;
+    }   // already at target — no rAF loop
     const start = new Map(_current);
     const t0 = performance.now();
     const durations = new Map(RENDERABLE.map((k) => [k, _durationFor(k)]));
@@ -170,15 +189,16 @@ const _morphCache = new Map();
 
 function _resolveMorphTargets(name) {
     if (_morphCache.has(name)) return _morphCache.get(name);
+    // VRM not loaded yet: report a miss without caching it, so the name can
+    // still resolve once the model exists.
+    if (!vrm?.scene) return null;
     const targets = [];
-    if (vrm?.scene) {
-        vrm.scene.traverse((object) => {
-            if (object.isMesh && object.morphTargetDictionary) {
-                const index = object.morphTargetDictionary[name];
-                if (index !== undefined) targets.push({ mesh: object, index });
-            }
-        });
-    }
+    vrm.scene.traverse((object) => {
+        if (object.isMesh && object.morphTargetDictionary) {
+            const index = object.morphTargetDictionary[name];
+            if (index !== undefined) targets.push({ mesh: object, index });
+        }
+    });
     const result = targets.length > 0 ? targets : null;
     _morphCache.set(name, result);
     return result;
@@ -254,7 +274,12 @@ export function applyBehavior(intent) {
     if (rawRecipe && vrm) {
         verifiedRecipe = {};
         for (const [key, value] of Object.entries(rawRecipe)) {
-            if (_resolveMorphTargets(key)) verifiedRecipe[key] = value;
+            if (_resolveMorphTargets(key)) {
+                verifiedRecipe[key] = value;
+            } else if (!_warnedMorphs.has(key)) {
+                _warnedMorphs.add(key);
+                console.warn(`[Maya][expr] recipe morph '${key}' not found on the loaded VRM — ignored.`);
+            }
         }
         if (Object.keys(verifiedRecipe).length === 0) verifiedRecipe = null;
     }
@@ -264,15 +289,17 @@ export function applyBehavior(intent) {
         // to zero so it doesn't fight the recipe on the same VRM.
         _animateTo(new Map(RENDERABLE.map((k) => [k, 0])));
         _animateRecipeTo(new Map(Object.entries(verifiedRecipe)));
-        console.debug(
-            `[Maya][expr] semantic=${intent.primary}|${intent.attitude} recipe_keys=`
-            + Object.entries(verifiedRecipe).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(" ")
-        );
+        if (_debugExpr()) {
+            console.debug(
+                `[Maya][expr] semantic=${intent.primary}|${intent.attitude} recipe_keys=`
+                + Object.entries(verifiedRecipe).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(" ")
+            );
+        }
     } else {
         // No recipe morph is available on this model; use semantic weights.
         _animateRecipeTo(new Map());   // ease out any stale recipe keys
         const weights = _composeWeights(intent);
-        _logDebug(intent, weights);
+        if (_debugExpr()) _logDebug(intent, weights);
         _animateTo(weights);
     }
 
