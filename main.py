@@ -56,7 +56,12 @@ from services.ws_server import ws_server
 from services.llm.llm_service import warmup as llm_warmup, get_ollama_client, close_ollama_client
 from services.llm.ollama_lifecycle import chat_keep_alive
 from services.node.sync_manager import node_sync_manager
-from brain.embeddings import _resolve_embedding_device, _embedding_gpu_options, describe_ollama_models
+from brain.embeddings import (
+    _resolve_embedding_device,
+    _embedding_gpu_options,
+    describe_ollama_models,
+    get_embedding_provider,
+)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 os.makedirs(config.log_dir, exist_ok=True)   # FileHandler fails if logs/ is missing
@@ -156,25 +161,16 @@ async def _warmup_ollama() -> None:
 
 async def _warmup_embeddings() -> None:
     """
-    Fire a throwaway embedding request so Ollama loads the embedding
-    model into RAM at startup, same as _warmup_ollama() does for the
-    chat model. Without this, ContextManager's first semantic-memory
-    lookup (brain/conversation.py -> brain/embeddings.py) pays a
-    multi-second cold-load cost mid-conversation instead of at startup.
+    Eagerly prime the in-process local BGE embedding model on CPU during startup.
+    This eliminates cold-load latency for semantic command routing and conversational memory.
     """
-    url = f"{config.llm.base_url.rstrip('/')}/api/embeddings"
-    model = config.context.embedding_model
-    payload = {"model": model, "prompt": "hello", "keep_alive": "30m"}
-    gpu_opts = _embedding_gpu_options()
-    if gpu_opts:
-        payload["options"] = gpu_opts
     try:
-        logger.info(f"Pre-warming Ollama embedding model '{model}' (device={_resolve_embedding_device()})…")
-        async with httpx.AsyncClient(timeout=60) as client:
-            await client.post(url, json=payload)
-        logger.info("✅ Embedding model is warm and ready.")
+        embedder = get_embedding_provider("local")
+        if hasattr(embedder, "embed"):
+            await embedder.embed("hello")
+        logger.info("✅ Local BGE embedding model is warm and ready.")
     except Exception as e:
-        logger.warning(f"Embedding warm-up skipped ({type(e).__name__}): {e}")
+        logger.warning(f"Local embedding warm-up skipped ({type(e).__name__}): {e}")
 
 
 # ── Interrupt / barge-in ──────────────────────────────────────────────────────

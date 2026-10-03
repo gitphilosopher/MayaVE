@@ -1040,6 +1040,9 @@ function startBlinking() {
     blink();
 }
 
+const _ZERO_GAZE = Object.freeze({ x: 0, y: 0 });
+const _lifeMotionState = { awake: false, speaking: false, attentionState: null };
+
 // Continuous BASE-tier head sway layers in active gaze and yields neck/spine
 // to higher-priority animations. It also ticks breathing, posture, and
 // shoulder life motion so those behaviors share this frame loop.
@@ -1064,7 +1067,7 @@ function startHeadMovement() {
 
         const gaze = (gazeController.hasActiveTarget() && !isSpeaking)
             ? gazeController.getHeadOffset()
-            : { x: 0, y: 0 };
+            : _ZERO_GAZE;
 
         if (neck && (!neck.name || animationController.canWrite(neck.name, PRIORITY.BASE))) {
             neck.rotation.y = Math.sin(t) * 0.05 + gaze.y;
@@ -1074,11 +1077,10 @@ function startHeadMovement() {
             spine.rotation.x = Math.sin(t * 2) * 0.011;
         }
 
-        lifeMotionController.update(vrm, {
-            awake: _awake,
-            speaking: isSpeaking,
-            attentionState: gazeController.getAttentionState(),
-        });
+        _lifeMotionState.awake = _awake;
+        _lifeMotionState.speaking = isSpeaking;
+        _lifeMotionState.attentionState = gazeController.getAttentionState();
+        lifeMotionController.update(vrm, _lifeMotionState);
     }
     update();
 }
@@ -1119,7 +1121,7 @@ function startEyeMovement() {
             const gaze = gazeController.getEyeOffset();
             targetX = gaze.x;
             targetY = gaze.y;
-        } else if (performance.now() < _behGazeUntil) {
+        } else if (now < _behGazeUntil) {
             targetX = _behGazeX;
             targetY = _behGazeY;
         }

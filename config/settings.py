@@ -72,7 +72,8 @@ class ContextConfig:
     similarity_threshold: float = 0.75
     dedup_threshold: float = 0.92
     semantic_recency_guard_seconds: float = 120.0
-    embedding_model: str = "nomic-embed-text"
+    embedding_provider: str = "local"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     memory_dir: str = None
 
 

@@ -17,6 +17,7 @@ empty or null results where the API permits, allowing semantic memory to
 degrade without interrupting conversation.
 """
 
+import contextlib
 import json
 import logging
 import sqlite3
@@ -89,8 +90,14 @@ class SQLiteVectorStore(VectorStore):
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db_path)
+    @contextlib.contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self._db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
         with self._connect() as conn:
@@ -189,6 +196,11 @@ class SQLiteVectorStore(VectorStore):
             scored = []
             for row in rows:
                 vec = self._from_blob(row[2])
+                if vec.shape != q.shape:
+                    logger.warning(
+                        f"Skipping vector id={row[0]} with mismatched dimension {vec.shape} (query expects {q.shape})"
+                    )
+                    continue
                 denom = np.linalg.norm(vec) * q_norm
                 sim = float(np.dot(q, vec) / denom) if denom else 0.0
                 if sim >= min_similarity:

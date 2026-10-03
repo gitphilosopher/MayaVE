@@ -49,8 +49,8 @@ import time
 from dataclasses import dataclass, field
 
 from brain.memory import memory, MemoryEntry
-from brain.embeddings import OllamaEmbedder
-from brain.vector_store import SQLiteVectorStore, MemoryRecord, VALID_MEM_TYPES
+from brain.embeddings import get_embedding_provider, Embedder
+from brain.vector_store import SQLiteVectorStore, MemoryRecord, VALID_MEM_TYPES, VectorStore
 from config.settings import config
 from services.node.memory_producer import record_memory
 
@@ -292,7 +292,7 @@ class ContextManager:
     # conversation_summary memory (see _on_memory_evict).
     _EVICT_FLUSH_SIZE = 10
 
-    def __init__(self):
+    def __init__(self, embedder: Embedder | None = None, store: VectorStore | None = None):
         self._conv = ConversationManager()
         self._state = ConversationState()
         self._open_loops: list[OpenLoop] = []
@@ -307,12 +307,15 @@ class ContextManager:
         # retrieval gate on intent without changing llm_service's signatures.
         self._turn: tuple[str, str] | None = None
 
-        self._embedder = OllamaEmbedder()
-        try:
-            self._store = SQLiteVectorStore()
-        except Exception as e:
-            logger.error(f"Semantic memory store unavailable — running recent-context-only: {e}", exc_info=True)
-            self._store = None
+        self._embedder = embedder or get_embedding_provider()
+        if store is not None:
+            self._store = store
+        else:
+            try:
+                self._store = SQLiteVectorStore()
+            except Exception as e:
+                logger.error(f"Semantic memory store unavailable — running recent-context-only: {e}", exc_info=True)
+                self._store = None
 
         # Feed turns about to drop out of the recent window into
         # compaction instead of losing them outright.
@@ -694,6 +697,7 @@ class ContextManager:
     async def _persist_memory(self, candidate: MemoryRecord) -> None:
         if self._store is None or candidate.mem_type not in VALID_MEM_TYPES:
             return
+        candidate.metadata.setdefault("model_id", getattr(self._embedder, "model_id", "local"))
         embedding = await self._embedder.embed(candidate.content)
         if embedding is None:
             return
@@ -832,6 +836,7 @@ class ContextManager:
         record = MemoryRecord(
             content=content, mem_type=mem_type, topic=topic,
             importance=importance, source="mayanode_sync", embedding=embedding,
+            metadata={"model_id": getattr(self._embedder, "model_id", "local")},
         )
         new_id = await loop.run_in_executor(None, self._store.add, record)
         logger.info(f"Semantic memory merged from MayaNode (id={new_id}, key='{key}'): '{content[:50]}'")

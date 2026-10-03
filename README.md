@@ -316,35 +316,39 @@ She can be awakened again using the configured wake word.
 
 ## 🔭 Future Features
 
-The following capabilities are planned but **not yet implemented**. None of them is available today.
+The following capabilities are still pending or materially incomplete in the current codebase.
 
 ### 📓 Diary
 
-A separate diary where Maya records her own account of interactions and experiences over time, distinct from the semantic memory used for retrieval. Entries would be generated automatically and be retrievable for later context.
+A separate chronological diary for Maya's own observations and experiences, distinct from the semantic memory used for retrieval and live context.
 
 ### 🌙 Dream Mode
 
-A configurable, periodic autonomous reflection process that runs while the user is away (targeting roughly every 3 hours). During a dream cycle Maya would reflect on recent interactions and feed the results into her diary and memory.
+A scheduled autonomous reflection cycle that runs while the user is away, consolidating recent interactions and feeding higher-level insight back into memory and diary flows.
 
 ### 🔎 Autonomous Research
 
-The ability to research a topic on her own initiative, without an immediate user request: searching the web, reading webpages and academic papers, viewing images, weighing sources, and synthesizing what she finds. Today's web search only opens a results page on request.
+Independent research initiation without an immediate user prompt, including source gathering, synthesis, and follow-up knowledge acquisition beyond direct request-driven web actions.
 
 ### 📚 Learning Notes
 
-A knowledge store, separate from personal memory and user notes, for what Maya learns through research.
+A dedicated store for research-derived knowledge that remains distinct from personal memory, user notes, and raw interaction history.
 
 ### 🧭 Autonomous Curiosity
 
-A mechanism that lets Maya pick research topics herself, based on knowledge gaps, unresolved questions, novelty, recent interactions and learning, and relationships between pieces of knowledge. This is a functional notion of curiosity, not human-like boredom.
+A self-directed prioritization system for choosing what Maya should investigate next based on unresolved questions, knowledge gaps, novelty, and recent context.
 
 ### 🧠 Cognitive States
 
-Named, switchable generation states (for example focused, exploratory, or reflective) that adjust LLM sampling and reasoning behavior at runtime. These are independent of her mood and facial-expression system.
+Explicit runtime cognition modes such as focused, exploratory, or reflective behavior, separate from emotional mood and avatar animation state.
 
-### 🔁 Metacognitive Memory Curation
+### 🔁 Advanced Retrieval Reranking
 
-Autonomous maintenance of long-term memory, inspired by Hegelian *Sublation* (*Aufhebung*): detecting redundant, conflicting, or fragmented memories, reasoning about how they change over time, and synthesizing them into higher-level representations while preserving the original memories and their provenance. Maya currently only deduplicates similar memories when writing them.
+A second-stage ranking step for semantic retrieval and command candidates so the router can refine top matches before dispatch or fallback decisions.
+
+### 🧬 Metacognitive Memory Curation
+
+Autonomous memory synthesis beyond simple deduplication: detecting redundancy, contradiction, temporal drift, and fragmented knowledge while preserving provenance and source traces.
 
 ---
 

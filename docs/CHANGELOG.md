@@ -19,6 +19,12 @@ All notable changes to MayaVE are documented here.
 - **Spoken timer reminder text** — `timer._extract_reminder` captures "remind me to X" (duration stripped, max 120 chars) and the alert speaks "Time's up, senpai! Reminder: X."
 
 ### Improvements
+- **VE11 Optimization 25: ContextManager → Shared Local BGE Migration** — Migrated conversational semantic memory in `brain/conversation.py` / `ContextManager` away from the legacy Ollama `nomic-embed-text` HTTP embedding path onto the shared in-process `LocalEmbeddingProvider` (`BAAI/bge-small-en-v1.5`) introduced in Opt13.
+  - Context configuration updated: `ContextConfig.embedding_provider` defaults to `"local"` and `ContextConfig.embedding_model` defaults to `"BAAI/bge-small-en-v1.5"`.
+  - Zero duplicate model overhead: `brain/embeddings.py` provides a thread-safe `get_shared_local_provider()` singleton factory, ensuring the hybrid semantic router and `ContextManager` share the identical in-process model instance and LRU embedding cache in host RAM.
+  - Startup model footprint eliminated: `main.py::_warmup_embeddings()` warms local BGE in-process. Ollama `nomic-embed-text` is never loaded into memory, reclaiming 376.4 MB of Ollama host RAM with 0.0 MB VRAM impact.
+  - Vector dimensionality & throughput: Switched from 768-dim Nomics embeddings to 384-dim BGE embeddings. Measured warm embed p95 latency reduced from 65.73 ms to 39.56 ms (−39.8%).
+  - SQLite Windows lock hardening & dimension safety: `brain/vector_store.py` hardened with context-managed connection closing (`conn.close()` in `finally`) to eliminate Windows `WinError 32` file lock leaks; `VectorStore.search` safely skips mismatched dimensional vectors with a warning rather than crashing numpy.
 - **VE11 Optimization 20: Stale WebSocket Client / Disconnect Recovery** — Renderer disconnect recovery now invalidates the affected audio wait without altering healthy `audio_done` synchronization. In `services/ws_server.py`, `MayaWebSocketServer._handler` signals `self._audio_done_event` when the last connected client disconnects (`if not self._clients: self._audio_done_event.set()`), immediately releasing any active `wait_for_audio_done()` call within ~50 ms instead of hanging for the full 30.0-second safety timeout.
   - Eliminates the dead-client failure amplification where a dropped renderer incurred \(N \times 30\text{s}\) timeout penalties across multi-sentence turns.
   - Preserves 100% of healthy renderer playback synchronization, phrase ordering, and barge-in cancellation.

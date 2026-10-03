@@ -90,7 +90,7 @@ class OllamaEmbedder(Embedder):
     """Ollama-backed embedding client with a bounded exact-text cache and pooled HTTP usage."""
 
     def __init__(self, model: str | None = None, timeout: float = 20.0):
-        self._model = model or config.context.embedding_model
+        self._model = model or getattr(config.context, "ollama_embedding_model", "nomic-embed-text")
         self._timeout = timeout
         self._url = f"{config.llm.base_url.rstrip('/')}/api/embeddings"
         self._device = _resolve_embedding_device()
@@ -281,9 +281,45 @@ class LocalEmbeddingProvider(Embedder):
         return await asyncio.to_thread(self.embed_sync, text)
 
 
+_shared_local_provider: LocalEmbeddingProvider | None = None
+_shared_local_provider_lock = threading.Lock()
+
+
+def get_shared_local_provider(
+    model_name: str | None = None, device: str = "cpu"
+) -> LocalEmbeddingProvider:
+    """Return the process-wide shared LocalEmbeddingProvider singleton."""
+    global _shared_local_provider
+    if _shared_local_provider is None:
+        with _shared_local_provider_lock:
+            if _shared_local_provider is None:
+                _shared_local_provider = LocalEmbeddingProvider(
+                    model_name=model_name, device=device
+                )
+    return _shared_local_provider
+
+
+def reset_shared_local_provider() -> None:
+    """Reset the shared local provider singleton (primarily for testing)."""
+    global _shared_local_provider
+    with _shared_local_provider_lock:
+        _shared_local_provider = None
+
+
 def get_embedding_provider(provider: str | None = None) -> Embedder:
-    """Return an embedding provider based on configuration or explicit parameter."""
-    p = (provider or getattr(config.router, "embedding_provider", "local")).strip().lower()
+    """Return an embedding provider based on configuration or explicit parameter.
+
+    Resolves provider from:
+    1. Explicit `provider` argument (if given)
+    2. `config.context.embedding_provider`
+    3. `config.router.embedding_provider`
+    4. Default "local"
+    """
+    p = (
+        provider
+        or getattr(config.context, "embedding_provider", None)
+        or getattr(config.router, "embedding_provider", "local")
+    ).strip().lower()
     if p == "local":
-        return LocalEmbeddingProvider()
+        return get_shared_local_provider()
     return OllamaEmbedder()
