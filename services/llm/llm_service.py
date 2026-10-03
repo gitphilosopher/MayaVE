@@ -53,7 +53,43 @@ from services.llm.ollama_lifecycle import chat_keep_alive, log_chat_turn
 
 logger   = logging.getLogger(__name__)
 _TIMEOUT = 60.0
+_CLIENT_LIMITS = httpx.Limits(max_keepalive_connections=5, max_connections=10, keepalive_expiry=300.0)
 _conv    = ConversationManager()
+
+# Persistent HTTP client for streaming LLM requests
+_ollama_client: httpx.AsyncClient | None = None
+_ollama_client_loop: asyncio.AbstractEventLoop | None = None
+
+
+def get_ollama_client() -> httpx.AsyncClient:
+    """
+    Return a shared persistent httpx.AsyncClient for Ollama calls bound to
+    the current running event loop. Recreates the client if none exists, if closed,
+    or if the running event loop changed (e.g. across test functions).
+    """
+    global _ollama_client, _ollama_client_loop
+    loop = asyncio.get_running_loop()
+    if (
+        _ollama_client is None
+        or _ollama_client.is_closed
+        or _ollama_client_loop is not loop
+        or _ollama_client_loop.is_closed()
+    ):
+        _ollama_client = httpx.AsyncClient(
+            timeout=_TIMEOUT,
+            limits=_CLIENT_LIMITS,
+        )
+        _ollama_client_loop = loop
+    return _ollama_client
+
+
+async def close_ollama_client() -> None:
+    """Close the shared Ollama client cleanly on shutdown or test reset."""
+    global _ollama_client, _ollama_client_loop
+    if _ollama_client is not None and not _ollama_client.is_closed:
+        await _ollama_client.aclose()
+    _ollama_client = None
+    _ollama_client_loop = None
 
 ALREADY_SPOKEN = "__ALREADY_SPOKEN__"
 
@@ -1094,39 +1130,39 @@ async def _ollama_streamer(
     t0 = time.perf_counter()
     first_token_logged = False
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        async with client.stream("POST", url, json=payload) as resp:
-            resp.raise_for_status()
-            logger.info(f"[TIMING]   /api/chat headers received: {time.perf_counter()-t0:.3f}s")
+    client = get_ollama_client()
+    async with client.stream("POST", url, json=payload) as resp:
+        resp.raise_for_status()
+        logger.info(f"[TIMING]   /api/chat headers received: {time.perf_counter()-t0:.3f}s")
 
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                data  = json.loads(line)
-                token = data.get("message", {}).get("content", "")
-                done  = data.get("done", False)
+        async for line in resp.aiter_lines():
+            if not line:
+                continue
+            data  = json.loads(line)
+            token = data.get("message", {}).get("content", "")
+            done  = data.get("done", False)
 
-                if not first_token_logged and token:
-                    logger.info(f"[TIMING]   first token received: {time.perf_counter()-t0:.3f}s")
-                    first_token_logged = True
+            if not first_token_logged and token:
+                logger.info(f"[TIMING]   first token received: {time.perf_counter()-t0:.3f}s")
+                first_token_logged = True
 
-                if token:
-                    await _handle_token(token)
+            if token:
+                await _handle_token(token)
 
-                if done:
-                    logger.info(f"[TIMING]   stream fully done: {time.perf_counter()-t0:.3f}s")
-                    logger.info(
-                        "Ollama metrics: total=%.2fs load=%.2fs prompt_eval=%.2fs eval=%.2fs "
-                        "prompt_tokens=%s generated_tokens=%s",
-                        data.get("total_duration", 0) / 1e9,
-                        data.get("load_duration", 0) / 1e9,
-                        data.get("prompt_eval_duration", 0) / 1e9,
-                        data.get("eval_duration", 0) / 1e9,
-                        data.get("prompt_eval_count"),
-                        data.get("eval_count"),
-                    )
-                    log_chat_turn(data)
-                    break
+            if done:
+                logger.info(f"[TIMING]   stream fully done: {time.perf_counter()-t0:.3f}s")
+                logger.info(
+                    "Ollama metrics: total=%.2fs load=%.2fs prompt_eval=%.2fs eval=%.2fs "
+                    "prompt_tokens=%s generated_tokens=%s",
+                    data.get("total_duration", 0) / 1e9,
+                    data.get("load_duration", 0) / 1e9,
+                    data.get("prompt_eval_duration", 0) / 1e9,
+                    data.get("eval_duration", 0) / 1e9,
+                    data.get("prompt_eval_count"),
+                    data.get("eval_count"),
+                )
+                log_chat_turn(data)
+                break
 
     # Log raw Ollama output before any parsing so we can debug tag issues
     logger.debug(f"Ollama raw output: {repr(full_text)}")
@@ -1318,22 +1354,67 @@ def get_shared_kokoro(lang: str | None = None):
         return _shared_pipeline, _shared_voice
 
 
+_kokoro_is_warm = False
+_kokoro_warmup_lock = threading.Lock()
+_kokoro_warm_event = threading.Event()
+
+
+def is_kokoro_warm() -> bool:
+    """Return whether the shared Kokoro pipeline has completed eager warmup."""
+    return _kokoro_is_warm
+
+
+def ensure_kokoro_warmed(phrase: str = "Hi.") -> bool:
+    """
+    Eagerly initialize the shared Kokoro pipeline and run a minimal silent
+    synthesis to prime CUDA kernels, activations, and cuBLAS/cuDNN workspaces.
+    Idempotent and thread-safe: executes exactly once across the application lifecycle.
+    """
+    global _kokoro_is_warm
+    if _kokoro_is_warm:
+        return True
+
+    with _kokoro_warmup_lock:
+        if _kokoro_is_warm:
+            return True
+        logger.info(f"Eagerly warming shared Kokoro TTS pipeline with '{phrase}'…")
+        t0 = time.perf_counter()
+        try:
+            with _kokoro_lock:
+                pipeline, voice = get_shared_kokoro()
+                for _, _, _ in pipeline(phrase, voice=voice, speed=1.0):
+                    break
+            _kokoro_is_warm = True
+            _kokoro_warm_event.set()
+            elapsed = time.perf_counter() - t0
+            logger.info(f"Kokoro TTS eager warmup complete in {elapsed:.2f}s — CUDA kernels primed.")
+            _log_cuda_memory("Kokoro eager warmup complete")
+            return True
+        except Exception as e:
+            logger.warning(f"Kokoro eager warmup failed (non-fatal): {e}", exc_info=True)
+            return False
+
+
 def reset_shared_kokoro() -> None:
     """
     Invalidates the shared Kokoro pipeline following a synthesis timeout or fatal failure,
     allowing the next synthesis call to construct a fresh backend instance.
     """
-    global _shared_pipeline, _shared_voice, _shared_lang
+    global _shared_pipeline, _shared_voice, _shared_lang, _kokoro_is_warm
     with _kokoro_lock:
         _shared_pipeline = None
         _shared_voice = None
         _shared_lang = None
+        _kokoro_is_warm = False
+        _kokoro_warm_event.clear()
     logger.warning("Shared Kokoro pipeline reset — will rebuild on next call.")
 
 
 # Backward-compatible internal aliases
 _get_kokoro = get_shared_kokoro
 _reset_kokoro_pipeline = reset_shared_kokoro
+
+_KOKORO_SYNTH_TIMEOUT = 15.0
 
 
 async def _run_kokoro(fn, *args, on_timeout=None):
@@ -1372,18 +1453,10 @@ async def _run_kokoro(fn, *args, on_timeout=None):
 
 def warmup() -> None:
     """
-    Call once at startup (before any query) to load Kokoro into memory.
-    Runs a silent synthesis so the model, voices, and GPU/CPU kernels are
-    all hot by the time the first real sentence arrives — eliminating the
-    7-second cold-start delay on the first LLM response.
+    Call once at startup (before any query) to load Kokoro into memory and prime CUDA kernels.
+    Idempotent and thread-safe.
     """
-    logger.info("Warming up Kokoro TTS pipeline…")
-    try:
-        _synthesise_blocking("Hello.")
-        logger.info("Kokoro TTS warmed up and ready.")
-        _log_cuda_memory("Kokoro warm, after first synthesis")
-    except Exception as e:
-        logger.warning(f"Kokoro warmup failed (non-fatal): {e}")
+    ensure_kokoro_warmed()
 
 
 def _synthesise_blocking(sentence: str, expression: str = "neutral", trace_id: str | None = None) -> tuple | None:

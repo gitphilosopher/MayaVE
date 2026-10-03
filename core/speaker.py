@@ -47,6 +47,7 @@ from core.behavior_engine import behavior_engine
 from services.llm.llm_service import (
     _enhance_prosody, _log_cuda_memory, _run_kokoro,
     get_shared_kokoro, reset_shared_kokoro, _kokoro_lock,
+    ensure_kokoro_warmed,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,9 +111,9 @@ class Speaker:
         logger.info("Kokoro TTS ready — fully offline.")
 
     def warmup(self) -> None:
-        """Prime the Kokoro pipeline once during startup to avoid a cold first reply."""
+        """Prime the shared Kokoro pipeline once during startup to avoid a cold first reply."""
         try:
-            self._synthesise("Hello.")
+            ensure_kokoro_warmed()
             logger.info("Speaker Kokoro pipeline warmed up.")
             _log_cuda_memory("Speaker pipeline warm, after first synthesis")
         except Exception as e:

@@ -94,3 +94,46 @@ def test_conversational_route_dispatches_to_llm(utterance):
     legacy = to_legacy_intent(ir)
     assert legacy["response_mode"] == "llm"
     assert legacy["intent"] in {"smalltalk", "general_query", "unknown"}
+
+
+def test_get_ollama_client_persistence_and_cleanup():
+    """Verify that get_ollama_client returns a persistent instance and cleans up safely."""
+    import asyncio
+    from services.llm.llm_service import get_ollama_client, close_ollama_client
+
+    async def _test():
+        client1 = get_ollama_client()
+        client2 = get_ollama_client()
+        assert client1 is client2, "Persistent client should be reused within the same loop"
+        assert not client1.is_closed
+
+        await close_ollama_client()
+        assert client1.is_closed
+
+        client3 = get_ollama_client()
+        assert client3 is not client1, "New client should be created after close"
+        assert not client3.is_closed
+        await close_ollama_client()
+
+    asyncio.run(_test())
+
+
+def test_get_ollama_client_loop_affinity():
+    """Verify that get_ollama_client recreates clients safely across distinct event loops."""
+    import asyncio
+    from services.llm.llm_service import get_ollama_client, close_ollama_client
+
+    async def _on_loop_1():
+        return get_ollama_client()
+
+    async def _on_loop_2():
+        return get_ollama_client()
+
+    c1 = asyncio.run(_on_loop_1())
+    assert c1 is not None
+
+    c2 = asyncio.run(_on_loop_2())
+    assert c2 is not None
+    assert c2 is not c1, "Different loops must receive separate client instances"
+    asyncio.run(close_ollama_client())
+

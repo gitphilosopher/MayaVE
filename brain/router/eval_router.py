@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from brain.embeddings import OllamaEmbedder
+from brain.embeddings import OllamaEmbedder, get_embedding_provider
 from brain.router.command_vector_store import CommandVectorStore
 from brain.router.registry import CommandRegistry, load_specs
 from brain.router.semantic_router import SemanticRouter
@@ -43,14 +43,21 @@ def _pct(xs, q):
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", action="store_true")
+    ap.add_argument("--provider", default=getattr(config.router, "embedding_provider", "local"), choices=["local", "ollama"])
     args = ap.parse_args()
 
     registry = CommandRegistry(load_specs())
-    store = CommandVectorStore(config.router.command_vector_db_path)
-    embedder = OllamaEmbedder()
+    store = CommandVectorStore(config.router.command_vector_db_path, provider=args.provider)
+    embedder = get_embedding_provider(args.provider)
+    model_id = getattr(embedder, "model_id", "")
 
-    if args.seed or store.is_stale(registry.specs):
-        print("seeded", await store.areseed(registry.specs, embedder.embed), "vectors")
+    if args.seed or store.is_stale(registry.specs, model_id):
+        print(f"Seeding vector index ({args.provider} / {model_id})...")
+        if hasattr(embedder, "embed_sync"):
+            seeded = store.reseed(registry.specs, embedder.embed_sync, model_id)
+        else:
+            seeded = await store.areseed(registry.specs, embedder.embed, model_id)
+        print("seeded", seeded, "vectors")
         if args.seed:
             return
 

@@ -95,7 +95,7 @@ flowchart LR
 1. `HF_HUB_OFFLINE=1` is set before any import that can load kokoro/huggingface_hub; `logs/` is created; rotating log (5 MB × 3).
 2. Register the state observer (LISTENING watchdog), start `ws_server.serve()` and `node_sync_manager.run()` as background tasks (the latter returns immediately when `config.node.enabled` is `False`).
 3. Construct `Speaker()`, `Transcriber()`, `Processor(speaker)` — which loads/auto-trains `IntentEngine`, builds `Router(speaker)` (also injects the speaker into `timer.py`), and initializes `CommandUnderstander` (`config.router.backend == "hybrid"` by default).
-4. Register `state.register_stop_callback(_hard_stop_audio)`, then warm up in parallel: Ollama chat (1 token, `keep_alive`), embeddings, Kokoro in `llm_service`, Kokoro in `Speaker` (auto-detecting CUDA when available via `device="auto"`).
+4. Register `state.register_stop_callback(_hard_stop_audio)`, then warm up in parallel: Ollama chat (1 token, `keep_alive`), local BGE embeddings (Opt 13), and eager Kokoro CUDA forward pass via `ensure_kokoro_warmed()` (Opt 14, shared lazy pipeline Opt 3, auto-detecting CUDA via `device="auto"`).
 5. FSM → IDLE, broadcast `wave`, speak the greeting (before the Listener exists).
 6. `asyncio.TaskGroup`: `Listener.start()` + `queue_manager.run()` (**Python ≥ 3.11**).
 
@@ -159,7 +159,7 @@ flowchart TD
     TR -- yes --> IR1
     TR -- no --> CV{"llm-mode label\nand conf≥0.5?"}
     CV -- yes --> UNK1["UNKNOWN (conversational)"]
-    CV -- no --> SEM["Semantic retrieval\n(Ollama embeddings, command_vectors.sqlite3)"]
+    CV -- no --> SEM["Semantic retrieval\n(Local BGE-small in-process CPU / Ollama fallback)"]
     SEM --> SC{"CONFIDENT?\nsim≥0.80 & margin≥0.08"}
     SC -- yes --> IR1
     SC -- no --> LF["LLM fallback (llm_fallback.route)\nJSON, temp 0, 8 s timeout"]
@@ -461,7 +461,9 @@ MayaVE/
 | Voice loop, skills, LLM streaming, TTS, avatar, mood/behavior, semantic memory | implemented |
 | Legacy classifier (guards + keywords + ensemble) | implemented (available as fallback) |
 | Hybrid `CommandUnderstander` + IR + dispatch gates | implemented (**active default**, `backend="hybrid"`) |
+| Local Semantic Embedding Provider (BGE-small CPU) | implemented (**active default**, Opt 13, latency ~25ms) |
 | Kokoro TTS GPU acceleration (`device="auto"`) | implemented (CUDA auto-detection, CPU fallback) |
+| Kokoro TTS Eager Warmup (Opt 14) | implemented (**active default**, first user TTS ~320ms vs ~5,883ms cold) |
 | `HybridIntentEngine` + shadow mode | implemented, **not wired** to runtime |
 | `skills/base.py` `SkillRegistry`/`SkillResult` | implemented, not on the live dispatch path |
 | MayaNode client (discovery, sync, outbox, events, memory both directions) | implemented, client-side only, off by default (`enabled=False`); server-side not in repo |

@@ -83,7 +83,9 @@ class RouterConfig:
     backend: str = "hybrid"                    # "legacy" | "hybrid"
     hybrid_domains: list[str] = field(default_factory=list)   # empty = all domains when backend == "hybrid"
     shadow_mode: bool = False                  # log hybrid-vs-legacy comparison; never dispatches hybrid
-    command_vector_db_path: str | None = None  # default ~/Maya/Router/command_vectors.sqlite3
+    command_vector_db_path: str | None = None  # default ~/Maya/Router/command_vectors_bge.sqlite3 (local) or command_vectors.sqlite3 (ollama)
+    embedding_provider: str = "local"          # "local" | "ollama"
+    local_embedding_model: str = "BAAI/bge-small-en-v1.5"
     # Placeholders pending brain/router/eval_router.py measurements on the real dataset.
     min_similarity: float = 0.80
     min_margin: float = 0.08

@@ -51,20 +51,26 @@ _MEM_TYPE = "command"
 _SCAN_ALL = 1_000_000
 
 
-def _default_db_path() -> Path:
+def _default_db_path(provider: str = "local") -> Path:
+    if provider == "local":
+        return Path.home() / "Maya" / "Router" / "command_vectors_bge.sqlite3"
     return Path.home() / "Maya" / "Router" / "command_vectors.sqlite3"
 
 
-def corpus_fingerprint(specs: list[CommandSpec]) -> str:
+def corpus_fingerprint(specs: list[CommandSpec], model_id: str = "") -> str:
     """Deterministic hash of every seed the corpus would produce — changes
-    whenever config/command_domains.json's domains/operations/seeds change."""
+    whenever config/command_domains.json's domains/operations/seeds change,
+    or the embedding model changes."""
     payload = json.dumps(
-        [
-            {"key": s.key, "legacy_intent": s.legacy_intent,
-             "entities": s.entities, "target_mode": s.target_mode,
-             "seeds": sorted(s.seeds)}
-            for s in sorted(specs, key=lambda s: s.key)
-        ],
+        {
+            "model_id": model_id,
+            "specs": [
+                {"key": s.key, "legacy_intent": s.legacy_intent,
+                 "entities": s.entities, "target_mode": s.target_mode,
+                 "seeds": sorted(s.seeds)}
+                for s in sorted(specs, key=lambda s: s.key)
+            ],
+        },
         sort_keys=True, ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -92,8 +98,9 @@ def _prototype_record(spec: CommandSpec, prototype: str, embedding: list[float])
 class CommandVectorStore:
     """Owns the command-vector SQLite file and its fingerprint sidecar."""
 
-    def __init__(self, db_path: "Path | str | None" = None):
-        self._db_path = Path(db_path) if db_path else _default_db_path()
+    def __init__(self, db_path: "Path | str | None" = None, provider: str = "local"):
+        self._provider = provider
+        self._db_path = Path(db_path) if db_path else _default_db_path(provider)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._fp_path = self._db_path.with_suffix(self._db_path.suffix + ".fingerprint.json")
         self._store = SQLiteVectorStore(db_path=self._db_path)
@@ -113,8 +120,8 @@ class CommandVectorStore:
         tmp.write_text(json.dumps({"fingerprint": fingerprint}), encoding="utf-8")
         tmp.replace(self._fp_path)
 
-    def is_stale(self, specs: list[CommandSpec]) -> bool:
-        return self.stored_fingerprint() != corpus_fingerprint(specs)
+    def is_stale(self, specs: list[CommandSpec], model_id: str = "") -> bool:
+        return self.stored_fingerprint() != corpus_fingerprint(specs, model_id)
 
     def _reset_index(self) -> None:
         """Empty the table through the store (never by deleting the open
@@ -122,15 +129,15 @@ class CommandVectorStore:
         self._store.clear()
         self._store = SQLiteVectorStore(db_path=self._db_path)
 
-    def _finish_reseed(self, specs: list[CommandSpec], written: int) -> int:
-        self._write_fingerprint(corpus_fingerprint(specs))
+    def _finish_reseed(self, specs: list[CommandSpec], written: int, model_id: str = "") -> int:
+        self._write_fingerprint(corpus_fingerprint(specs, model_id))
         logger.info(
             f"Command vector store reseeded — {written} prototype vector(s) "
-            f"across {len(specs)} operation(s)."
+            f"across {len(specs)} operation(s) [model='{model_id}']."
         )
         return written
 
-    def reseed(self, specs: list[CommandSpec], embed_fn) -> int:
+    def reseed(self, specs: list[CommandSpec], embed_fn, model_id: str = "") -> int:
         """
         Rebuild the command index from scratch. `embed_fn` is a sync
         callable str -> list[float] | None (kept sync here so this module
@@ -151,9 +158,9 @@ class CommandVectorStore:
                     continue
                 if self._store.add(_prototype_record(spec, prototype, embedding)) is not None:
                     written += 1
-        return self._finish_reseed(specs, written)
+        return self._finish_reseed(specs, written, model_id)
 
-    async def areseed(self, specs: list[CommandSpec], embed_fn) -> int:
+    async def areseed(self, specs: list[CommandSpec], embed_fn, model_id: str = "") -> int:
         """Async twin of reseed() — `embed_fn` is an async callable
         (e.g. OllamaEmbedder.embed). Same ordering, same records."""
         self._reset_index()
@@ -166,7 +173,7 @@ class CommandVectorStore:
                     continue
                 if self._store.add(_prototype_record(spec, prototype, embedding)) is not None:
                     written += 1
-        return self._finish_reseed(specs, written)
+        return self._finish_reseed(specs, written, model_id)
 
     # ── Search ───────────────────────────────────────────────────────────
 

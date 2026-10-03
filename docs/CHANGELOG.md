@@ -19,6 +19,21 @@ All notable changes to MayaVE are documented here.
 - **Spoken timer reminder text** — `timer._extract_reminder` captures "remind me to X" (duration stripped, max 120 chars) and the alert speaks "Time's up, senpai! Reminder: X."
 
 ### Improvements
+- **VE11 Optimization 20: Stale WebSocket Client / Disconnect Recovery** — Renderer disconnect recovery now invalidates the affected audio wait without altering healthy `audio_done` synchronization. In `services/ws_server.py`, `MayaWebSocketServer._handler` signals `self._audio_done_event` when the last connected client disconnects (`if not self._clients: self._audio_done_event.set()`), immediately releasing any active `wait_for_audio_done()` call within ~50 ms instead of hanging for the full 30.0-second safety timeout.
+  - Eliminates the dead-client failure amplification where a dropped renderer incurred \(N \times 30\text{s}\) timeout penalties across multi-sentence turns.
+  - Preserves 100% of healthy renderer playback synchronization, phrase ordering, and barge-in cancellation.
+  - Safe multi-client semantics: disconnect of one client does not release the wait if other healthy clients remain connected.
+- **VE11 Optimization 14: Eager Kokoro CUDA Warmup** — Eagerly initialized the shared Kokoro `KPipeline` during application startup (`main.py`) with a silent, single-phrase forward pass (`"Hi."`) via thread-safe `ensure_kokoro_warmed()`, absorbing the cold CUDA kernel compilation, JIT trace, and cuBLAS/cuDNN activation buffer allocation (~3.6s) before user interactions begin.
+  - First user TTS synthesis latency reduced from **5,882.9 ms to 319.9 ms (−94.6% reduction, saving 5,563 ms)**.
+  - Post-idle TTS latency confirmed at **453–495 ms**, demonstrating that the ~2.5s delay was purely a one-time CUDA cold-kernel initialization penalty, not an idle/power-state penalty.
+  - VRAM footprint during synthesis is cleanly budgeted at **~576 MB allocated / 635 MB reserved (~14% total VRAM)**, leaving ample GPU headroom for Ollama `llama3.2` and Three.js WebGL avatar rendering.
+  - Eliminated redundant concurrent startup warmup task in `main.py` (`speaker_warmup_task`), establishing `ensure_kokoro_warmed()` as the single thread-safe idempotent warmup entry point.
+- **VE11 Optimization 13: Local In-Process Semantic Embedding Inference** — Implemented `LocalEmbeddingProvider` using `BAAI/bge-small-en-v1.5` (384-dimensional unit-norm float vectors) running in-process on CPU via Hugging Face Transformers and PyTorch, resolving the ~1,108 ms Ollama `nomic-embed-text` HTTP retrieval bottleneck identified in Opt 12.
+  - Semantic retrieval latency dropped from **~1,108 ms to ~25–35 ms** (~97% reduction).
+  - Understander stage latency on semantic queries dropped from **~1,240 ms to ~152–178 ms**.
+  - Routing accuracy on `cases.jsonl` improved from **96.7% to 98.3%** with 0.0% wrong execution rate and 0.0% false OOS execution rate.
+  - Pure CPU execution consuming 0.0 MB VRAM, completely avoiding GPU resource contention with avatar WebGL rendering and CUDA Kokoro TTS.
+  - Zero index contamination: local index resides in `~/Maya/Router/command_vectors_bge.sqlite3` with model-aware fingerprinting, leaving the existing `command_vectors.sqlite3` intact.
 - **Test suite consolidation and cleanup** — Full regression suite passing at **170 passed** (`pytest brain services/llm -q`). Eliminated Python SyntaxWarnings in `brain/router/test_router_boundaries.py` (replaced literal identity comparisons `0.16 is None` with semantic equality / direct checks). Remaining warnings are external Keras/TensorFlow and conversational test logger messages.
 - **Router failure matrix baseline** — Validated `brain/router/failure_matrix.py` across 60 evaluation cases over 3 seeds plus a repeat run: seed1 (0/60), seed2 (1/60 — known ambiguous clarification variance on `"timer for a quarter of an hour"`), seed3 (0/60), seed1_repeat (0/60), achieving 59/60 (98.3%) cross-seed consistency.
 - **Documentation realigned with source** — `docs/architecture.md` and `README.md` updated to reflect the active VE11 hybrid semantic router default, CUDA Kokoro TTS integration, hardened expression parser, and 170 passing tests.

@@ -18,6 +18,7 @@ stack.
 import asyncio
 import logging
 import os
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -93,6 +94,7 @@ class OllamaEmbedder(Embedder):
         self._timeout = timeout
         self._url = f"{config.llm.base_url.rstrip('/')}/api/embeddings"
         self._device = _resolve_embedding_device()
+        self.model_id = f"ollama:{self._model}"
         logger.info(f"[TIMING] Embedding device mode: '{self._device}' (model='{self._model}')")
         self._unavailable = False
         self._client: httpx.AsyncClient | None = None
@@ -198,3 +200,90 @@ class OllamaEmbedder(Embedder):
             return None
         finally:
             self._in_flight -= 1
+
+
+class LocalEmbeddingProvider(Embedder):
+    """In-process CPU embedding provider using BAAI/bge-small-en-v1.5.
+
+    Runs locally via Hugging Face Transformers and PyTorch on CPU.
+    Reuses a single shared model instance, thread-safe, with an exact-text LRU cache.
+    Zero external network calls, zero GPU contention.
+    """
+    _shared_model = None
+    _shared_tokenizer = None
+    _shared_lock = threading.Lock()
+
+    def __init__(self, model_name: str | None = None, device: str = "cpu"):
+        self._model_name = model_name or getattr(config.router, "local_embedding_model", "BAAI/bge-small-en-v1.5")
+        self._device = device
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self.model_id = f"local:{self._model_name}"
+
+    def _ensure_loaded(self):
+        if LocalEmbeddingProvider._shared_model is None:
+            with LocalEmbeddingProvider._shared_lock:
+                if LocalEmbeddingProvider._shared_model is None:
+                    import torch
+                    from transformers import AutoTokenizer, AutoModel
+                    t0 = time.perf_counter()
+                    tok = AutoTokenizer.from_pretrained(self._model_name)
+                    mod = AutoModel.from_pretrained(self._model_name)
+                    mod.to(self._device)
+                    mod.eval()
+                    LocalEmbeddingProvider._shared_tokenizer = tok
+                    LocalEmbeddingProvider._shared_model = mod
+                    logger.info(
+                        f"Local embedding provider ready: model='{self._model_name}' "
+                        f"device='{self._device}' in {time.perf_counter()-t0:.2f}s"
+                    )
+        return LocalEmbeddingProvider._shared_tokenizer, LocalEmbeddingProvider._shared_model
+
+    def embed_sync(self, text: str) -> list[float] | None:
+        if not text or not text.strip():
+            return None
+        with self._cache_lock:
+            cached = self._cache.get(text)
+            if cached is not None:
+                self._cache.move_to_end(text)
+                return cached
+
+        try:
+            import torch
+            tok, mod = self._ensure_loaded()
+            with torch.no_grad():
+                inp = tok(text, return_tensors="pt", padding=True, truncation=True)
+                if self._device != "cpu":
+                    inp = {k: v.to(self._device) for k, v in inp.items()}
+                out = mod(**inp)
+                emb = out[0][:, 0]
+                emb = torch.nn.functional.normalize(emb, p=2, dim=1)
+                vec = emb[0].cpu().tolist()
+
+            with self._cache_lock:
+                self._cache[text] = vec
+                self._cache.move_to_end(text)
+                while len(self._cache) > _CACHE_MAX:
+                    self._cache.popitem(last=False)
+            return vec
+        except Exception as e:
+            logger.warning(f"Local embedding inference failed (non-fatal): {e}", exc_info=True)
+            return None
+
+    async def embed(self, text: str) -> list[float] | None:
+        if not text or not text.strip():
+            return None
+        with self._cache_lock:
+            cached = self._cache.get(text)
+            if cached is not None:
+                self._cache.move_to_end(text)
+                return cached
+        return await asyncio.to_thread(self.embed_sync, text)
+
+
+def get_embedding_provider(provider: str | None = None) -> Embedder:
+    """Return an embedding provider based on configuration or explicit parameter."""
+    p = (provider or getattr(config.router, "embedding_provider", "local")).strip().lower()
+    if p == "local":
+        return LocalEmbeddingProvider()
+    return OllamaEmbedder()

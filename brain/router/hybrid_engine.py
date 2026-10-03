@@ -33,7 +33,7 @@ import asyncio
 import logging
 import time
 
-from brain.embeddings import OllamaEmbedder
+from brain.embeddings import OllamaEmbedder, get_embedding_provider
 from brain.intent_engine import IntentEngine
 from brain.router import guards, validate
 from brain.router.adapter import to_legacy_intent
@@ -58,8 +58,9 @@ class HybridIntentEngine:
         self._legacy = legacy_engine or IntentEngine()
 
         self._registry = CommandRegistry(load_specs())
-        self._store = CommandVectorStore(getattr(config.router, "command_vector_db_path", None))
-        self._embedder = OllamaEmbedder()
+        provider_type = getattr(config.router, "embedding_provider", "local")
+        self._store = CommandVectorStore(getattr(config.router, "command_vector_db_path", None), provider=provider_type)
+        self._embedder = get_embedding_provider(provider_type)
         self._semantic = SemanticRouter(self._embedder, self._store, self._registry)
         self._thresholds = ConfidenceThresholds(
             min_similarity=getattr(config.router, "min_similarity", 0.80),

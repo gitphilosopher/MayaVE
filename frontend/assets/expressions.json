@@ -24,6 +24,33 @@
     "Fcl_MTH_Joy": 0.5,
     "Fcl_MTH_Up": 0.15
   },
+  "excited|playful|high": {
+    "Fcl_BRW_Fun": 0.274,
+    "Fcl_BRW_Joy": 0.64,
+    "Fcl_EYE_Fun": 0.227,
+    "Fcl_EYE_Joy": 0.455,
+    "Fcl_EYE_Surprised": 0.318,
+    "Fcl_MTH_Fun": 0.277,
+    "Fcl_MTH_Joy": 0.785,
+    "Fcl_MTH_Large": 0.231
+  },
+  "excited|playful|medium": {
+    "Fcl_BRW_Fun": 0.194,
+    "Fcl_BRW_Joy": 0.453,
+    "Fcl_EYE_Fun": 0.158,
+    "Fcl_EYE_Joy": 0.316,
+    "Fcl_EYE_Surprised": 0.221,
+    "Fcl_MTH_Fun": 0.205,
+    "Fcl_MTH_Joy": 0.579,
+    "Fcl_MTH_Large": 0.17
+  },
+  "excited|sincere|high": {
+    "Fcl_BRW_Joy": 0.64,
+    "Fcl_EYE_Joy": 0.455,
+    "Fcl_EYE_Surprised": 0.318,
+    "Fcl_MTH_Joy": 0.785,
+    "Fcl_MTH_Large": 0.231
+  },
   "excited|sincere|medium": {
     "Fcl_BRW_Joy": 0.453,
     "Fcl_EYE_Joy": 0.316,
@@ -72,6 +99,11 @@
     "Fcl_MTH_Joy": 0.7,
     "Fcl_MTH_Up": 0.2
   },
+  "happy|sincere|low": {
+    "Fcl_BRW_Joy": 0.216,
+    "Fcl_EYE_Joy": 0.186,
+    "Fcl_MTH_Joy": 0.284
+  },
   "happy|sincere|medium": {
     "Fcl_BRW_Joy": 0.389,
     "Fcl_EYE_Joy": 0.347,
@@ -89,6 +121,10 @@
     "Fcl_EYE_Natural": 0.3,
     "Fcl_MTH_Neutral": 0.25
   },
+  "neutral|sincere|high": {
+    "Fcl_EYE_Natural": 0.227,
+    "Fcl_MTH_Neutral": 0.139
+  },
   "neutral|sincere|low": {
     "Fcl_EYE_Natural": 0.085,
     "Fcl_MTH_Neutral": 0.061
@@ -102,6 +138,13 @@
     "Fcl_EYE_Angry": 0.2,
     "Fcl_EYE_Natural": 0.25,
     "Fcl_MTH_Neutral": 0.25
+  },
+  "neutral|teasing|medium": {
+    "Fcl_BRW_Fun": 0.162,
+    "Fcl_EYE_Joy_L": 0.126,
+    "Fcl_EYE_Natural": 0.158,
+    "Fcl_MTH_Fun": 0.136,
+    "Fcl_MTH_Neutral": 0.102
   },
   "relaxed|default|medium": {
     "Fcl_EYE_Natural": 0.4,

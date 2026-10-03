@@ -223,15 +223,18 @@ async def _main(path: Path, use_semantic: bool, use_llm: bool, verbose: bool = F
     legacy, reg = IntentEngine(), CommandRegistry(load_specs())
     semantic = llm = None
     if use_semantic:
-        from brain.embeddings import OllamaEmbedder
+        from brain.embeddings import get_embedding_provider
         from brain.router.command_vector_store import CommandVectorStore
         from brain.router.semantic_router import SemanticRouter
         from config.settings import config
-        store = CommandVectorStore(getattr(config.router, "command_vector_db_path", None))
-        if store.is_stale(reg.specs):
+        provider_type = getattr(config.router, "embedding_provider", "local")
+        store = CommandVectorStore(getattr(config.router, "command_vector_db_path", None), provider=provider_type)
+        embedder = get_embedding_provider(provider_type)
+        model_id = getattr(embedder, "model_id", "")
+        if store.is_stale(reg.specs, model_id):
             print("WARNING: command corpus stale/unseeded — run `python -m brain.router.eval_router --seed`.",
                   file=sys.stderr)
-        semantic = SemanticRouter(OllamaEmbedder(), store, reg).retrieve
+        semantic = SemanticRouter(embedder, store, reg).retrieve
     if use_llm:
         from brain.router.llm_fallback import route as llm
     make = lambda: CommandUnderstander(legacy, reg, guard_fn=guards.check, semantic=semantic, llm_route=llm)

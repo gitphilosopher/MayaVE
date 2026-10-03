@@ -81,7 +81,7 @@ class Processor:
         if config.router.backend != "hybrid":
             return None
         try:
-            from brain.embeddings import OllamaEmbedder
+            from brain.embeddings import get_embedding_provider
             from brain.router import guards
             from brain.router.command_vector_store import CommandVectorStore
             from brain.router.confidence import ConfidenceThresholds
@@ -91,16 +91,24 @@ class Processor:
             from brain.router.understand import CommandUnderstander
 
             registry = CommandRegistry(load_specs())
-            store = CommandVectorStore(config.router.command_vector_db_path)
-            if store.is_stale(registry.specs):
-                logger.warning("Command vector corpus stale/unseeded — semantic tier inert until "
-                            "`python -m brain.router.eval_router --seed` is run.")
+            provider_type = getattr(config.router, "embedding_provider", "local")
+            store = CommandVectorStore(config.router.command_vector_db_path, provider=provider_type)
+            embedder = get_embedding_provider(provider_type)
+            model_id = getattr(embedder, "model_id", "")
+
+            if store.is_stale(registry.specs, model_id):
+                if provider_type == "local" and hasattr(embedder, "embed_sync"):
+                    logger.info("Command vector corpus stale or unseeded — auto-seeding local BGE index...")
+                    store.reseed(registry.specs, embedder.embed_sync, model_id)
+                else:
+                    logger.warning("Command vector corpus stale/unseeded — semantic tier inert until "
+                                "`python -m brain.router.eval_router --seed` is run.")
             thresholds = ConfidenceThresholds(
                 min_similarity=config.router.min_similarity,
                 min_margin=config.router.min_margin,
                 low_similarity_floor=config.router.low_similarity_floor,
             )
-            semantic = SemanticRouter(OllamaEmbedder(), store, registry).retrieve
+            semantic = SemanticRouter(embedder, store, registry).retrieve
             return CommandUnderstander(engine, registry, guard_fn=guards.check, semantic=semantic,
                                     semantic_thresholds=thresholds, llm_route=llm_route)
         except Exception:

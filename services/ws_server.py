@@ -98,6 +98,8 @@ class MayaWebSocketServer:
         finally:
             self._clients.discard(ws)
             logger.info(f"Avatar disconnected: {addr}  (clients={len(self._clients)})")
+            if not self._clients:
+                self._audio_done_event.set()
 
     async def _on_message(self, ws: WSConnection, message: str) -> None:
         """Handle browser events such as interrupts and audio completion notifications."""

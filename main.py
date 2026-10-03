@@ -53,7 +53,7 @@ from core.wake_word import contains_wake_word, is_sleep_command
 from core.behavior_engine import behavior_engine
 from core.mood import mood_manager
 from services.ws_server import ws_server
-from services.llm.llm_service import warmup as llm_warmup
+from services.llm.llm_service import warmup as llm_warmup, get_ollama_client, close_ollama_client
 from services.llm.ollama_lifecycle import chat_keep_alive
 from services.node.sync_manager import node_sync_manager
 from brain.embeddings import _resolve_embedding_device, _embedding_gpu_options, describe_ollama_models
@@ -147,8 +147,8 @@ async def _warmup_ollama() -> None:
     }
     try:
         logger.info(f"Pre-warming Ollama model '{config.llm.model}' (keep_alive={payload['keep_alive']})…")
-        async with httpx.AsyncClient(timeout=60) as client:
-            await client.post(url, json=payload)
+        client = get_ollama_client()
+        await client.post(url, json=payload)
         logger.info("✅ Ollama model is warm and ready.")
     except Exception as e:
         logger.warning(f"Ollama warm-up skipped ({type(e).__name__}): {e}")
@@ -255,16 +255,11 @@ async def main() -> None:
     warmup_task = asyncio.create_task(_warmup_ollama())
     embed_warmup_task = asyncio.create_task(_warmup_embeddings())
 
-    # Pre-warm Kokoro TTS — loads model, voices, and JIT kernels into memory.
-    # run_in_executor returns a Future directly — no create_task needed.
+    # Pre-warm Kokoro TTS — loads model, voices, and executes minimal CUDA forward pass.
+    # Opt 3 unified the pipeline; Opt 14 eagerly absorbs the one-time CUDA kernel
+    # compilation and workspace allocation so the first user turn has no ~2.5s delay.
     loop = asyncio.get_running_loop()
-    kokoro_warmup_task = loop.run_in_executor(None, llm_warmup)
-
-    # Speaker owns its own separate Kokoro pipeline instance (used for
-    # greetings/skills/alerts, distinct from llm_service.py's module-level
-    # one warmed above) — warm it too so the startup greeting isn't the
-    # first real inference call.
-    speaker_warmup_task = loop.run_in_executor(None, speaker.warmup)
+    kokoro_warmup_task = loop.run_in_executor(None, speaker.warmup)
 
     # ── Wake callback ──────────────────────────────────────────────────
     async def on_wake() -> None:
@@ -367,8 +362,8 @@ async def main() -> None:
 
     queue_manager.set_handler(processor.handle)
 
-    # Wait for both warm-ups to finish before going live
-    await asyncio.gather(warmup_task, kokoro_warmup_task, embed_warmup_task, speaker_warmup_task)
+    # Wait for warm-ups to finish before going live
+    await asyncio.gather(warmup_task, kokoro_warmup_task, embed_warmup_task)
     print("🧠  Ollama ready.")
     print("🎙️  Kokoro TTS ready.\n")
 
@@ -398,9 +393,12 @@ async def main() -> None:
     # ── Launch concurrent tasks ────────────────────────────────────────
     listener = Listener(on_speech=on_speech, on_wake=on_wake)
 
-    async with asyncio.TaskGroup() as tg:
-        tg.create_task(listener.start(),    name="listener")
-        tg.create_task(queue_manager.run(), name="queue-worker")
+    try:
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(listener.start(),    name="listener")
+            tg.create_task(queue_manager.run(), name="queue-worker")
+    finally:
+        await close_ollama_client()
 
 
 if __name__ == "__main__":
