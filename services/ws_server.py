@@ -123,13 +123,28 @@ class MayaWebSocketServer:
 
     # ── Broadcast helpers ─────────────────────────────────────────────
 
-    async def broadcast_audio(self, wav_bytes: bytes) -> None:
+    async def broadcast_audio(self, wav_bytes: bytes, trace_id: Optional[str] = None) -> None:
         """Send one WAV payload to the browser; tracks generation order for stop handling."""
         self._audio_sent_gen = self._stop_gen   # snapshot before any await
         if not self._clients:
             return
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "ws_send_start", {"bytes": len(wav_bytes)})
+        except Exception:
+            pass
         b64 = base64.b64encode(wav_bytes).decode("utf-8")
-        await self._broadcast(json.dumps({"type": "audio", "data": b64}))
+        msg = {"type": "audio", "data": b64}
+        if trace_id:
+            msg["trace_id"] = trace_id
+        await self._broadcast(json.dumps(msg))
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "ws_send_end", {"bytes": len(wav_bytes)})
+        except Exception:
+            pass
 
     async def broadcast_stop_audio(self) -> None:
         """Tell the browser to stop current playback and release any pending audio wait."""

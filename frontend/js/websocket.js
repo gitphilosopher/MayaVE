@@ -25,6 +25,7 @@ import {
     playShrugAnimation, playWinkAnimation,
 } from "./avatar.js";
 import { applyBehavior } from "./expression-composer.js";
+import { recordTrace, setCurrentTraceId, getTraceData } from "./tracer.js";
 
 const WS_URL       = "ws://localhost:8765";
 const RECONNECT_MS = 2000;
@@ -55,9 +56,16 @@ function connect() {
         let data;
         try { data = JSON.parse(event.data); } catch { return; }
 
+        const traceId = data.trace_id || null;
+        if (traceId) setCurrentTraceId(traceId);
+
         switch (data.type) {
             case "audio":
-                speakFromBytes(base64ToArrayBuffer(data.data));
+                if (traceId) recordTrace(traceId, "ws_receive", { payload_chars: data.data ? data.data.length : 0 });
+                if (traceId) recordTrace(traceId, "message_dispatch_start");
+                const audioBuf = base64ToArrayBuffer(data.data);
+                if (traceId) recordTrace(traceId, "message_dispatch_end", { byte_length: audioBuf.byteLength });
+                speakFromBytes(audioBuf, traceId);
                 break;
             case "state":
                 handleState(data.value);
@@ -92,6 +100,13 @@ function connect() {
                         metrics: window.getPerfMetrics(data.reset !== false)
                     }));
                 }
+                break;
+            case "query_trace":
+                ws.send(JSON.stringify({
+                    type: "trace_response",
+                    id: data.id,
+                    data: getTraceData(data.reset !== false)
+                }));
                 break;
         }
     };

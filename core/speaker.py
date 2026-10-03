@@ -215,8 +215,15 @@ class Speaker:
             return None
         return None if result is _NO_AUDIO else result
 
-    def _synthesise(self, text: str) -> np.ndarray | None:
+    def _synthesise(self, text: str, trace_id: str | None = None) -> np.ndarray | None:
         """Blocking Kokoro synthesis — called in executor."""
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "tts_synthesis_start", {"text_len": len(text)})
+        except Exception:
+            pass
+
         with _kokoro_lock:
             pipeline, voice = get_shared_kokoro()
             self._pipeline, self._voice = pipeline, voice
@@ -225,10 +232,25 @@ class Speaker:
                 pipeline(text, voice=voice, speed=self._speed)
                 if audio is not None and len(audio) > 0
             ]
+
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "tts_synthesis_end", {"chunks": len(chunks)})
+        except Exception:
+            pass
+
         if not chunks:
             logger.warning("Kokoro returned no audio chunks.")
             return None
-        return np.concatenate(chunks).astype(np.float32)
+        res = np.concatenate(chunks).astype(np.float32)
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "tts_audio_ready", {"samples": len(res), "sr": _SAMPLE_RATE})
+        except Exception:
+            pass
+        return res
 
     @staticmethod
     def _play_blocking(audio: np.ndarray) -> None:

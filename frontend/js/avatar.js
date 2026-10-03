@@ -30,6 +30,7 @@ import { animationController, PRIORITY } from "./animation-controller.js";
 import { gazeController, ATTENTION_STATE } from "./gaze-controller.js";
 import { lifeMotionController } from "./life-motion-controller.js";
 import { expressionController, EXPRESSION_LAYER } from "./expression-controller.js";
+import { recordTrace } from "./tracer.js";
 
 export let vrm;
 export let isSpeaking = false;
@@ -69,10 +70,74 @@ function _onSpeakingEnd() {
 }
 
 let _audioCtx = null;
-/** Return the page-wide audio context, recreating it if it was closed. */
+let _audioCtxCreations = 0;
+
+export function getAudioContextCreations() {
+    return _audioCtxCreations;
+}
+
+/** Eagerly initialize the AudioContext during application bootstrap. */
+export function warmUpAudioContext(isBootstrap = true) {
+    if (_audioCtx && _audioCtx.state !== "closed") {
+        return _audioCtx;
+    }
+    const traceId = isBootstrap ? "bootstrap-audio" : "fallback-audio";
+    recordTrace(traceId, "audio_context_init_start", {
+        is_bootstrap: isBootstrap,
+        prior_creations: _audioCtxCreations
+    });
+
+    try {
+        const urlParams = typeof window !== "undefined" && window.location ? new URLSearchParams(window.location.search) : null;
+        const latencyHint = (urlParams && urlParams.get("latencyHint")) || "playback";
+        _audioCtx = new AudioContext({ latencyHint });
+        _audioCtxCreations++;
+        recordTrace(traceId, "audio_context_init_end", {
+            state: _audioCtx.state,
+            sample_rate: _audioCtx.sampleRate,
+            latency_hint: latencyHint,
+            base_latency: typeof _audioCtx.baseLatency === "number" ? Number((_audioCtx.baseLatency * 1000).toFixed(2)) : null,
+            creations: _audioCtxCreations
+        });
+
+        if (_audioCtx.state === "suspended") {
+            recordTrace(traceId, "audio_context_resume_start", { state: _audioCtx.state });
+            _audioCtx.resume().then(() => {
+                recordTrace(traceId, "audio_context_resume_end", { state: _audioCtx.state });
+                recordTrace(traceId, "audio_context_ready", { state: _audioCtx.state });
+            }).catch(err => {
+                console.warn("[Maya] AudioContext resume error:", err);
+            });
+        } else {
+            recordTrace(traceId, "audio_context_ready", { state: _audioCtx.state });
+        }
+    } catch (err) {
+        console.error("[Maya] AudioContext initialization failed:", err);
+        recordTrace(traceId, "audio_context_init_error", { error: String(err) });
+    }
+
+    return _audioCtx;
+}
+
+export function getAudioContextState() {
+    if (!_audioCtx) return { state: "none" };
+    return {
+        state: _audioCtx.state,
+        currentTime: Number(_audioCtx.currentTime.toFixed(3)),
+        baseLatency: typeof _audioCtx.baseLatency === "number" ? Number((_audioCtx.baseLatency * 1000).toFixed(2)) : null,
+        outputLatency: typeof _audioCtx.outputLatency === "number" ? Number((_audioCtx.outputLatency * 1000).toFixed(2)) : null
+    };
+}
+
+window.getAudioContextCreations = getAudioContextCreations;
+window.warmUpAudioContext = warmUpAudioContext;
+window.getAudioContextState = getAudioContextState;
+
+/** Return the page-wide audio context, using the pre-warmed instance or creating fallback. */
 function getAudioContext() {
     if (!_audioCtx || _audioCtx.state === "closed") {
-        _audioCtx = new AudioContext();
+        console.warn("[Maya] AudioContext fallback creation triggered.");
+        return warmUpAudioContext(false);
     }
     return _audioCtx;
 }
@@ -106,6 +171,7 @@ export function applyBehavioralGaze(mode) {
 
 let _awake          = false;
 let _blinkingActive = false;  // true while the blink loop is scheduled
+let _blinkTimeout     = null; // pending setTimeout for next blink
 let _blinkOpenTimeout = null; // pending 120 ms "eyes open" callback
 let _eyeLoopStarted = false;  // eye-movement loop is started once per page, not per wake
 
@@ -215,16 +281,18 @@ function _stopLipSync() {
  * Decode and play backend audio, reporting completion through the registered
  * callback.
  */
-export async function speakFromBytes(arrayBuffer) {
+export async function speakFromBytes(arrayBuffer, traceId = null) {
     if (!vrm) {
         if (typeof _onAudioDone === "function") _onAudioDone();   // don't leave the backend waiting 30 s
         return;
     }
 
+    if (traceId) recordTrace(traceId, "audio_event_received", { bytes: arrayBuffer.byteLength });
     const ctx = getAudioContext();
     const gen = _audioGen;
 
     let decoded;
+    if (traceId) recordTrace(traceId, "audio_decode_start");
     try {
         decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
     } catch (e) {
@@ -232,7 +300,13 @@ export async function speakFromBytes(arrayBuffer) {
         if (gen === _audioGen && typeof _onAudioDone === "function") _onAudioDone();
         return;
     }
+    if (traceId) recordTrace(traceId, "audio_decode_end");
     if (gen !== _audioGen) return;   // stop_audio arrived during decode
+
+    if (traceId) recordTrace(traceId, "audio_buffer_created", {
+        duration_s: Number(decoded.duration.toFixed(3)),
+        sample_rate: decoded.sampleRate
+    });
 
     const source   = ctx.createBufferSource();
     const analyser = ctx.createAnalyser();
@@ -246,11 +320,19 @@ export async function speakFromBytes(arrayBuffer) {
     _onSpeakingStart();
     _currentSource  = source;
     source.onended = () => {
+        if (traceId) recordTrace(traceId, "audio_playback_end", {
+            audio_current_time: Number(ctx.currentTime.toFixed(3))
+        });
         if (_currentSource === source) _currentSource = null;
         _stopLipSync();
         if (typeof _onAudioDone === "function") _onAudioDone();
     };
 
+    if (traceId) recordTrace(traceId, "audio_playback_start", {
+        audio_current_time: Number(ctx.currentTime.toFixed(3)),
+        base_latency_ms: typeof ctx.baseLatency === "number" ? Number((ctx.baseLatency * 1000).toFixed(2)) : null,
+        output_latency_ms: typeof ctx.outputLatency === "number" ? Number((ctx.outputLatency * 1000).toFixed(2)) : null
+    });
     source.start(0);
     _startLipSync(analyser);
 }
@@ -875,6 +957,16 @@ export function stopIdleFidgets() {
     _idleFidgetTimeout = null;
 }
 
+// Matches main.js SLEEP_FPS. Persistent per-frame loops below drop to this cadence while dormant.
+const _DORMANT_LOOP_INTERVAL_MS = 100;
+const _MAX_LOOP_DT = 0.25;   // seconds; clamps stalls/background throttling
+
+/** True when nothing visible is happening: asleep, silent, no action/fidget running or loading. */
+export function isAvatarDormant() {
+    return !_awake && !isSpeaking && _activeNames.size === 0
+        && !_winkActive && !_headTiltActive && !_shoulderRollActive;
+}
+
 // ── Screen-attention input and queries ─────────────────────────────────────
 // Callers provide attention data; this module performs no screen capture or
 // image analysis. Gaze and fidget behavior consume the shared controller state.
@@ -953,11 +1045,17 @@ function startBlinking() {
 // shoulder life motion so those behaviors share this frame loop.
 function startHeadMovement() {
     let t = 0;
+    let lastNow = performance.now();
     let boneVrm = null, neck = null, spine = null;
     function update() {
         requestAnimationFrame(update);
+        const now = performance.now();
+        // Dormant: nothing renders faster than the sleep rate, so don't write bones faster.
+        if (isAvatarDormant() && now - lastNow < _DORMANT_LOOP_INTERVAL_MS - 1) return;
+        const dt = Math.min((now - lastNow) / 1000, _MAX_LOOP_DT);
+        lastNow = now;
         if (!vrm) return;
-        t += 0.01;
+        t += 0.6 * dt;   // 0.01 per frame at 60 FPS
         if (boneVrm !== vrm) {
             boneVrm = vrm;
             neck  = vrm.humanoid.getNormalizedBoneNode("neck");
@@ -1004,8 +1102,13 @@ function startEyeMovement() {
         }
     }, 2000);
 
+    let lastNow = performance.now();
     function update() {
         requestAnimationFrame(update);
+        const now = performance.now();
+        const dt = Math.min((now - lastNow) / 1000, _MAX_LOOP_DT);
+        lastNow = now;
+        if (!_awake) return;   // lids are closed while asleep; nothing to track
 
         let targetX = idleTargetX;
         let targetY = idleTargetY;
@@ -1020,11 +1123,11 @@ function startEyeMovement() {
             targetX = _behGazeX;
             targetY = _behGazeY;
         }
-
-        leftEye.rotation.y  += (targetX - leftEye.rotation.y)  * 0.05;
-        rightEye.rotation.y += (targetX - rightEye.rotation.y) * 0.05;
-        leftEye.rotation.x  += (targetY - leftEye.rotation.x)  * 0.05;
-        rightEye.rotation.x += (targetY - rightEye.rotation.x) * 0.05;
+        const k = 1 - Math.pow(1 - 0.05, dt * 60);   // exactly 0.05 at 60 FPS
+        leftEye.rotation.y  += (targetX - leftEye.rotation.y)  * k;
+        rightEye.rotation.y += (targetX - rightEye.rotation.y) * k;
+        leftEye.rotation.x  += (targetY - leftEye.rotation.x)  * k;
+        rightEye.rotation.x += (targetY - rightEye.rotation.x) * k;
     }
     update();
 }

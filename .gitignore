@@ -15,10 +15,13 @@ _tmp*.py
 # review_candidates.py
 # datasets/training/candidates_rejected.jsonl
 # datasets/training/audit_report.json
+tracer.*
 
 # Runtime logs
 # logs/
 *.log
+opt*/
+scratch/
 
 # Local/model files
 frontend/assets/mmodel.vroid

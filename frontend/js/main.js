@@ -11,8 +11,9 @@
  */
 
 import * as THREE from "three";
-import { loadAvatar, vrm, updateVrmaAnimations, updateGaze } from "./avatar.js";
+import { loadAvatar, vrm, updateVrmaAnimations, updateGaze, warmUpAudioContext, isSpeaking } from "./avatar.js";
 import "./websocket.js";
+import { recordFrameGap, recordTrace, recordRafHeartbeat } from "./tracer.js";
 
 export const scene = new THREE.Scene();
 // Transparent background for the overlay window.
@@ -55,6 +56,7 @@ const fill = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(fill);
 
 loadAvatar(scene);
+warmUpAudioContext(true);
 
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -132,19 +134,36 @@ function animate(timestamp) {
     }
 
     const dt = now - _perfLastTime;
+    const prevTime = _perfLastTime;
     _perfLastTime = now;
+    recordRafHeartbeat(now, dt);
     if (dt > 0 && dt < 1000) {
         _perfBuf[_perfHead] = dt;
         _perfHead = (_perfHead + 1) % _PERF_CAP;
         if (_perfCount < _PERF_CAP) _perfCount++;
     }
 
+    const tRender0 = performance.now();
     renderer.render(scene, camera);
+    const tRender1 = performance.now();
+
     const rawDelta = clock.getDelta();
     const delta = Math.min(rawDelta, 0.1);
+
+    const tVrm0 = performance.now();
     if (vrm) vrm.update(delta);
     updateVrmaAnimations(delta);
     updateGaze(delta);
+    const tVrm1 = performance.now();
+
+    if (dt >= 33.3) {
+        recordFrameGap(prevTime, now, dt, {
+            is_speaking: !!isSpeaking,
+            vrm_loaded: !!vrm,
+            render_ms: Number((tRender1 - tRender0).toFixed(3)),
+            vrm_ms: Number((tVrm1 - tVrm0).toFixed(3))
+        });
+    }
 }
 
 animate();

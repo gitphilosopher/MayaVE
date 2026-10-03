@@ -1386,7 +1386,7 @@ def warmup() -> None:
         logger.warning(f"Kokoro warmup failed (non-fatal): {e}")
 
 
-def _synthesise_blocking(sentence: str, expression: str = "neutral") -> tuple | None:
+def _synthesise_blocking(sentence: str, expression: str = "neutral", trace_id: str | None = None) -> tuple | None:
     """
     Synthesise `sentence` with Kokoro.
 
@@ -1398,6 +1398,13 @@ def _synthesise_blocking(sentence: str, expression: str = "neutral") -> tuple | 
     emotional pacing since it has no native emotion mode.
     """
     try:
+        from services.tracer import log_event
+        if trace_id:
+            log_event(trace_id, "tts_synthesis_start", {"text_len": len(sentence), "expression": expression})
+    except Exception:
+        pass
+
+    try:
         pipeline, voice = _get_kokoro()
         base_speed  = getattr(config.tts, "speed", 1.0)
         expr_factor = EXPRESSION_SPEED.get(expression, 1.0)
@@ -1406,10 +1413,27 @@ def _synthesise_blocking(sentence: str, expression: str = "neutral") -> tuple | 
         with _kokoro_lock:
             chunks = [audio for _, _, audio in pipeline(sentence, voice=voice, speed=speed)
                       if audio is not None and len(audio) > 0]
+
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "tts_synthesis_end", {"chunks": len(chunks)})
+        except Exception:
+            pass
+
         if not chunks:
             logger.warning(f"Kokoro: no audio for '{sentence}'")
             return None
-        return (np.concatenate(chunks).astype(np.float32), 24_000)
+        pcm = np.concatenate(chunks).astype(np.float32)
+
+        try:
+            from services.tracer import log_event
+            if trace_id:
+                log_event(trace_id, "tts_audio_ready", {"samples": len(pcm), "sr": 24_000})
+        except Exception:
+            pass
+
+        return (pcm, 24_000)
     except Exception as e:
         logger.error(f"Kokoro synth error: {e}", exc_info=True)
         return None
