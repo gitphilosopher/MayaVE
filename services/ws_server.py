@@ -159,6 +159,8 @@ class MayaWebSocketServer:
 
     async def broadcast_state(self, state_value: str) -> None:
         """Persist and emit a new avatar state value to connected clients."""
+        if state_value == self._last_state:
+            return
         self._last_state = state_value
         if not self._clients:
             return

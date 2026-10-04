@@ -14,13 +14,13 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 
 ### 🧠 Intelligence
 
-* Local LLM inference through **Ollama** (`llama3.2`)
+* Local LLM inference through **Ollama** (`llama3.2`, optimized 2048 context with 100% GPU residency)
 * Hybrid semantic command router (default runtime path): deterministic guards, classifier margin gating, semantic retrieval, and validated LLM fallback
 * ML-based intent classification using **PyTorch + TensorFlow**
 * Context-aware conversation handling
 * Topic and conversational-state tracking
 * Short-term conversation memory
-* Long-term semantic memory using **SQLite + Ollama embeddings**
+* Long-term semantic memory using **SQLite + local BGE embeddings**
 
 ### 🎙️ Voice
 

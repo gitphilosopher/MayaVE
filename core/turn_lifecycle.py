@@ -35,9 +35,13 @@ async def rest(force_idle: bool = False) -> None:
         await ws_server.broadcast_state("sleeping")
         return
 
-    if force_idle:
-        await state.set(MayaState.IDLE)
+    # If already idle and not forced, the turn has already rested (e.g. via Speaker.speak).
+    if state.is_idle() and not force_idle:
+        return
+
+    await state.set(MayaState.IDLE)
     await ws_server.broadcast_state("idle")
     await ws_server.broadcast_behavior(
         behavior_engine.compose(mood_manager.baseline_expression(), source="idle")
     )
+

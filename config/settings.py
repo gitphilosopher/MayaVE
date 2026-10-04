@@ -52,15 +52,18 @@ class TTSConfig:
     speed: float = 1
     output: str = "avatar"
     device: str = "auto"
+    repo_id: str = "hexgrad/Kokoro-82M"
 
 
 @dataclass
 class LLMConfig:
     """Settings for the local LLM backend used by conversation and routing logic."""
     model: str = "llama3.2"
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://127.0.0.1:11434"
     max_tokens: int = 150
     temperature: float = 0.7
+    num_gpu: int | None = None
+    num_ctx: int = 2048
 
 
 @dataclass

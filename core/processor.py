@@ -47,7 +47,7 @@ from brain.conversation import ConversationManager, context_manager
 from brain.router.dispatch import Router
 from brain.router.ir import to_legacy_intent
 from config.settings import config
-from services.llm.llm_service import ALREADY_SPOKEN
+from services.llm.llm_service import ALREADY_SPOKEN, next_diag_turn_id
 from services.ws_server import ws_server
 from services.node.events import record_event
 
@@ -128,7 +128,9 @@ class Processor:
             logger.info(f"Dropping queued command — already asleep: '{text[:40]}'")
             return
 
+        turn_id = next_diag_turn_id()
         t0 = time.perf_counter()
+        logger.info(f"[DIAG][TURN={turn_id}] user command start t={t0:.3f} text='{text[:40]}'")
         logger.info(f"[TIMING][TTFA] user command start t={t0:.3f} text='{text[:40]}'")
 
         await state.set(MayaState.PROCESSING)
@@ -137,11 +139,15 @@ class Processor:
 
         logger.info(f"Processing: '{text}'")
         self._conversation.add_user(text)
+        t_pre = time.perf_counter()
 
         try:
+            t_classify_start = time.perf_counter()
             intent = await self._classify(text)
             intent["_t_cmd_start"] = t0
-            logger.info(f"[TIMING] intent_classify: {time.perf_counter()-t0:.3f}s")
+            intent["_turn_id"] = turn_id
+            t_classify = time.perf_counter() - t_classify_start
+            logger.info(f"[TIMING] intent_classify: {t_classify:.3f}s")
             logger.info(
                 f"Intent: {intent['intent']} "
                 f"({intent['confidence']:.2f} via {intent['model']})"
@@ -157,12 +163,16 @@ class Processor:
             whole = {text.strip().lower(), str(intent.get("raw") or "").strip().lower()}
             if str(intent.get("target") or "").strip().lower() in whole:
                 ctx_intent = {**intent, "target": ""}
+            t_ctx_start = time.perf_counter()
             context_manager.observe_user_turn(text, ctx_intent)
+            t_ctx = time.perf_counter() - t_ctx_start
 
-            t_dispatch = time.perf_counter()
+            t_dispatch_start = time.perf_counter()
             response = await self._router.dispatch(intent, text)
-            logger.info(f"[TIMING] router.dispatch total: {time.perf_counter()-t_dispatch:.3f}s")
+            t_dispatch = time.perf_counter() - t_dispatch_start
+            logger.info(f"[TIMING] router.dispatch total: {t_dispatch:.3f}s")
 
+            t_speak_start = time.perf_counter()
             if response and response != ALREADY_SPOKEN:
                 # Strip expression tags for transcript/history while preserving the
                 # raw response for speech and behavior output.
@@ -189,18 +199,29 @@ class Processor:
                     ))
                 else:
                     await state.run_interruptible(self._speaker.speak(response))
+            t_speak = time.perf_counter() - t_speak_start
 
             # Re-check the live state so a concurrent sleep command wins over a
             # normal idle return.
+            t_rest_start = time.perf_counter()
             await turn_rest()
+            t_rest = time.perf_counter() - t_rest_start
 
             # Best-effort MayaNode sync hand-off — queues into the local outbox
             # and returns immediately regardless of whether MayaNode integration
             # is enabled or reachable (see services/node/events.py). Only the
             # resolved intent id is sent; never raw text, target, or confidence.
+            t_outbox_start = time.perf_counter()
             record_event("mayave.turn_completed", {"intent": intent.get("intent", "unknown")})
+            t_outbox = time.perf_counter() - t_outbox_start
 
-            logger.info(f"[TIMING] handle() total: {time.perf_counter()-t0:.3f}s")
+            t_total = time.perf_counter() - t0
+            t_pipeline = t_total - t_speak
+            logger.info(
+                f"[TIMING] handle() turn complete: {t_total:.3f}s "
+                f"(speech_and_playback={t_speak:.3f}s, pipeline={t_pipeline:.3f}s)"
+            )
+            logger.info(f"[TIMING] handle() total: {t_total:.3f}s")
 
         except Exception as e:
             logger.error(f"Processor error: {e}", exc_info=True)

@@ -186,7 +186,14 @@ async def route(utterance: str, domains: list[str], operations_by_domain: dict[s
         "stream": False,
         "format": "json",
         "keep_alive": chat_keep_alive(),
-        "options": {"temperature": 0.0, "num_predict": 200},
+        "options": {
+            k: v for k, v in {
+                "temperature": 0.0,
+                "num_predict": 200,
+                "num_gpu": getattr(config.llm, "num_gpu", None),
+                "num_ctx": getattr(config.llm, "num_ctx", None),
+            }.items() if v is not None
+        },
     }
     t0 = time.perf_counter()
     try:

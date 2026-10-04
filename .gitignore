@@ -11,11 +11,12 @@ tests/
 temp.py
 edge-automation-profile
 _tmp*.py
-# test_*.py
+test_*.py
 # review_candidates.py
 # datasets/training/candidates_rejected.jsonl
 # datasets/training/audit_report.json
 tracer.*
+logs/stage_a_benchmark_results.json
 
 # Runtime logs
 # logs/

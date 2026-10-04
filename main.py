@@ -148,7 +148,13 @@ async def _warmup_ollama() -> None:
         "messages": [{"role": "user", "content": "hi"}],
         "stream":   False,
         "keep_alive": chat_keep_alive(),
-        "options":  {"num_predict": 1},   # generate just 1 token — fast
+        "options":  {
+            k: v for k, v in {
+                "num_predict": 1,
+                "num_gpu": getattr(config.llm, "num_gpu", None),
+                "num_ctx": getattr(config.llm, "num_ctx", None),
+            }.items() if v is not None
+        },
     }
     try:
         logger.info(f"Pre-warming Ollama model '{config.llm.model}' (keep_alive={payload['keep_alive']})…")

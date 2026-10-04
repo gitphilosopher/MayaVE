@@ -30,6 +30,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 import asyncio
 import concurrent.futures
+from enum import Enum
 import inspect
 import json
 import logging
@@ -37,6 +38,7 @@ import random
 import re
 import threading
 import time
+from typing import Callable
 
 import httpx
 import numpy as np
@@ -59,6 +61,40 @@ _conv    = ConversationManager()
 # Persistent HTTP client for streaming LLM requests
 _ollama_client: httpx.AsyncClient | None = None
 _ollama_client_loop: asyncio.AbstractEventLoop | None = None
+
+# Monotonic turn ID tracking for diagnostic correlation (Phase F.1.1)
+_current_diag_turn_id: int = 0
+
+def next_diag_turn_id() -> int:
+    """Increment and return the next monotonic diagnostic turn ID."""
+    global _current_diag_turn_id
+    _current_diag_turn_id += 1
+    return _current_diag_turn_id
+
+def get_diag_turn_id() -> int:
+    """Return the current diagnostic turn ID."""
+    return _current_diag_turn_id
+
+def set_diag_turn_id(turn_id: int) -> None:
+    """Explicitly set the current diagnostic turn ID."""
+    global _current_diag_turn_id
+    _current_diag_turn_id = turn_id
+
+# Diagnostic fault-injection hooks
+_cuda_stall_injection_phrase: int | None = None
+_cuda_stall_injection_duration: float = 0.0
+
+def inject_cuda_worker_stall(phrase_id: int = 1, duration: float = 16.0) -> None:
+    """Diagnostic hook: inject a sleep into the native worker for a specific phrase."""
+    global _cuda_stall_injection_phrase, _cuda_stall_injection_duration
+    _cuda_stall_injection_phrase = phrase_id
+    _cuda_stall_injection_duration = duration
+
+def clear_cuda_worker_stall() -> None:
+    """Clear injected worker stall."""
+    global _cuda_stall_injection_phrase, _cuda_stall_injection_duration
+    _cuda_stall_injection_phrase = None
+    _cuda_stall_injection_duration = 0.0
 
 
 def get_ollama_client() -> httpx.AsyncClient:
@@ -756,6 +792,14 @@ async def query(intent: dict, text: str) -> str:
     if not question:
         return f"I didn't catch that, {config.user_name}. Could you repeat?"
 
+    turn_id = intent.get("_turn_id")
+    if turn_id is not None:
+        set_diag_turn_id(turn_id)
+    else:
+        turn_id = get_diag_turn_id()
+    if not turn_id:
+        turn_id = next_diag_turn_id()
+
     # TTFA chain start. processor.py sets intent["_t_cmd_start"] at the
     # moment it began handling this command; fall back to "now" for any
     # other caller so this never breaks if the key is absent.
@@ -765,7 +809,7 @@ async def query(intent: dict, text: str) -> str:
     # active mood (e.g. Maya still angry from earlier in the conversation).
     mood_manager.observe_user_text(question)
 
-    logger.info(f"Querying Ollama ({config.llm.model}): '{question}'")
+    logger.info(f"[DIAG][TURN={turn_id}] Querying Ollama ({config.llm.model}): '{question}'")
 
     async def _do_stream() -> None:
         if _should_play_filler(intent, question):
@@ -797,9 +841,9 @@ async def query(intent: dict, text: str) -> str:
         finally:
             _filler_done.set()   # a cancelled filler never reopens the gate
 
-        # Finished reply -> full clean text; interrupted -> only what was played.
-        if _reply_finished[0]:
-            full_response = _last_response[0] if _last_response else ""
+        # Finished reply -> full clean text; interrupted or partial -> only what was played.
+        if _reply_finished[0] and _last_response:
+            full_response = _last_response[0]
         else:
             full_response = " ".join(_spoken_phrases)
         _last_response.clear()
@@ -863,6 +907,7 @@ _reply_finished = [False]         # set when _play_worker drains to _DONE
 
 async def _stream_and_speak(question: str, t_cmd_start: float) -> None:
     """Assemble the prompt and run the streaming Ollama → synth → play pipeline for one turn."""
+    turn_id = get_diag_turn_id()
     t0 = time.perf_counter()
     context_package = await context_manager.build_context_package(question)
     logger.info(f"[TIMING] build_context_package: {time.perf_counter()-t0:.3f}s")
@@ -881,11 +926,18 @@ async def _stream_and_speak(question: str, t_cmd_start: float) -> None:
 
     t2 = time.perf_counter()
     logger.info(f"[TIMING][TTFA] Ollama request start: +{t2-t_cmd_start:.3f}s since command start")
+    _log_cuda_memory("BEFORE_OLLAMA_REQUEST", turn_id=turn_id)
     streamer = asyncio.create_task(_ollama_streamer(messages, synth_q, _last_response, t_cmd_start))
-    synther  = asyncio.create_task(_synth_worker(synth_q, play_q, t_cmd_start))
+
+    def _cancel_streamer():
+        logger.warning(f"[DIAG][TURN={turn_id}] OLLAMA_STREAM_CANCEL_REQUESTED")
+        if not streamer.done():
+            streamer.cancel()
+
+    synther  = asyncio.create_task(_synth_worker(synth_q, play_q, t_cmd_start, cancel_streamer=_cancel_streamer))
     player   = asyncio.create_task(_play_worker(play_q, t_cmd_start))
 
-    await asyncio.gather(streamer, synther, player)
+    await asyncio.gather(streamer, synther, player, return_exceptions=True)
     logger.info(f"[TIMING] full pipeline (streamer+synth+play): {time.perf_counter()-t2:.3f}s")
 
 
@@ -998,8 +1050,12 @@ async def _ollama_streamer(
         # model's expiry to Ollama's 5-minute default (see ollama_lifecycle).
         "keep_alive": chat_keep_alive(),
         "options": {
-            "temperature": config.llm.temperature,
-            "num_predict": config.llm.max_tokens,
+            k: v for k, v in {
+                "temperature": config.llm.temperature,
+                "num_predict": config.llm.max_tokens,
+                "num_gpu": getattr(config.llm, "num_gpu", None),
+                "num_ctx": getattr(config.llm, "num_ctx", None),
+            }.items() if v is not None
         },
     }
 
@@ -1096,17 +1152,17 @@ async def _ollama_streamer(
 
         return clean, resolved, combined_actions, is_final, resolved_attitude, resolved_intensity, continuation
 
-    # Diagnostic only (see llm_service.py investigation, no behavior change):
-    # counts phrases in put order so producer/consumer logs can be matched.
+    # Monotonic phrase sequence counter for the current streaming turn
     _phrase_seq = [0]
 
     async def _put_phrase(result) -> None:
         _phrase_seq[0] += 1
         n = _phrase_seq[0]
         ts = time.perf_counter()
-        await synth_q.put(result)
+        # Pack result with phrase_id and creation timestamp
+        await synth_q.put((*result, n, ts))
         logger.info(
-            f"[TIMING] synth_q.put #{n} is_final={result[3]} qsize={synth_q.qsize()} "
+            f"[TIMING][TTS][phrase={n}] QUEUED is_final={result[3]} qsize={synth_q.qsize()} "
             f"t={ts:.3f} '{result[0]}'"
         )
         if n == 1:
@@ -1129,40 +1185,71 @@ async def _ollama_streamer(
 
     t0 = time.perf_counter()
     first_token_logged = False
+    turn_id = get_diag_turn_id()
+    d_tag = f"[DIAG][TURN={turn_id}] "
+    logger.info(f"{d_tag}OLLAMA_REQUEST_START model={config.llm.model} url={url} t={t0:.3f}")
+    _log_cuda_memory("OLLAMA_REQUEST_START", turn_id=turn_id)
 
     client = get_ollama_client()
-    async with client.stream("POST", url, json=payload) as resp:
-        resp.raise_for_status()
-        logger.info(f"[TIMING]   /api/chat headers received: {time.perf_counter()-t0:.3f}s")
+    resp = None
+    stream_cancelled = False
+    _ollama_generating.set()
+    try:
+        async with client.stream("POST", url, json=payload) as response:
+            resp = response
+            resp.raise_for_status()
+            t_hdr = time.perf_counter()
+            logger.info(f"{d_tag}OLLAMA_HEADERS_RECEIVED status={resp.status_code} in {t_hdr-t0:.3f}s")
+            logger.info(f"[TIMING]   /api/chat headers received: {t_hdr-t0:.3f}s")
+            _log_cuda_memory("OLLAMA_HEADERS_RECEIVED", turn_id=turn_id)
 
-        async for line in resp.aiter_lines():
-            if not line:
-                continue
-            data  = json.loads(line)
-            token = data.get("message", {}).get("content", "")
-            done  = data.get("done", False)
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                data  = json.loads(line)
+                token = data.get("message", {}).get("content", "")
+                done  = data.get("done", False)
 
-            if not first_token_logged and token:
-                logger.info(f"[TIMING]   first token received: {time.perf_counter()-t0:.3f}s")
-                first_token_logged = True
+                if not first_token_logged and token:
+                    t_tok = time.perf_counter()
+                    logger.info(f"{d_tag}OLLAMA_FIRST_TOKEN received in {t_tok-t0:.3f}s")
+                    logger.info(f"[TIMING]   first token received: {t_tok-t0:.3f}s")
+                    _log_cuda_memory("OLLAMA_FIRST_TOKEN", turn_id=turn_id)
+                    first_token_logged = True
 
-            if token:
-                await _handle_token(token)
+                if token:
+                    await _handle_token(token)
 
-            if done:
-                logger.info(f"[TIMING]   stream fully done: {time.perf_counter()-t0:.3f}s")
-                logger.info(
-                    "Ollama metrics: total=%.2fs load=%.2fs prompt_eval=%.2fs eval=%.2fs "
-                    "prompt_tokens=%s generated_tokens=%s",
-                    data.get("total_duration", 0) / 1e9,
-                    data.get("load_duration", 0) / 1e9,
-                    data.get("prompt_eval_duration", 0) / 1e9,
-                    data.get("eval_duration", 0) / 1e9,
-                    data.get("prompt_eval_count"),
-                    data.get("eval_count"),
-                )
-                log_chat_turn(data)
-                break
+                if done:
+                    _ollama_generating.clear()
+                    t_done = time.perf_counter()
+                    logger.info(f"{d_tag}OLLAMA_STREAM_END in {t_done-t0:.3f}s")
+                    logger.info(f"[TIMING]   stream fully done: {t_done-t0:.3f}s")
+                    logger.info(
+                        "Ollama metrics: total=%.2fs load=%.2fs prompt_eval=%.2fs eval=%.2fs "
+                        "prompt_tokens=%s generated_tokens=%s",
+                        data.get("total_duration", 0) / 1e9,
+                        data.get("load_duration", 0) / 1e9,
+                        data.get("prompt_eval_duration", 0) / 1e9,
+                        data.get("eval_duration", 0) / 1e9,
+                        data.get("prompt_eval_count"),
+                        data.get("eval_count"),
+                    )
+                    log_chat_turn(data)
+                    break
+    except asyncio.CancelledError:
+        stream_cancelled = True
+        logger.warning(f"{d_tag}OLLAMA_STREAM_CANCELLED (CancelledError caught in streamer)")
+        raise
+    except Exception as e:
+        logger.error(f"{d_tag}OLLAMA_REQUEST_EXCEPTION: {e}", exc_info=True)
+        raise
+    finally:
+        _ollama_generating.clear()
+        t_dur = time.perf_counter() - t0
+        logger.info(f"{d_tag}OLLAMA_REQUEST_DURATION: {t_dur:.3f}s (cancelled={stream_cancelled})")
+        if resp is not None:
+            logger.info(f"{d_tag}OLLAMA_RESPONSE_CLOSED: resp.is_closed={resp.is_closed}")
 
     # Log raw Ollama output before any parsing so we can debug tag issues
     logger.debug(f"Ollama raw output: {repr(full_text)}")
@@ -1192,7 +1279,12 @@ async def _ollama_streamer(
 
 # ── Stage 2: sentence → synthesised audio ────────────────────────────────────
 
-async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_start: float) -> None:
+async def _synth_worker(
+    synth_q: asyncio.Queue,
+    play_q: asyncio.Queue,
+    t_cmd_start: float,
+    cancel_streamer: Callable[[], None] | None = None,
+) -> None:
     loop = asyncio.get_running_loop()
 
     # Diagnostic only — confirms the worker is already parked on synth_q.get()
@@ -1212,10 +1304,14 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
             await play_q.put(_DONE)
             return
 
-        sentence, expression, actions, is_final, attitude, intensity, continuation = item
+        sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = item
+        phrase_id = meta[0] if meta else None
+        t_phrase_created = meta[1] if len(meta) > 1 else t_dequeued
+        p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+        queue_wait = t_dequeued - t_phrase_created
+
         logger.info(
-            f"[TIMING] synth_worker dequeued '{sentence}' t={t_dequeued:.3f} "
-            f"(queue_wait={t_dequeued - t_wait_start:.3f}s)"
+            f"[TIMING]{p_tag}DEQUEUED '{sentence[:30]}' t={t_dequeued:.3f} (queue_wait={queue_wait:.3f}s)"
         )
 
         try:
@@ -1223,25 +1319,38 @@ async def _synth_worker(synth_q: asyncio.Queue, play_q: asyncio.Queue, t_cmd_sta
             t_pros0  = time.perf_counter()
             enhanced = _enhance_prosody(sentence, expression, is_final, continuation)
             t_pros1  = time.perf_counter()
-            logger.info(f"[TIMING] _enhance_prosody '{sentence[:30]}': {t_pros1 - t_pros0:.4f}s")
+            logger.info(f"[TIMING]{p_tag}_enhance_prosody '{sentence[:30]}': {t_pros1 - t_pros0:.4f}s")
 
             t0 = time.perf_counter()
-            logger.info(f"[TIMING] Kokoro synth DISPATCH '{sentence[:30]}' t={t0:.3f}")
+            logger.info(f"[TIMING]{p_tag}Kokoro synth DISPATCH '{sentence[:30]}' t={t0:.3f}")
             if not first_dispatch_logged:
                 logger.info(f"[TIMING][TTFA] Kokoro dispatch: +{t0-t_cmd_start:.3f}s since command start")
                 first_dispatch_logged = True
 
-            audio = await _run_kokoro(_synthesise_blocking, enhanced, expression)
+            audio = await _run_kokoro(_synthesise_blocking, enhanced, expression, phrase_id=phrase_id)
             t1 = time.perf_counter()
-            logger.info(f"[TIMING] Kokoro synth DONE '{sentence[:30]}': {t1-t0:.3f}s (dispatch+compute) t={t1:.3f}")
-            if not first_ready_logged:
-                logger.info(f"[TIMING][TTFA] first Kokoro audio ready: +{t1-t_cmd_start:.3f}s since command start")
-                first_ready_logged = True
+            dur = t1 - t0
 
             if audio is not None:
-                await play_q.put((audio, expression, actions, attitude, intensity, sentence))
+                logger.info(f"[TIMING]{p_tag}Kokoro synth DONE '{sentence[:30]}': {dur:.3f}s (dispatch+compute) t={t1:.3f}")
+                if not first_ready_logged:
+                    logger.info(f"[TIMING][TTFA] first Kokoro audio ready: +{t1-t_cmd_start:.3f}s since command start")
+                    first_ready_logged = True
+                await play_q.put((audio, expression, actions, attitude, intensity, sentence, phrase_id, t_phrase_created))
+            else:
+                logger.error(
+                    f"[TIMING]{p_tag}FAILED after {dur:.3f}s (synthesis returned None / timeout) — "
+                    "initiating turn stall containment."
+                )
+                # Fatal synthesis failure: cancel streamer so Ollama 60s HTTP socket doesn't hang the turn!
+                if cancel_streamer:
+                    logger.warning(f"[TIMING]{p_tag}Cancelling Ollama streamer to unblock conversational turn.")
+                    cancel_streamer()
+                # Feed _DONE to play_q so player finishes any already-buffered audio and completes the turn cleanly
+                await play_q.put(_DONE)
+                return
         except Exception as e:
-            logger.error(f"Synth error for '{sentence}': {e}", exc_info=True)
+            logger.error(f"{p_tag}Synth error for '{sentence}': {e}", exc_info=True)
 
 
 def _resolve_tts_device() -> str:
@@ -1269,28 +1378,32 @@ def _build_kokoro_pipeline(lang: str) -> KPipeline:
     without that parameter) rather than raising.
     """
     device = _resolve_tts_device()
-    if "device" in inspect.signature(KPipeline.__init__).parameters:
-        pipeline = KPipeline(lang_code=lang, device=device)
-    else:
-        logger.warning(
-            f"Installed kokoro version's KPipeline has no device= kwarg — "
-            f"requested device='{device}' could not be forced; using library default."
-        )
-        pipeline = KPipeline(lang_code=lang)
+    repo_id = getattr(config.tts, "repo_id", "hexgrad/Kokoro-82M")
+    sig = inspect.signature(KPipeline.__init__).parameters
+    kwargs = {}
+    if "device" in sig:
+        kwargs["device"] = device
+    if "repo_id" in sig:
+        kwargs["repo_id"] = repo_id
+    pipeline = KPipeline(lang_code=lang, **kwargs)
     _log_kokoro_device(pipeline, requested=device)
     return pipeline
 
 
-def _log_cuda_memory(label: str) -> None:
+def _log_cuda_memory(label: str, turn_id: int | None = None, phrase_id: int | None = None) -> None:
     """Diagnostic only — Kokoro's own share of VRAM (Ollama's own models
     are separate processes and aren't visible via torch here; see
     brain/embeddings.py's describe_ollama_models() for those)."""
+    t_id = turn_id if turn_id is not None else get_diag_turn_id()
+    tag = f"[DIAG][TURN={t_id}]"
+    if phrase_id is not None:
+        tag += f"[TTS][phrase={phrase_id}]"
     try:
         import torch
         if torch.cuda.is_available():
             alloc = torch.cuda.memory_allocated() / 1e6
             reserved = torch.cuda.memory_reserved() / 1e6
-            logger.info(f"[TIMING] CUDA memory [{label}]: allocated={alloc:.0f}MB reserved={reserved:.0f}MB")
+            logger.info(f"{tag} CUDA memory [{label}]: allocated={alloc:.1f}MB reserved={reserved:.1f}MB")
     except Exception:
         pass
 
@@ -1311,7 +1424,7 @@ def _log_kokoro_device(pipeline: KPipeline, requested: str) -> None:
         f"[TIMING] Kokoro TTS device — requested='{requested}' "
         f"cuda_available={cuda_available} actual='{actual}'"
     )
-    _log_cuda_memory("Kokoro init, before any synthesis")
+    _log_cuda_memory("Kokoro init, before any synthesis", turn_id=0)
 
 
 _kokoro_lock = threading.RLock()
@@ -1388,18 +1501,119 @@ def ensure_kokoro_warmed(phrase: str = "Hi.") -> bool:
             _kokoro_warm_event.set()
             elapsed = time.perf_counter() - t0
             logger.info(f"Kokoro TTS eager warmup complete in {elapsed:.2f}s — CUDA kernels primed.")
-            _log_cuda_memory("Kokoro eager warmup complete")
+            _log_cuda_memory("NORMAL_STARTUP_AFTER_WARMUP", turn_id=0)
             return True
         except Exception as e:
             logger.warning(f"Kokoro eager warmup failed (non-fatal): {e}", exc_info=True)
             return False
 
 
-def reset_shared_kokoro() -> None:
+class WorkerState(Enum):
+    IDLE = "IDLE"
+    RUNNING = "RUNNING"
+    TIMED_OUT = "TIMED_OUT"
+    RECOVERING = "RECOVERING"
+    FAILED = "FAILED"
+
+
+_cuda_worker_state: WorkerState = WorkerState.IDLE
+_kokoro_worker_active = threading.Event()
+_kokoro_stale_worker = threading.Event()
+_kokoro_worker_seq = 0
+_active_phrase_id: int | None = None
+
+
+def get_worker_state() -> WorkerState:
+    """Return the current lifecycle state of the CUDA Kokoro worker."""
+    return _cuda_worker_state
+
+
+def is_kokoro_busy() -> bool:
+    """Return whether a Kokoro synthesis worker is currently running."""
+    return _kokoro_worker_active.is_set()
+
+
+def is_kokoro_stale() -> bool:
+    """Return whether a timed-out Kokoro worker is still executing in background or quarantined."""
+    return _kokoro_stale_worker.is_set() or _cuda_worker_state == WorkerState.TIMED_OUT
+
+
+# ── CPU Kokoro Fallback Subsystem ──────────────────────────────────────────
+
+_cpu_kokoro_lock = threading.RLock()
+_cpu_shared_pipeline: KPipeline | None = None
+_cpu_shared_voice = None
+_cpu_shared_lang: str | None = None
+
+
+def get_cpu_kokoro(lang: str | None = None):
     """
-    Invalidates the shared Kokoro pipeline following a synthesis timeout or fatal failure,
-    allowing the next synthesis call to construct a fresh backend instance.
+    Thread-safe lazy singleton provider for the isolated CPU Kokoro KPipeline.
+    Used when CUDA Kokoro is quarantined due to a soft timeout, ensuring that
+    Maya continues speaking without blocking on CUDA or _kokoro_lock.
     """
+    global _cpu_shared_pipeline, _cpu_shared_voice, _cpu_shared_lang
+    if lang is None:
+        lang = getattr(config.tts, "lang_code", "a")
+
+    with _cpu_kokoro_lock:
+        if _cpu_shared_pipeline is None or _cpu_shared_lang != lang:
+            repo_id = getattr(config.tts, "repo_id", "hexgrad/Kokoro-82M")
+            logger.info(f"[TTS] Initializing isolated CPU Kokoro pipeline (lang='{lang}', repo_id='{repo_id}')…")
+            _cpu_shared_pipeline = KPipeline(lang_code=lang, device="cpu", repo_id=repo_id)
+            _cpu_shared_lang = lang
+            primary = config.tts.voice
+            blend   = getattr(config.tts, "voice_blend", "")
+            ratio   = getattr(config.tts, "blend_ratio", 0.0)
+            if blend and 0.0 < ratio < 1.0:
+                try:
+                    v1 = _cpu_shared_pipeline.load_voice(primary)
+                    v2 = _cpu_shared_pipeline.load_voice(blend)
+                    _cpu_shared_voice = (1.0 - ratio) * v1 + ratio * v2
+                except Exception as e:
+                    logger.warning(f"CPU voice blend failed ({e}), falling back to {primary}")
+                    _cpu_shared_voice = primary
+            else:
+                _cpu_shared_voice = primary
+        return _cpu_shared_pipeline, _cpu_shared_voice
+
+
+def _synthesise_cpu_blocking(
+    sentence: str,
+    expression: str = "neutral",
+    trace_id: str | None = None,
+    phrase_id: int | None = None,
+) -> tuple | None:
+    """
+    Synthesise `sentence` with CPU Kokoro. Completely decoupled from CUDA,
+    _kokoro_lock, and VRAM memory.
+    """
+    p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+    try:
+        pipeline, voice = get_cpu_kokoro()
+        base_speed  = getattr(config.tts, "speed", 1.0)
+        expr_factor = EXPRESSION_SPEED.get(expression, 1.0)
+        speed       = round(base_speed * expr_factor, 3)
+        logger.info(f"{p_tag}Synthesising on CPU fallback [{expression}] speed={speed}: '{sentence[:60]}'")
+        t0 = time.perf_counter()
+        with _cpu_kokoro_lock:
+            chunks = [audio for _, _, audio in pipeline(sentence, voice=voice, speed=speed)
+                      if audio is not None and len(audio) > 0]
+        dt = time.perf_counter() - t0
+
+        if not chunks:
+            logger.warning(f"{p_tag}CPU Kokoro: no audio for '{sentence}'")
+            return None
+        pcm = np.concatenate(chunks).astype(np.float32)
+        logger.info(f"{p_tag}CPU Kokoro synthesis complete in {dt:.3f}s (samples={len(pcm)})")
+        return (pcm, 24_000)
+    except Exception as e:
+        logger.error(f"{p_tag}CPU Kokoro synth error: {e}", exc_info=True)
+        return None
+
+
+def _do_reset_pipeline() -> None:
+    """Internal helper to atomically clear the shared pipeline while holding _kokoro_lock."""
     global _shared_pipeline, _shared_voice, _shared_lang, _kokoro_is_warm
     with _kokoro_lock:
         _shared_pipeline = None
@@ -1410,6 +1624,128 @@ def reset_shared_kokoro() -> None:
     logger.warning("Shared Kokoro pipeline reset — will rebuild on next call.")
 
 
+def reset_shared_kokoro() -> None:
+    """
+    Invalidates the shared Kokoro pipeline following a synthesis timeout or fatal failure,
+    allowing the next synthesis call to construct a fresh backend instance.
+    Non-blocking with respect to asyncio event loops: if a worker is currently active,
+    marks reset as deferred rather than freezing the caller on _kokoro_lock.
+    """
+    if _kokoro_worker_active.is_set():
+        _kokoro_stale_worker.set()
+        logger.warning("Shared Kokoro pipeline reset deferred — worker still active on GPU.")
+        return
+    _do_reset_pipeline()
+
+
+class GPUSchedulerState(Enum):
+    GPU_TTS_ALLOWED = "GPU_TTS_ALLOWED"
+    GPU_TTS_DEFERRED = "GPU_TTS_DEFERRED"
+    GPU_TTS_CPU_FALLBACK = "GPU_TTS_CPU_FALLBACK"
+    GPU_TTS_QUARANTINED = "GPU_TTS_QUARANTINED"
+
+
+class GPUSchedulingPolicy(Enum):
+    POLICY_0_BASELINE = "baseline"
+    POLICY_1_PHRASE_GATED = "phrase_gated"
+    POLICY_2_FIRST_PHRASE_PRIORITY = "first_phrase_priority"
+    POLICY_3_ADAPTIVE_GATE = "adaptive_gate"
+    POLICY_4_HEAVY_GENERATION_DEFERRAL = "heavy_generation_deferral"
+    POLICY_5_FULL_SERIALIZATION = "full_serialization"
+
+
+_active_scheduling_policy: GPUSchedulingPolicy = GPUSchedulingPolicy.POLICY_3_ADAPTIVE_GATE
+_ollama_generating = threading.Event()
+
+
+def get_active_scheduling_policy() -> GPUSchedulingPolicy:
+    """Return the currently active GPU scheduling policy."""
+    return _active_scheduling_policy
+
+
+def set_active_scheduling_policy(policy: GPUSchedulingPolicy) -> None:
+    """Set the active GPU scheduling policy."""
+    global _active_scheduling_policy
+    _active_scheduling_policy = policy
+
+
+def is_ollama_generating() -> bool:
+    """Return whether the Ollama token generation stream is currently active."""
+    return _ollama_generating.is_set()
+
+
+async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSchedulerState, str]:
+    """
+    Evaluates whether a phrase synthesis request is admitted to CUDA, deferred,
+    routed to CPU fallback, or rejected by quarantine.
+
+    Hierarchy (Phase F.2):
+    1. Quarantine Precedence: If CUDA worker is TIMED_OUT or stale, ALWAYS return GPU_TTS_QUARANTINED.
+    2. Policy Evaluation: Based on active GPUSchedulingPolicy.
+    3. Phrase Fairness: Bounded deferral prevents infinite starvation.
+    """
+    global _active_scheduling_policy
+    p_num = phrase_id if phrase_id is not None else 1
+
+    # Tier 1: F.1 Quarantine Precedence (Absolute Safety)
+    if is_kokoro_stale() or _cuda_worker_state == WorkerState.TIMED_OUT or _kokoro_stale_worker.is_set():
+        return (GPUSchedulerState.GPU_TTS_QUARANTINED, "cuda_quarantined")
+
+    policy = _active_scheduling_policy
+
+    # Policy 0: Baseline
+    if policy == GPUSchedulingPolicy.POLICY_0_BASELINE:
+        return (GPUSchedulerState.GPU_TTS_ALLOWED, "baseline_unconstrained")
+
+    # Policy 1: Phrase-Gated
+    elif policy == GPUSchedulingPolicy.POLICY_1_PHRASE_GATED:
+        if is_ollama_generating():
+            await asyncio.sleep(0.05)
+            if is_ollama_generating():
+                return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "ollama_active_phrase_gated")
+        return (GPUSchedulerState.GPU_TTS_ALLOWED, "phrase_gated_admitted")
+
+    # Policy 2: First-Phrase Priority
+    elif policy == GPUSchedulingPolicy.POLICY_2_FIRST_PHRASE_PRIORITY:
+        if p_num == 1:
+            return (GPUSchedulerState.GPU_TTS_ALLOWED, "first_phrase_priority_admitted")
+        if is_ollama_generating():
+            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "ollama_generating_phrase_conservative")
+        return (GPUSchedulerState.GPU_TTS_ALLOWED, "ollama_idle_admitted")
+
+    # Policy 3: Adaptive GPU Gate
+    elif policy == GPUSchedulingPolicy.POLICY_3_ADAPTIVE_GATE:
+        if is_ollama_generating():
+            if p_num == 1:
+                return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_first_phrase_cuda")
+            else:
+                return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "adaptive_concurrency_cpu")
+        else:
+            return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_ollama_idle_cuda")
+
+    # Policy 4: Heavy-Generation Deferral (Bounded Delay)
+    elif policy == GPUSchedulingPolicy.POLICY_4_HEAVY_GENERATION_DEFERRAL:
+        if is_ollama_generating():
+            t_wait_start = time.perf_counter()
+            while is_ollama_generating() and (time.perf_counter() - t_wait_start < 0.15):
+                await asyncio.sleep(0.02)
+            if is_ollama_generating():
+                return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "deferral_budget_expired_cpu")
+        return (GPUSchedulerState.GPU_TTS_ALLOWED, "deferral_cleared_cuda")
+
+    # Policy 5: Full GPU Serialization
+    elif policy == GPUSchedulingPolicy.POLICY_5_FULL_SERIALIZATION:
+        if is_ollama_generating():
+            t_wait_start = time.perf_counter()
+            while is_ollama_generating():
+                await asyncio.sleep(0.02)
+                if time.perf_counter() - t_wait_start > 15.0:
+                    return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "serialization_timeout_cpu")
+        return (GPUSchedulerState.GPU_TTS_ALLOWED, "full_serialization_cuda")
+
+    return (GPUSchedulerState.GPU_TTS_ALLOWED, "default")
+
+
 # Backward-compatible internal aliases
 _get_kokoro = get_shared_kokoro
 _reset_kokoro_pipeline = reset_shared_kokoro
@@ -1417,37 +1753,152 @@ _reset_kokoro_pipeline = reset_shared_kokoro
 _KOKORO_SYNTH_TIMEOUT = 15.0
 
 
-async def _run_kokoro(fn, *args, on_timeout=None):
-    """
-    Runs a blocking Kokoro call on its own daemon thread (not the shared
-    executor) with a timeout. A stuck native call can't be cancelled, so
-    two things matter: (1) the wait is bounded so the pipeline recovers
-    within _KOKORO_SYNTH_TIMEOUT instead of stalling indefinitely, and
-    (2) the worker is a daemon thread so a still-stuck call afterward
-    can never block Python's interpreter shutdown (see Handoff bug: a
-    hung synth call left a non-daemon executor thread that made Ctrl+C
-    hang again at exit inside threading._shutdown's atexit join).
-    Returns None on timeout, exactly like a normal synth failure, so
-    callers don't need special-case handling.
+def set_kokoro_synth_timeout(timeout: float) -> None:
+    """Set the Kokoro synthesis watchdog timeout (seconds)."""
+    global _KOKORO_SYNTH_TIMEOUT
+    _KOKORO_SYNTH_TIMEOUT = timeout
 
-    on_timeout: called on timeout instead of resetting this module's
-    pipeline — for callers that own a different pipeline (core/speaker.py).
+
+async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
     """
+    Runs Kokoro synthesis with bounded soft timeout, adaptive GPU scheduling, and automatic CPU fallback.
+
+    Fault containment & recovery contract (Phase F.1 & F.2):
+    1. Quarantine precedence: If CUDA is quarantined (TIMED_OUT / stale), scheduler forces CPU fallback.
+    2. Adaptive GPU admission: The active scheduling policy dictates whether CUDA is safe or CPU should be used.
+    3. Soft timeout: If CUDA synthesis exceeds _KOKORO_SYNTH_TIMEOUT, asyncio.wait_for
+       terminates the caller wait and marks the worker as TIMED_OUT.
+    4. Deferred CUDA recovery: When the background worker exits native execution, its
+       finally block resets the CUDA pipeline and restores the backend to IDLE.
+    """
+    global _kokoro_worker_seq, _cuda_worker_state, _active_phrase_id
+
+    turn_id = get_diag_turn_id()
+    diag_p_tag = f"[DIAG][TURN={turn_id}][TTS][phrase={phrase_id}] " if phrase_id is not None else f"[DIAG][TURN={turn_id}][TTS] "
+    p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+
+    # Scheduler Admission Evaluation
+    admission_state, reason = await evaluate_tts_admission(phrase_id=phrase_id)
+    logger.info(
+        f"[SCHED][TTS][phrase={phrase_id}] decision={admission_state.value} reason={reason} worker_state={_cuda_worker_state.value}"
+    )
+
+    # 1. If quarantined or scheduler decided CPU fallback:
+    if admission_state in (GPUSchedulerState.GPU_TTS_QUARANTINED, GPUSchedulerState.GPU_TTS_CPU_FALLBACK):
+        if fn == _synthesise_blocking or getattr(fn, "__name__", "") == "_synthesise_blocking":
+            if admission_state == GPUSchedulerState.GPU_TTS_QUARANTINED:
+                logger.warning(
+                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (worker_state={_cuda_worker_state.value}) — "
+                    "routing speech synthesis to isolated CPU fallback pipeline."
+                )
+            else:
+                logger.info(
+                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (scheduler_decision={admission_state.value}) — "
+                    f"routing speech synthesis to CPU ({reason})."
+                )
+            logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
+            loop = asyncio.get_running_loop()
+            try:
+                sentence = args[0]
+                expression = args[1] if len(args) > 1 else "neutral"
+                trace_id = args[2] if len(args) > 2 else None
+                res = await loop.run_in_executor(
+                    None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
+                )
+                logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None})")
+                return res
+            except Exception as e:
+                logger.error(f"{diag_p_tag}CPU fallback synthesis failed: {e}", exc_info=True)
+                return None
+        else:
+            logger.warning(
+                f"{p_tag}Kokoro synthesis rejected: prior worker still active on GPU after timeout."
+            )
+            return None
+
+    # 2. CUDA is healthy: dispatch to CUDA worker thread
     fut = concurrent.futures.Future()
+    _kokoro_worker_active.set()
+    _kokoro_worker_seq += 1
+    seq = _kokoro_worker_seq
+    _active_phrase_id = phrase_id
+    logger.info(f"{diag_p_tag}CUDA_WORKER_STATE_BEFORE_DISPATCH state={_cuda_worker_state.value}")
+    _log_cuda_memory("BEFORE_KOKORO_CUDA_DISPATCH", turn_id=turn_id, phrase_id=phrase_id)
+    _cuda_worker_state = WorkerState.RUNNING
+
+    t_dispatch = time.perf_counter()
+    logger.info(f"{p_tag}DISPATCH worker={seq} backend=cuda thread=kokoro-synth-{seq}")
 
     def _runner():
+        nonlocal t_dispatch
+        t_start = time.perf_counter()
+        res = None
+        exc = None
+        t_exec = 0.0
         try:
-            fut.set_result(fn(*args))
+            if _cuda_stall_injection_phrase is not None and (phrase_id == _cuda_stall_injection_phrase or _cuda_stall_injection_phrase == -1):
+                logger.warning(
+                    f"{diag_p_tag}[INJECTED_FAULT] Stalling CUDA worker #{seq} for {_cuda_stall_injection_duration}s..."
+                )
+                time.sleep(_cuda_stall_injection_duration)
+            res = fn(*args)
+            t_exec = time.perf_counter() - t_start
         except BaseException as e:
-            fut.set_exception(e)
+            exc = e
+            t_exec = time.perf_counter() - t_start
+        finally:
+            _kokoro_worker_active.clear()
+            logger.info(f"{diag_p_tag}CUDA_WORKER_EXIT worker #{seq}")
+            if _kokoro_stale_worker.is_set():
+                global _cuda_worker_state
+                _cuda_worker_state = WorkerState.RECOVERING
+                t_total = time.perf_counter() - t_dispatch
+                logger.info(
+                    f"{p_tag}Stale Kokoro worker #{seq} finally exited after {t_total:.3f}s — "
+                    "executing deferred pipeline reset off event loop."
+                )
+                try:
+                    _do_reset_pipeline()
+                finally:
+                    _kokoro_stale_worker.clear()
+                    _cuda_worker_state = WorkerState.IDLE
+                    logger.info(f"{diag_p_tag}CUDA_WORKER_RECOVERED — CUDA backend restored to IDLE.")
+                    _log_cuda_memory("QUARANTINED_WORKER_EXITED", turn_id=turn_id, phrase_id=phrase_id)
+            else:
+                _cuda_worker_state = WorkerState.IDLE
 
-    threading.Thread(target=_runner, daemon=True, name="kokoro-synth").start()
+            if exc is not None:
+                if not fut.cancelled():
+                    fut.set_exception(exc)
+                else:
+                    logger.warning(f"{p_tag}Exception from timed-out worker #{seq}: {exc}")
+            else:
+                if not fut.cancelled():
+                    fut.set_result(res)
+                else:
+                    logger.warning(
+                        f"{p_tag}Late completion from timed-out worker #{seq} after {t_exec:.3f}s (result discarded)"
+                    )
+
+    threading.Thread(target=_runner, daemon=True, name=f"kokoro-synth-{seq}").start()
 
     try:
         return await asyncio.wait_for(asyncio.wrap_future(fut), timeout=_KOKORO_SYNTH_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.error(f"Kokoro synthesis timed out after {_KOKORO_SYNTH_TIMEOUT}s.")
-        (on_timeout or _reset_kokoro_pipeline)()
+        _cuda_worker_state = WorkerState.TIMED_OUT
+        _kokoro_stale_worker.set()
+        logger.error(
+            f"{diag_p_tag}CUDA_WORKER_TIMEOUT after {_KOKORO_SYNTH_TIMEOUT}s "
+            f"(worker #{seq} still executing in background)"
+        )
+        logger.warning(f"{diag_p_tag}CUDA_WORKER_QUARANTINED")
+        logger.warning(f"{diag_p_tag}CUDA_WORKER_THREAD_STILL_RUNNING (worker #{seq})")
+        _log_cuda_memory("AFTER_CUDA_TIMEOUT", turn_id=turn_id, phrase_id=phrase_id)
+        if on_timeout:
+            try:
+                on_timeout()
+            except Exception as e:
+                logger.warning(f"{p_tag}Kokoro on_timeout callback failed (non-fatal): {e}")
         return None
 
 
@@ -1552,7 +2003,11 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
             await turn_rest(force_idle=True)
             return
 
-        (data, samplerate), expression, actions, attitude, intensity, phrase = item
+        audio_tuple, expression, actions, attitude, intensity, phrase, *meta = item
+        data, samplerate = audio_tuple
+        phrase_id = meta[0] if meta else None
+        t_phrase_created = meta[1] if len(meta) > 1 else None
+        p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
 
         # Wait for filler to finish before sending first real sentence
         if first_sentence:
@@ -1581,9 +2036,16 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
             from core.speaker import _numpy_to_wav
             wav_bytes = await loop.run_in_executor(None, _numpy_to_wav, data, samplerate)
             t0 = time.perf_counter()
+            logger.info(f"[TIMING]{p_tag}AUDIO_BROADCAST_START samples={len(data)} sr={samplerate} t={t0:.3f}")
             await _ws.broadcast_audio(wav_bytes)
             await _ws.wait_for_audio_done()
-            logger.info(f"[TIMING] audio broadcast+playback+ack: {time.perf_counter()-t0:.3f}s")
+            t_sync = time.perf_counter() - t0
+            audio_dur = len(data) / samplerate if samplerate else 0.0
+            total_str = f" total_lifecycle={time.perf_counter() - t_phrase_created:.3f}s" if t_phrase_created else ""
+            logger.info(
+                f"[TIMING]{p_tag}AUDIO_DONE: {t_sync:.3f}s "
+                f"(playback_sync: audio_dur={audio_dur:.3f}s, overhead={t_sync - audio_dur:+.3f}s){total_str}"
+            )
 
         if output in ("local", "both"):
             await loop.run_in_executor(None, _play_blocking, data, samplerate)

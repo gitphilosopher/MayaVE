@@ -146,9 +146,10 @@ class GazeController {
             return;
         }
 
-        const now = performance.now();
-
         if (this._target) {
+            // The clock is only needed while a target session exists; reading it
+            // here skips a performance.now() call on every idle frame.
+            const now = performance.now();
             const sinceLastEvent = now - this._lastEventAt;
             const unchangedFor   = now - this._unchangedSinceAt;
 

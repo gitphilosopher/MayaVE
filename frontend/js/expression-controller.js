@@ -63,8 +63,10 @@ class ExpressionController {
                 console.warn(`[Maya][expr] expression '${key}' does not exist on this VRM — writes are no-ops.`);
             }
         }
-        for (const tier of _TIERS_DESC) {
-            const map = this._layers.get(tier);
+        // Indexed loop: this runs several times per frame during lip-sync, so
+        // avoid creating an array iterator on every call.
+        for (let i = 0; i < _TIERS_DESC.length; i++) {
+            const map = this._layers.get(_TIERS_DESC[i]);
             if (map && map.has(key)) {
                 this._manager.setValue(key, map.get(key));
                 return;

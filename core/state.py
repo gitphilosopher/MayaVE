@@ -79,6 +79,9 @@ class StateManager:
     def is_sleeping(self) -> bool:
         return self._state == MayaState.SLEEPING
 
+    def is_idle(self) -> bool:
+        return self._state == MayaState.IDLE
+
     def is_speaking(self) -> bool:
         return self._state == MayaState.SPEAKING
 

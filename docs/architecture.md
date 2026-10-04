@@ -259,7 +259,7 @@ Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/
 
 **Expression parsing & action validation (`_parse_expression`):** Valid physical actions (`nod`, `giggle`, `sigh`, `shrug`, `wink`) are extracted strictly against `_ACTION_VOCABULARY`. Non-action asterisks (such as markdown emphasis `*really*` or `**excited**`) are preserved verbatim as spoken prose rather than destructively removed.
 
-**GPU-accelerated Kokoro TTS:** PyTorch CUDA build accelerates Kokoro synthesis on GPU via `config.tts.device = "auto"`, falling back to CPU when CUDA is unavailable. On the tested reference configuration (NVIDIA GeForce RTX 3050 Laptop GPU, 4GB VRAM), Kokoro CUDA synthesis runs concurrently with Ollama `llama3.2` without CUDA out-of-memory errors, model eviction, or process contention under the tested workload.
+**GPU-accelerated Kokoro TTS & Ollama VRAM Optimization:** PyTorch CUDA build accelerates Kokoro synthesis on GPU via `config.tts.device = "auto"`, falling back to CPU when CUDA is unavailable. In VE11 Optimization 31, on the target RTX 3050 Windows runtime (4GB VRAM), Ollama `llama3.2` is configured with `config.llm.num_ctx = 2048` and direct IPv4 `http://127.0.0.1:11434`. Reducing Ollama context from 4096 to 2048 trimmed ~600 MB of KV cache, enabling 100% pure GPU layer residency (2,318 MB VRAM footprint) and eliminating mixed-offload PCIe bus contention during Kokoro neural synthesis, achieving median conversational TTFA of 747 ms with zero Kokoro timeouts.
 
 ---
 

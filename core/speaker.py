@@ -35,6 +35,7 @@ import asyncio
 import io
 import logging
 import re
+import time
 import wave
 
 import numpy as np
@@ -47,7 +48,8 @@ from core.behavior_engine import behavior_engine
 from services.llm.llm_service import (
     _enhance_prosody, _log_cuda_memory, _run_kokoro,
     get_shared_kokoro, reset_shared_kokoro, _kokoro_lock,
-    ensure_kokoro_warmed,
+    ensure_kokoro_warmed, get_cpu_kokoro, _cpu_kokoro_lock,
+    is_kokoro_stale,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,10 +148,13 @@ class Speaker:
 
         try:
             loop = asyncio.get_running_loop()
+            t_synth_0 = time.perf_counter()
             audio = await self._synthesise_guarded(clean)
+            t_synth = time.perf_counter() - t_synth_0
             if audio is None:
                 return
 
+            t_play_0 = time.perf_counter()
             if self._output in ("avatar", "both"):
                 await ws_server.broadcast_behavior(behavior_engine.compose(expression, source="skill"))
                 await ws_server.broadcast_state("speaking")
@@ -161,12 +166,18 @@ class Speaker:
 
                 await ws_server.broadcast_audio(wav_bytes)
                 await ws_server.wait_for_audio_done()
-                await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
 
             if self._output in ("local", "both"):
                 if on_audio_start:
                     await on_audio_start()
                 await loop.run_in_executor(None, self._play_blocking, audio)
+            t_play = time.perf_counter() - t_play_0
+            audio_dur = len(audio) / _SAMPLE_RATE if audio is not None else 0.0
+            logger.info(
+                f"[TIMING][SPEAKER] text='{clean[:30]}' | "
+                f"synth: {t_synth:.4f}s | audio_dur: {audio_dur:.4f}s | "
+                f"play_wait: {t_play:.4f}s | speaker_total: {t_synth + t_play:.4f}s"
+            )
 
         except Exception as e:
             logger.error(f"Speaker error: {e}", exc_info=True)
@@ -225,14 +236,26 @@ class Speaker:
         except Exception:
             pass
 
-        with _kokoro_lock:
-            pipeline, voice = get_shared_kokoro()
-            self._pipeline, self._voice = pipeline, voice
-            chunks = [
-                audio for _, _, audio in
-                pipeline(text, voice=voice, speed=self._speed)
-                if audio is not None and len(audio) > 0
-            ]
+        if is_kokoro_stale():
+            logger.warning("[SPEAKER][DIAG] CPU_FALLBACK_SELECTED (quarantined / stale worker) — falling back to CPU Kokoro.")
+            logger.info("[SPEAKER][DIAG] CPU_FALLBACK_DISPATCH")
+            pipeline, voice = get_cpu_kokoro()
+            with _cpu_kokoro_lock:
+                chunks = [
+                    audio for _, _, audio in
+                    pipeline(text, voice=voice, speed=self._speed)
+                    if audio is not None and len(audio) > 0
+                ]
+            logger.info(f"[SPEAKER][DIAG] CPU_FALLBACK_COMPLETE (chunks={len(chunks)})")
+        else:
+            with _kokoro_lock:
+                pipeline, voice = get_shared_kokoro()
+                self._pipeline, self._voice = pipeline, voice
+                chunks = [
+                    audio for _, _, audio in
+                    pipeline(text, voice=voice, speed=self._speed)
+                    if audio is not None and len(audio) > 0
+                ]
 
         try:
             from services.tracer import log_event
