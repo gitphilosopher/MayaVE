@@ -12,6 +12,7 @@ temp.py
 edge-automation-profile
 _tmp*.py
 test_*.py
+services/llm/test_linguistic_segmenter.py
 # review_candidates.py
 # datasets/training/candidates_rejected.jsonl
 # datasets/training/audit_report.json

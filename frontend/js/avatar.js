@@ -51,6 +51,7 @@ function _isCalmPeriodActive() {
 let _currentSource  = null;   // AudioBufferSourceNode from speakFromBytes
 let _audioGen = 0;            // invalidates audio whose decode finishes after a stop
 let _currentAudioEl = null;   // HTMLAudioElement from speak()
+const _audioQueue = [];       // Queue of decoded audio buffers for gapless phrase playback
 
 let _onAudioDone = null;
 /** Set the callback invoked when streamed audio finishes or cannot be played. */
@@ -277,9 +278,55 @@ function _stopLipSync() {
 
 // ── Streamed audio ─────────────────────────────────────────────────────────
 
+function _playNextAudioInQueue() {
+    if (_audioQueue.length === 0) {
+        _currentSource = null;
+        isSpeaking = false;
+        _stopLipSync();
+        _onSpeakingEnd();
+        if (typeof _onAudioDone === "function") _onAudioDone();
+        return;
+    }
+
+    const item = _audioQueue.shift();
+    if (item.gen !== _audioGen) {
+        _playNextAudioInQueue();
+        return;
+    }
+
+    const ctx = getAudioContext();
+    const source = ctx.createBufferSource();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+
+    source.buffer = item.decoded;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    isSpeaking = true;
+    _currentSource = source;
+    _onSpeakingStart();
+
+    source.onended = () => {
+        if (item.traceId) recordTrace(item.traceId, "audio_playback_end", {
+            audio_current_time: Number(ctx.currentTime.toFixed(3))
+        });
+        if (_currentSource === source) _currentSource = null;
+        _playNextAudioInQueue();
+    };
+
+    if (item.traceId) recordTrace(item.traceId, "audio_playback_start", {
+        audio_current_time: Number(ctx.currentTime.toFixed(3)),
+        base_latency_ms: typeof ctx.baseLatency === "number" ? Number((ctx.baseLatency * 1000).toFixed(2)) : null,
+        output_latency_ms: typeof ctx.outputLatency === "number" ? Number((ctx.outputLatency * 1000).toFixed(2)) : null
+    });
+    source.start(0);
+    _startLipSync(analyser);
+}
+
 /**
  * Decode and play backend audio, reporting completion through the registered
- * callback.
+ * callback. Queues subsequent phrases for gapless continuous speech.
  */
 export async function speakFromBytes(arrayBuffer, traceId = null) {
     if (!vrm) {
@@ -297,7 +344,9 @@ export async function speakFromBytes(arrayBuffer, traceId = null) {
         decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
     } catch (e) {
         console.error("[Maya] decodeAudioData failed:", e);
-        if (gen === _audioGen && typeof _onAudioDone === "function") _onAudioDone();
+        if (gen === _audioGen && typeof _onAudioDone === "function" && !_currentSource && _audioQueue.length === 0) {
+            _onAudioDone();
+        }
         return;
     }
     if (traceId) recordTrace(traceId, "audio_decode_end");
@@ -308,33 +357,10 @@ export async function speakFromBytes(arrayBuffer, traceId = null) {
         sample_rate: decoded.sampleRate
     });
 
-    const source   = ctx.createBufferSource();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-
-    source.buffer = decoded;
-    source.connect(analyser);
-    analyser.connect(ctx.destination);
-
-    isSpeaking      = true;
-    _onSpeakingStart();
-    _currentSource  = source;
-    source.onended = () => {
-        if (traceId) recordTrace(traceId, "audio_playback_end", {
-            audio_current_time: Number(ctx.currentTime.toFixed(3))
-        });
-        if (_currentSource === source) _currentSource = null;
-        _stopLipSync();
-        if (typeof _onAudioDone === "function") _onAudioDone();
-    };
-
-    if (traceId) recordTrace(traceId, "audio_playback_start", {
-        audio_current_time: Number(ctx.currentTime.toFixed(3)),
-        base_latency_ms: typeof ctx.baseLatency === "number" ? Number((ctx.baseLatency * 1000).toFixed(2)) : null,
-        output_latency_ms: typeof ctx.outputLatency === "number" ? Number((ctx.outputLatency * 1000).toFixed(2)) : null
-    });
-    source.start(0);
-    _startLipSync(analyser);
+    _audioQueue.push({ decoded, traceId, gen });
+    if (!_currentSource) {
+        _playNextAudioInQueue();
+    }
 }
 
 // Local-file playback is retained for manual testing.
@@ -368,6 +394,7 @@ export function speak(audioFile) {
 /** Halts whichever audio path is active + stops lip-sync. Safe no-op if idle. */
 export function stopCurrentAudio() {
     _audioGen++;
+    _audioQueue.length = 0;
     if (_currentSource) {
         const s = _currentSource;
         _currentSource = null;
@@ -380,7 +407,9 @@ export function stopCurrentAudio() {
         a.onended = null;
         try { a.pause(); a.currentTime = 0; } catch (e) { /* no-op */ }
     }
+    isSpeaking = false;
     _stopLipSync();
+    _onSpeakingEnd();
 }
 
 // ── Expression helper ─────────────────────────────────────────────────────────

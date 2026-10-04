@@ -121,6 +121,13 @@ class Speaker:
         except Exception as e:
             logger.warning(f"Speaker warmup failed (non-fatal): {e}")
 
+        try:
+            from services.llm.llm_service import ensure_cpu_kokoro_warmed
+            ensure_cpu_kokoro_warmed()
+            logger.info("Speaker Kokoro CPU fallback pipeline warmed up.")
+        except Exception as e:
+            logger.warning(f"Speaker CPU warmup failed (non-fatal): {e}")
+
     async def speak(self, text: str, on_audio_start=None) -> None:
         """Synthesize a response, emit the matching avatar state, and return to idle/sleep when done."""
         if not text or not text.strip():

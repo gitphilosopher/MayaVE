@@ -129,72 +129,6 @@ async def close_ollama_client() -> None:
 
 ALREADY_SPOKEN = "__ALREADY_SPOKEN__"
 
-# Phrase-boundary detection for early TTS start (see module docstring).
-_PHRASE_PUNCT_RE   = re.compile(r'[.!?,;]|—')
-_PARTIAL_TRAIL_RE  = re.compile(r'[.!?,;:\-—]+\s*$')
-_PHRASE_WORD_LIMIT = 12
-
-# Direct-address terms that must never be isolated as their own chunk —
-# "..., senpai." split at the comma leaves "senpai." as a stranded
-# one-word phrase that sounds disconnected on its own. A comma immediately
-# followed by one of these is skipped as a boundary candidate so it merges
-# into the sentence's next real boundary instead.
-_VOCATIVE_WORDS  = {config.user_name.lower()}
-_NEXT_WORD_RE    = re.compile(r'\s*(\S+)')
-
-
-def _is_vocative_prefix(word: str) -> bool:
-    """
-    True if `word` is a strict, case-insensitive prefix of a known
-    vocative (e.g. "sen" of "senpai") — i.e. it might still grow into
-    one as more stream tokens arrive. Ollama streams sub-word tokens
-    ("sen" + "pai"), so the word right after a comma can be incomplete
-    at the moment _next_boundary checks it; without this, "sen" doesn't
-    match _VOCATIVE_WORDS yet and the comma splits early, stranding
-    "senpai," as its own phrase once the rest streams in.
-    """
-    return any(len(word) < len(v) and v.startswith(word) for v in _VOCATIVE_WORDS)
-
-
-def _next_boundary(buffer: str) -> tuple[int, bool] | None:
-    """
-    Earliest phrase boundary in `buffer`, or None if it should keep
-    accumulating tokens. Returns (split_index, is_sentence_final) —
-    is_sentence_final is True only for a real [.!?] boundary.
-    A punctuation match must be followed by whitespace (or buffer end)
-    so numbers like '3.14' aren't split. Falls back to a word-count
-    cutoff when no punctuation has appeared yet.
-    """
-    for m in _PHRASE_PUNCT_RE.finditer(buffer):
-        idx = m.end()
-        if idx < len(buffer) and not buffer[idx].isspace():
-            continue
-        ch = m.group(0)
-
-        if ch == "." and idx == len(buffer) and m.start() > 0 and buffer[m.start() - 1].isalnum():
-            return None  # "3." / "google." may continue as "3.14" / "google.com"
-
-        if ch in ",;":
-            look = _NEXT_WORD_RE.match(buffer, idx)
-            if not look:
-                # Next word hasn't streamed in yet — wait rather than risk
-                # splitting right before a vocative we can't see yet.
-                return None
-            word = look.group(1).strip(".,!?;:—").lower()
-            if word in _VOCATIVE_WORDS:
-                continue  # merge this clause into the next boundary instead
-            if look.end(1) == len(buffer) and _is_vocative_prefix(word):
-                # Word is still mid-stream and could complete into a
-                # vocative (e.g. "sen" -> "senpai") — wait for more.
-                return None
-
-        return idx, ch in ".!?"
-
-    words = list(re.finditer(r'\S+\s*', buffer))
-    if len(words) >= _PHRASE_WORD_LIMIT:
-        return words[_PHRASE_WORD_LIMIT - 1].end(), False
-    return None
-
 # Matches valid [expression] tags AND the optional [key:value] nuance tags
 # ([attitude:word], [intensity:word]) — single \w+ word(s) only, no
 # spaces/apostrophes. See _parse_expression for how the two forms are
@@ -222,13 +156,199 @@ _PUNCT_ONLY_RE = re.compile(r'^[\s.,!?;:\-\u2013\u2014\u2026"\'`*]+$')
 # ACTION TAGS section) to wrap a physical action in asterisks, choosing
 # ONLY from _ACTION_VOCABULARY. Capturing the inner text lets us classify
 # it against that fixed set rather than guessing at arbitrary hallucinated
-# text. Left unstripped, these get fed to Kokoro/espeak literally
-# (including the asterisks), which is what was tripping the phonemizer's
-# "words count mismatch" warning.
+# text.
 _ASTERISK_RE = re.compile(r'\*([^*\n]{1,80})\*')
 _HYBRID_TAG_RE_1 = re.compile(r'\*\[([a-zA-Z]+)\]\*?')
 _HYBRID_TAG_RE_2 = re.compile(r'\[\*([a-zA-Z]+)\*\]')
 _MARKDOWN_BOLD_RE = re.compile(r'\*\*([^*\n]+)\*\*')
+
+# Direct-address terms that must never be isolated as their own chunk —
+# "..., senpai." split at the comma leaves "senpai." as a stranded
+# one-word phrase that sounds disconnected on its own. A comma immediately
+# followed by one of these is skipped as a boundary candidate so it merges
+# into the sentence's next real boundary instead.
+_VOCATIVE_WORDS = {config.user_name.lower(), "senpai"}
+_NEXT_WORD_RE   = re.compile(r'\s*(\S+)')
+
+# Conjunctions, relative pronouns, and prepositions that signal an incomplete
+# clause following a comma/semicolon/dash — commas preceding these are not split,
+# preserving cohesive thoughts for natural speech prosody.
+_CONTINUATION_WORDS = {
+    'and', 'or', 'but', 'nor', 'so', 'yet',
+    'because', 'since', 'although', 'though', 'while', 'whereas',
+    'which', 'that', 'who', 'whom', 'whose', 'what', 'whatever',
+    'than', 'as', 'if', 'unless', 'whether',
+    'when', 'whenever', 'where', 'wherever',
+    'from', 'to', 'into', 'of', 'off', 'for', 'with', 'without', 'within',
+    'about', 'against', 'between', 'through', 'during', 'before', 'after',
+    'above', 'below', 'under', 'over',
+    'rather', 'instead', 'such', 'including', 'especially',
+}
+
+_PUNCT_GROUP_RE    = re.compile(r'([.!?]+|[,;:\-—\u2013\u2014]+)')
+_PARTIAL_TRAIL_RE  = re.compile(r'[.!?,;:\-—]+\s*$')
+
+
+def _is_vocative_prefix(word: str) -> bool:
+    """
+    True if `word` is a strict, case-insensitive prefix of a known
+    vocative (e.g. "sen" of "senpai") — i.e. it might still grow into
+    one as more stream tokens arrive. Ollama streams sub-word tokens
+    ("sen" + "pai"), so the word right after a comma can be incomplete
+    at the moment _next_boundary checks it.
+    """
+    word = word.lower()
+    return any(len(word) < len(v) and v.startswith(word) for v in _VOCATIVE_WORDS)
+
+
+def _count_spoken_words(text: str) -> int:
+    """Count words that will actually be spoken aloud (ignoring tags/actions)."""
+    clean = _ANY_BRACKET_RE.sub('', text)
+    clean = _ASTERISK_RE.sub('', clean)
+    words = [w.strip('.,!?;:—"\'') for w in re.split(r'\s+', clean.strip())]
+    return len([w for w in words if w and not _PUNCT_ONLY_RE.match(w)])
+
+
+def _get_spoken_words(text: str) -> list[str]:
+    """Return lowercase list of words that will be spoken aloud."""
+    clean = _ANY_BRACKET_RE.sub('', text)
+    clean = _ASTERISK_RE.sub('', clean)
+    words = [w.strip('.,!?;:—"\'').lower() for w in re.split(r'\s+', clean.strip())]
+    return [w for w in words if w and not _PUNCT_ONLY_RE.match(w)]
+
+
+class SegmentBoundary(tuple):
+    """
+    Subclass of 2-tuple (idx, is_final) to preserve 100% backward compatibility
+    with unpacking `idx, is_final = boundary` while attaching the segmentation `reason`.
+    """
+    def __new__(cls, idx: int, is_final: bool, reason: str = "default"):
+        obj = super().__new__(cls, (idx, is_final))
+        obj.reason = reason
+        return obj
+
+
+def _next_boundary(buffer: str, is_first_phrase: bool = True) -> SegmentBoundary | None:
+    """
+    Linguistic phrase-boundary detector for streaming TTS.
+    Returns SegmentBoundary(split_index, is_sentence_final, reason) or None.
+
+    Distinguishes strong boundaries (. ! ?) from medium boundaries (, ; : —).
+    Coalesces dependent clauses and continuation words ('rather', 'than', 'and', etc.).
+    Protects vocatives ('senpai') so they are never emitted as isolated fragments.
+    Normalizes pathological ellipsis / repeated dots.
+    """
+    # 1. Unclosed bracket check: wait if stream is in middle of a tag
+    if buffer.rfind('[') > buffer.rfind(']'):
+        return None
+    # Unclosed asterisk check: wait if stream is mid-action
+    if buffer.count('*') % 2 == 1:
+        return None
+
+    # Tag spans to ignore punctuation inside tags
+    tag_spans = [
+        (tm.start(), tm.end())
+        for tm in list(_ANY_BRACKET_RE.finditer(buffer)) + list(_ASTERISK_RE.finditer(buffer))
+    ]
+
+    for m in _PUNCT_GROUP_RE.finditer(buffer):
+        start = m.start()
+        end = m.end()
+
+        # Inside tag?
+        if any(ts <= start < te for ts, te in tag_spans):
+            continue
+
+        punct_str = m.group(1)
+
+        # Decimal number protection: e.g. '3.14' or '1,000'
+        if start > 0 and end < len(buffer) and buffer[start - 1].isdigit() and buffer[end].isdigit():
+            continue
+
+        # Domain/identifier protection: e.g. 'google.com'
+        if '.' in punct_str and start > 0 and end < len(buffer) and buffer[start - 1].isalnum() and buffer[end].isalnum():
+            continue
+
+        # Trailing dot in an alnum word mid-stream: e.g. '3.' or 'google.'
+        if '.' in punct_str and end == len(buffer) and start > 0 and buffer[start - 1].isalnum():
+            return None
+
+        # Whitespace requirement: punctuation must be followed by whitespace, quote, or buffer end
+        if end < len(buffer) and not buffer[end].isspace() and buffer[end] not in '"\')]}':
+            continue
+
+        candidate = buffer[:end]
+        spoken_words = _count_spoken_words(candidate)
+        if spoken_words == 0:
+            continue
+
+        # Lookahead for following word
+        look = _NEXT_WORD_RE.match(buffer, end)
+        following_raw = look.group(1).strip('.,!?;:—"\'') if look else None
+        following_word = following_raw.lower() if following_raw else None
+
+        # Lone senpai protection: candidate contains only vocative word(s)
+        words_list = _get_spoken_words(candidate)
+        if words_list and all(w in _VOCATIVE_WORDS for w in words_list):
+            # Never emit a lone senpai chunk
+            continue
+
+        # Check if punctuation is an ellipsis / repeated dots (e.g. '..' or '...')
+        is_repeated_dots = '.' in punct_str and len(punct_str) >= 2
+
+        if is_repeated_dots:
+            # If followed by a lowercase word (or very short intro < 4 words), treat as intra-sentence hesitation
+            if following_raw and following_raw[0].islower():
+                continue
+            if following_word and spoken_words < 4:
+                continue
+
+        # Classification: Strong vs Medium
+        is_strong = any(c in punct_str for c in '.!?')
+        is_medium = not is_strong
+
+        if is_strong:
+            # If followed immediately by senpai without a continuing clause (e.g. ". Senpai."),
+            # attach to prevent leaving senpai stranded alone.
+            if following_word and following_word in _VOCATIVE_WORDS:
+                rest_after_voc = buffer[look.end(1):].lstrip()
+                if not rest_after_voc.startswith((',', ';', ':')):
+                    continue
+            if following_word and look.end(1) == len(buffer) and _is_vocative_prefix(following_word):
+                return None
+            return SegmentBoundary(end, True, 'strong_punctuation')
+
+        if is_medium:
+            # If buffer ends right after medium punctuation, wait for following word
+            if not look:
+                return None
+
+            # Senpai attachment: never split right before senpai
+            if following_word in _VOCATIVE_WORDS:
+                continue
+            if look.end(1) == len(buffer) and _is_vocative_prefix(following_word):
+                return None
+
+            # Continuation word: do not split before continuation words
+            if following_word in _CONTINUATION_WORDS:
+                continue
+
+            # Minimum natural chunk size for medium boundary:
+            # First phrase can emit at 5 spoken words; later phrases coalesce to at least 6 spoken words
+            min_clause_words = 5 if is_first_phrase else 6
+            if spoken_words < min_clause_words:
+                continue
+
+            return SegmentBoundary(end, False, 'coalesced_clause')
+
+    # Safety ceiling: prevent buffer from growing indefinitely without a boundary
+    spoken_words = _count_spoken_words(buffer)
+    if spoken_words >= 18 or len(buffer) >= 110:
+        words = list(re.finditer(r'\S+\s*', buffer))
+        if len(words) >= 14:
+            return SegmentBoundary(words[13].end(), False, 'max_buffer_safety')
+
+    return None
 
 # The closed set of actions Ollama is allowed to use (see ACTION TAGS in
 # _SYSTEM_PROMPT) — this list and the prompt's list must stay in sync.
@@ -359,7 +479,20 @@ def _fix_caps(text: str) -> str:
 
 # ── Prosody enhancement ───────────────────────────────────────────────────────
 
-_TRAIL_PUNCT = re.compile(r'[.!?,;]+$')
+_TRAIL_PUNCT = re.compile(r'[.!?,;\u2026]+$')
+
+
+def _normalize_pathological_dots(text: str) -> str:
+    """
+    Normalizes pathological dot sequences for Kokoro speech synthesis:
+    - 4+ dots like '....' or '.....' collapsed to a clean period or ellipsis.
+    - Pathological trailing dots at end of sentence normalised to a clean terminal period '.'.
+    - Consecutive unicode ellipses collapsed to one.
+    """
+    text = re.sub(r'\.{4,}', '...', text)
+    text = re.sub(r'[\u2026]{2,}', '\u2026', text)
+    text = re.sub(r'(?:\.{3}|\u2026)+$', '.', text)
+    return text
 
 
 # ── Per-expression Kokoro speed multipliers ───────────────────────────────────
@@ -583,9 +716,8 @@ def _enhance_prosody(text: str, expression: str, is_final: bool = True,
         enhanced = ". ".join(p[0].upper() + p[1:] for p in cleaned[:4]) + "."
 
     elif expression == "sad":
-        # Keep as one flowing unit — ellipsis pause midway, trailing off
-        enhanced = re.sub(r',\s+', '… ', base, count=1)
-        enhanced = enhanced + "…"
+        # Keep as one flowing unit — clean cadence
+        enhanced = base + "."
 
     elif expression == "relaxed":
         enhanced = base + "."
@@ -620,6 +752,7 @@ _SYSTEM_PROMPT = (
     "- Tags must be lowercase and inside square brackets.\n"
     "- Do not use any tags other than the ones listed above.\n"
     "- Do not include tags in the middle of a sentence, only at the start.\n"
+    "- Do not use ellipses (...) or trailing dots for hesitation; speak in clean, complete sentences.\n"
     "- Match the tag to how you actually feel saying that sentence — don't just default to [neutral].\n\n"
     "OPTIONAL NUANCE TAGS: Right after the emotion tag, you may add up to two "
     "more, in this order: [attitude:word] and [intensity:word]. "
@@ -648,7 +781,7 @@ _SYSTEM_PROMPT = (
     "angry sentences stress words of refusal or frustration, "
     "relaxed and neutral sentences have no caps at all.\n"
     "Example [excited]: 'Oh ABSOLUTELY senpai — it's SUCH a beautiful day!'\n"
-    "Example [sad]: 'I really MISS you senpai… it's been so HARD without you…'\n"
+    "Example [sad]: 'I really MISS you senpai, it's been so HARD without you.'\n"
     "Example [angry]: 'I told you STOP — this is WRONG and you know it.'\n"
     "Example [relaxed]: 'Everything is running smoothly. Nothing to worry about.'\n"
     "Never capitalise randomly. Only stress words that genuinely carry the feeling."
@@ -1103,11 +1236,23 @@ async def _ollama_streamer(
         # touch any other bracket content or otherwise alter real text.
         clean = _EMPTY_BRACKET_RE.sub("", clean)
         clean = re.sub(r'\s{2,}', ' ', clean).strip()
+        clean = _normalize_pathological_dots(clean)
 
         if not clean or _PUNCT_ONLY_RE.match(clean):
             # Tag/action-only fragment, or nothing speakable left after
             # cleanup — carry forward to the next phrase instead of
             # enqueuing a wasted synthesis call.
+            _pending_expression = expression
+            _pending_actions.extend(actions)
+            if attitude is not None:
+                _pending_attitude = attitude
+            if intensity is not None:
+                _pending_intensity = intensity
+            return None
+
+        # Protection: if not final and the only words are vocatives, carry forward
+        spoken_list = _get_spoken_words(clean)
+        if not is_final and spoken_list and all(w in _VOCATIVE_WORDS for w in spoken_list):
             _pending_expression = expression
             _pending_actions.extend(actions)
             if attitude is not None:
@@ -1155,15 +1300,26 @@ async def _ollama_streamer(
     # Monotonic phrase sequence counter for the current streaming turn
     _phrase_seq = [0]
 
-    async def _put_phrase(result) -> None:
+    async def _put_phrase(result, reason: str = "default") -> None:
         _phrase_seq[0] += 1
         n = _phrase_seq[0]
         ts = time.perf_counter()
         # Pack result with phrase_id and creation timestamp
         await synth_q.put((*result, n, ts))
+        clean_text = result[0]
+        is_final = result[3]
+        words = len(clean_text.split())
+        chars = len(clean_text)
         logger.info(
-            f"[TIMING][TTS][phrase={n}] QUEUED is_final={result[3]} qsize={synth_q.qsize()} "
-            f"t={ts:.3f} '{result[0]}'"
+            f"[TIMING][TTS][phrase={n}] QUEUED is_final={is_final} qsize={synth_q.qsize()} "
+            f"t={ts:.3f} '{clean_text}'"
+        )
+        logger.info(
+            f"[TTS_CHUNK] id={n} words={words} chars={chars} boundary={'sentence' if is_final else 'phrase'} "
+            f"reason={reason} text='{clean_text}'"
+        )
+        logger.info(
+            f"[TTS_SEGMENT] reason={reason} words={words}"
         )
         if n == 1:
             logger.info(f"[TIMING][TTFA] first usable phrase ready: +{ts-t_cmd_start:.3f}s since command start")
@@ -1173,15 +1329,16 @@ async def _ollama_streamer(
         full_text += token
         buffer    += token
         while True:
-            boundary = _next_boundary(buffer)
+            boundary = _next_boundary(buffer, is_first_phrase=(_phrase_seq[0] == 0))
             if boundary is None:
                 break
             idx, is_final = boundary
+            reason = getattr(boundary, "reason", "default")
             raw    = buffer[:idx]
             buffer = buffer[idx:]
             result = _emit(raw, is_final)
             if result:
-                await _put_phrase(result)
+                await _put_phrase(result, reason=reason)
 
     t0 = time.perf_counter()
     first_token_logged = False
@@ -1258,7 +1415,7 @@ async def _ollama_streamer(
     if buffer.strip():
         result = _emit(buffer, True)
         if result:
-            await _put_phrase(result)
+            await _put_phrase(result, reason="flush_buffer")
 
     # Store clean version (tags + stage directions stripped) for conversation memory
     clean_full = _HYBRID_TAG_RE_1.sub(r'*\1*', full_text)
@@ -1295,24 +1452,25 @@ async def _synth_worker(
     first_dispatch_logged = False
     first_ready_logged    = False
 
-    while True:
-        t_wait_start = time.perf_counter()
-        item = await synth_q.get()
-        t_dequeued = time.perf_counter()
+    completed_phrases: dict[int, tuple] = {}
+    next_play_id: int = 1
+    pending_tasks: set[asyncio.Task] = set()
+    flush_lock = asyncio.Lock()
+    synth_failed = [False]
 
-        if item is _DONE:
-            await play_q.put(_DONE)
-            return
+    async def _flush_ordered() -> None:
+        nonlocal next_play_id
+        async with flush_lock:
+            while next_play_id in completed_phrases:
+                payload = completed_phrases.pop(next_play_id)
+                if payload is not None:
+                    await play_q.put(payload)
+                next_play_id += 1
 
-        sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = item
-        phrase_id = meta[0] if meta else None
-        t_phrase_created = meta[1] if len(meta) > 1 else t_dequeued
-        p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
-        queue_wait = t_dequeued - t_phrase_created
-
-        logger.info(
-            f"[TIMING]{p_tag}DEQUEUED '{sentence[:30]}' t={t_dequeued:.3f} (queue_wait={queue_wait:.3f}s)"
-        )
+    async def _do_phrase_synth(phrase_item, p_id: int | None, p_created: float) -> None:
+        nonlocal first_dispatch_logged, first_ready_logged
+        sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = phrase_item
+        p_tag = f"[TTS][phrase={p_id}] " if p_id is not None else "[TTS] "
 
         try:
             # Enhance prosody before synthesis so Kokoro renders with feeling
@@ -1327,7 +1485,7 @@ async def _synth_worker(
                 logger.info(f"[TIMING][TTFA] Kokoro dispatch: +{t0-t_cmd_start:.3f}s since command start")
                 first_dispatch_logged = True
 
-            audio = await _run_kokoro(_synthesise_blocking, enhanced, expression, phrase_id=phrase_id)
+            audio = await _run_kokoro(_synthesise_blocking, enhanced, expression, phrase_id=p_id)
             t1 = time.perf_counter()
             dur = t1 - t0
 
@@ -1336,21 +1494,57 @@ async def _synth_worker(
                 if not first_ready_logged:
                     logger.info(f"[TIMING][TTFA] first Kokoro audio ready: +{t1-t_cmd_start:.3f}s since command start")
                     first_ready_logged = True
-                await play_q.put((audio, expression, actions, attitude, intensity, sentence, phrase_id, t_phrase_created))
+                completed_phrases[p_id if p_id is not None else next_play_id] = (
+                    audio, expression, actions, attitude, intensity, sentence, p_id, p_created
+                )
+                await _flush_ordered()
             else:
                 logger.error(
                     f"[TIMING]{p_tag}FAILED after {dur:.3f}s (synthesis returned None / timeout) — "
                     "initiating turn stall containment."
                 )
+                synth_failed[0] = True
                 # Fatal synthesis failure: cancel streamer so Ollama 60s HTTP socket doesn't hang the turn!
                 if cancel_streamer:
                     logger.warning(f"[TIMING]{p_tag}Cancelling Ollama streamer to unblock conversational turn.")
                     cancel_streamer()
-                # Feed _DONE to play_q so player finishes any already-buffered audio and completes the turn cleanly
+                await _flush_ordered()
                 await play_q.put(_DONE)
-                return
+                await synth_q.put(_DONE)
         except Exception as e:
             logger.error(f"{p_tag}Synth error for '{sentence}': {e}", exc_info=True)
+            synth_failed[0] = True
+            await synth_q.put(_DONE)
+
+    while True:
+        t_wait_start = time.perf_counter()
+        item = await synth_q.get()
+        t_dequeued = time.perf_counter()
+
+        if item is _DONE or synth_failed[0]:
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+            await _flush_ordered()
+            await play_q.put(_DONE)
+            return
+
+        sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = item
+        phrase_id = meta[0] if meta else None
+        t_phrase_created = meta[1] if len(meta) > 1 else t_dequeued
+        p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+        queue_wait = t_dequeued - t_phrase_created
+
+        logger.info(
+            f"[TIMING]{p_tag}DEQUEUED '{sentence[:30]}' t={t_dequeued:.3f} (queue_wait={queue_wait:.3f}s)"
+        )
+
+        task = asyncio.create_task(_do_phrase_synth(item, phrase_id, t_phrase_created))
+        pending_tasks.add(task)
+        task.add_done_callback(pending_tasks.discard)
+
+        # Bound concurrent lookahead to at most 2 in-flight synthesis tasks (1 CUDA + 1 CPU)
+        while len(pending_tasks) >= 2 and not synth_failed[0]:
+            await asyncio.sleep(0.01)
 
 
 def _resolve_tts_device() -> str:
@@ -1595,6 +1789,14 @@ def _synthesise_cpu_blocking(
         expr_factor = EXPRESSION_SPEED.get(expression, 1.0)
         speed       = round(base_speed * expr_factor, 3)
         logger.info(f"{p_tag}Synthesising on CPU fallback [{expression}] speed={speed}: '{sentence[:60]}'")
+        # Bound CPU threads so PortAudio microphone callback is never starved
+        try:
+            import torch
+            if torch.get_num_threads() > 4:
+                torch.set_num_threads(4)
+        except Exception:
+            pass
+
         t0 = time.perf_counter()
         with _cpu_kokoro_lock:
             chunks = [audio for _, _, audio in pipeline(sentence, voice=voice, speed=speed)
@@ -1610,6 +1812,20 @@ def _synthesise_cpu_blocking(
     except Exception as e:
         logger.error(f"{p_tag}CPU Kokoro synth error: {e}", exc_info=True)
         return None
+
+
+def ensure_cpu_kokoro_warmed(lang: str | None = None) -> None:
+    """Prime the isolated CPU Kokoro pipeline during startup to eliminate cold-start fallback latency."""
+    try:
+        t0 = time.perf_counter()
+        pipeline, voice = get_cpu_kokoro(lang)
+        with _cpu_kokoro_lock:
+            for _ in pipeline("Maya", voice=voice, speed=1.0):
+                pass
+        dt = time.perf_counter() - t0
+        logger.info(f"[TTS] Isolated CPU Kokoro pipeline successfully primed and resident in {dt:.3f}s.")
+    except Exception as e:
+        logger.warning(f"[TTS] CPU Kokoro pipeline warmup failed (non-fatal): {e}")
 
 
 def _do_reset_pipeline() -> None:
@@ -1663,6 +1879,46 @@ def get_active_scheduling_policy() -> GPUSchedulingPolicy:
     return _active_scheduling_policy
 
 
+KOKORO_CUDA_MIN_HEADROOM_MB: float = 350.0
+_mock_gpu_free_vram_mb: float | None = None
+
+
+def get_gpu_vram_info() -> tuple[float | None, float | None]:
+    """
+    Return (free_mb, total_mb) for the active CUDA device, or (None, None).
+    Supports _mock_gpu_free_vram_mb for hermetic test coverage.
+    """
+    global _mock_gpu_free_vram_mb
+    if _mock_gpu_free_vram_mb is not None:
+        return _mock_gpu_free_vram_mb, 4096.0
+    try:
+        import torch
+        if torch.cuda.is_available():
+            free_bytes, total_bytes = torch.cuda.mem_get_info()
+            return free_bytes / (1024 * 1024), total_bytes / (1024 * 1024)
+    except Exception:
+        pass
+    return None, None
+
+
+_cpu_fallback_lock: asyncio.Lock | None = None
+_cpu_fallback_lock_loop: asyncio.AbstractEventLoop | None = None
+_cpu_fallback_queue_depth: int = 0
+_cpu_fallback_active: bool = False
+
+
+def _get_cpu_fallback_lock() -> asyncio.Lock:
+    global _cpu_fallback_lock, _cpu_fallback_lock_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if _cpu_fallback_lock is None or _cpu_fallback_lock_loop is not loop:
+        _cpu_fallback_lock = asyncio.Lock()
+        _cpu_fallback_lock_loop = loop
+    return _cpu_fallback_lock
+
+
 def set_active_scheduling_policy(policy: GPUSchedulingPolicy) -> None:
     """Set the active GPU scheduling policy."""
     global _active_scheduling_policy
@@ -1679,10 +1935,15 @@ async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSched
     Evaluates whether a phrase synthesis request is admitted to CUDA, deferred,
     routed to CPU fallback, or rejected by quarantine.
 
-    Hierarchy (Phase F.2):
+    Hierarchy:
     1. Quarantine Precedence: If CUDA worker is TIMED_OUT or stale, ALWAYS return GPU_TTS_QUARANTINED.
-    2. Policy Evaluation: Based on active GPUSchedulingPolicy.
-    3. Phrase Fairness: Bounded deferral prevents infinite starvation.
+    2. Device Capability: If TTS device is not CUDA or CUDA unavailable, return GPU_TTS_CPU_FALLBACK.
+    3. Resource Admission: Under Policy 3 (Adaptive Gate):
+       - If free VRAM < KOKORO_CUDA_MIN_HEADROOM_MB (350 MB), route to CPU fallback.
+       - If a CUDA Kokoro worker is actively running, perform a bounded wait (up to 0.4s)
+         so subsequent phrases can take the fast CUDA path without thread collisions.
+       - If worker is still busy after bounded wait, safely route to CPU fallback.
+       - If VRAM headroom is safe (>= 350 MB), admit to CUDA (regardless of Ollama generating).
     """
     global _active_scheduling_policy
     p_num = phrase_id if phrase_id is not None else 1
@@ -1690,6 +1951,9 @@ async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSched
     # Tier 1: F.1 Quarantine Precedence (Absolute Safety)
     if is_kokoro_stale() or _cuda_worker_state == WorkerState.TIMED_OUT or _kokoro_stale_worker.is_set():
         return (GPUSchedulerState.GPU_TTS_QUARANTINED, "cuda_quarantined")
+
+    if _resolve_tts_device() != "cuda":
+        return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "device_cpu")
 
     policy = _active_scheduling_policy
 
@@ -1713,13 +1977,38 @@ async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSched
             return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "ollama_generating_phrase_conservative")
         return (GPUSchedulerState.GPU_TTS_ALLOWED, "ollama_idle_admitted")
 
-    # Policy 3: Adaptive GPU Gate
+    # Policy 3: Adaptive GPU Gate (VRAM-Aware & Concurrency-Safe)
     elif policy == GPUSchedulingPolicy.POLICY_3_ADAPTIVE_GATE:
+        # Check initial VRAM headroom
+        free_mb, _ = get_gpu_vram_info()
+        if free_mb is not None and free_mb < KOKORO_CUDA_MIN_HEADROOM_MB:
+            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, f"vram_headroom_low_{free_mb:.0f}mb")
+
+        # Bounded wait if another CUDA worker is actively synthesizing
+        if is_kokoro_busy():
+            t_wait_start = time.perf_counter()
+            while is_kokoro_busy() and (time.perf_counter() - t_wait_start < 0.40):
+                await asyncio.sleep(0.02)
+
+        # Re-check quarantine in case the worker timed out while we waited
+        if is_kokoro_stale() or _cuda_worker_state == WorkerState.TIMED_OUT or _kokoro_stale_worker.is_set():
+            return (GPUSchedulerState.GPU_TTS_QUARANTINED, "cuda_quarantined")
+
+        # If worker is STILL busy after bounded wait, route to CPU fallback
+        if is_kokoro_busy():
+            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "cuda_worker_busy_timeout")
+
+        # Re-check VRAM headroom after wait
+        free_mb, _ = get_gpu_vram_info()
+        if free_mb is not None and free_mb < KOKORO_CUDA_MIN_HEADROOM_MB:
+            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, f"vram_headroom_low_{free_mb:.0f}mb")
+
+        # Worker is idle and VRAM headroom is safe
         if is_ollama_generating():
             if p_num == 1:
                 return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_first_phrase_cuda")
             else:
-                return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "adaptive_concurrency_cpu")
+                return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_headroom_safe")
         else:
             return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_ollama_idle_cuda")
 
@@ -1779,8 +2068,12 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
 
     # Scheduler Admission Evaluation
     admission_state, reason = await evaluate_tts_admission(phrase_id=phrase_id)
+    backend_str = "cuda" if admission_state == GPUSchedulerState.GPU_TTS_ALLOWED else "cpu"
+    free_mb, _ = get_gpu_vram_info()
+    free_str = f"{free_mb:.1f}MB" if free_mb is not None else "n/a"
     logger.info(
-        f"[SCHED][TTS][phrase={phrase_id}] decision={admission_state.value} reason={reason} worker_state={_cuda_worker_state.value}"
+        f"[TTS_ADMISSION]{p_tag}backend={backend_str} decision={admission_state.value} reason={reason} "
+        f"gpu_free={free_str} ollama_active={is_ollama_generating()} kokoro_gpu_active={is_kokoro_busy()}"
     )
 
     # 1. If quarantined or scheduler decided CPU fallback:
@@ -1796,20 +2089,35 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
                     f"{diag_p_tag}CPU_FALLBACK_SELECTED (scheduler_decision={admission_state.value}) — "
                     f"routing speech synthesis to CPU ({reason})."
                 )
-            logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
+
+            global _cpu_fallback_queue_depth, _cpu_fallback_active
             loop = asyncio.get_running_loop()
-            try:
-                sentence = args[0]
-                expression = args[1] if len(args) > 1 else "neutral"
-                trace_id = args[2] if len(args) > 2 else None
-                res = await loop.run_in_executor(
-                    None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
-                )
-                logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None})")
-                return res
-            except Exception as e:
-                logger.error(f"{diag_p_tag}CPU fallback synthesis failed: {e}", exc_info=True)
-                return None
+            cpu_lock = _get_cpu_fallback_lock()
+
+            _cpu_fallback_queue_depth += 1
+            queue_pos = _cpu_fallback_queue_depth - 1
+            logger.info(f"[CPU_TTS_QUEUE]{p_tag}position={queue_pos} active={_cpu_fallback_active}")
+
+            async with cpu_lock:
+                _cpu_fallback_active = True
+                logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active=True")
+                logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
+                try:
+                    sentence = args[0]
+                    expression = args[1] if len(args) > 1 else "neutral"
+                    trace_id = args[2] if len(args) > 2 else None
+                    res = await loop.run_in_executor(
+                        None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
+                    )
+                    logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None})")
+                    return res
+                except Exception as e:
+                    logger.error(f"{diag_p_tag}CPU fallback synthesis failed: {e}", exc_info=True)
+                    return None
+                finally:
+                    _cpu_fallback_queue_depth -= 1
+                    _cpu_fallback_active = (_cpu_fallback_queue_depth > 0)
+                    logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active={_cpu_fallback_active}")
         else:
             logger.warning(
                 f"{p_tag}Kokoro synthesis rejected: prior worker still active on GPU after timeout."
@@ -1994,6 +2302,7 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
 
         if item is _DONE:
             _reply_finished[0] = True
+            await _ws.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
             # Respects a concurrent "go to sleep" landed mid-reply — see
             # core/turn_lifecycle.py's rest() and docs/CHANGELOG.md's
             # "Sleep race" issue. force_idle=True: this is the one place
@@ -2049,8 +2358,6 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
 
         if output in ("local", "both"):
             await loop.run_in_executor(None, _play_blocking, data, samplerate)
-
-        await _ws.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
 
 
 def _play_blocking(data, samplerate: int) -> None:
