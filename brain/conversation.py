@@ -204,6 +204,30 @@ _REMEMBER_CUE_RE = re.compile(
 )
 _PREFERENCE_RE = re.compile(r"\b(prefer|favorite|always|never)\b", re.IGNORECASE)
 
+# Negative directives or denials — these instruct the assistant NOT to remember,
+# or express the user's lack of memory. They must NEVER become durable memory.
+_FORGET_OR_NEGATIVE_RE = re.compile(
+    r"\b(?:don'?t|do\s+not|never)\s+remember\b|"
+    r"(?<!don't\s)(?<!dont\s)(?<!do not\s)(?<!never\s)\b(?:forget|drop|delete|remove)\s+(?:that|this|my\s+preference)\b",
+    re.IGNORECASE,
+)
+
+
+# Questions, memory inquiries, hypotheticals, or past/historical preferences.
+# These inquire about past events or hypothesize conditions, and must NEVER become durable facts.
+_QUESTION_OR_HYPOTHETICAL_RE = re.compile(
+    r"^(?:do|did)\s+you\s+remember\b|"
+    r"^(?:remember\s+when|what\s+if|if\s+i\b|suppose\s+i\b)|"
+    r"\b(?:used\s+to|previously|formerly|in\s+the\s+past)\b",
+    re.IGNORECASE,
+)
+
+# Directive prefix cleaner to extract canonical fact/preference content
+_DIRECTIVE_PREFIX_RE = re.compile(
+    r"^(?:(?:please|can\s+you|could\s+you)\s+)*(?:remember\s+(?:that\s+)?|don'?t\s+forget\s+(?:that\s+)?|note\s+that\s+)",
+    re.IGNORECASE,
+)
+
 # Narrower cues that update ConversationState directly (current-turn info,
 # not long-term memory). Kept separate from _REMEMBER_CUE_RE so a single
 # "i'm planning a trip" doesn't get dumped verbatim into state.decisions —
@@ -644,12 +668,13 @@ class ContextManager:
 
     # ── Post-reply bookkeeping ─────────────────────────────────────────────
 
-    async def record_assistant_turn(self, question: str, response: str, intent: dict | None = None) -> None:
-        """Resolves the just-discussed open loop and, if the turn meets
-        the memory policy, persists a semantic memory. Best-effort —
-        never lets a memory failure surface to the caller."""
+    async def record_assistant_turn(self, question: str, response: str, intent: dict | None = None, *, interrupted: bool = False) -> None:
+        """Resolves the just-discussed open loop (unless interrupted) and,
+        if the turn meets the memory policy, persists a semantic memory.
+        Best-effort — never lets a memory failure surface to the caller."""
         try:
-            self._resolve_open_loop(self._state.active_topic)
+            if not interrupted:
+                self._resolve_open_loop(self._state.active_topic)
             candidate = self._memory_candidate(question, intent)
             if candidate:
                 await self._persist_memory(candidate)
@@ -685,10 +710,23 @@ class ContextManager:
         if intent_name in _NOISE_INTENTS:
             return None
 
-        if _REMEMBER_CUE_RE.search(question):
-            mem_type = "preference" if _PREFERENCE_RE.search(question) else "fact"
+        t = question.strip()
+        if t.endswith("?"):
+            return None
+        if _FORGET_OR_NEGATIVE_RE.search(t):
+            return None
+        if _QUESTION_OR_HYPOTHETICAL_RE.search(t):
+            return None
+
+        if _REMEMBER_CUE_RE.search(t):
+            clean = _DIRECTIVE_PREFIX_RE.sub("", t).strip()
+            if clean:
+                clean = clean[0].upper() + clean[1:]
+            if len(clean) < 5:
+                return None
+            mem_type = "preference" if _PREFERENCE_RE.search(clean) else "fact"
             return MemoryRecord(
-                content=question.strip(), mem_type=mem_type,
+                content=clean, mem_type=mem_type,
                 topic=self._state.active_topic or "", importance=0.8, source="user_stated",
             )
 
@@ -716,7 +754,7 @@ class ContextManager:
             # Prefer the newer statement over a stale duplicate rather than
             # accumulating near-identical or contradictory entries.
             await loop.run_in_executor(
-                None, self._store.update, existing.id, candidate.content, embedding, candidate.timestamp,
+                None, self._store.update, existing.id, candidate.content, embedding, candidate.timestamp, candidate.topic,
             )
             logger.debug(f"Semantic memory updated (id={existing.id}): '{candidate.content[:50]}'")
             record_id = existing.id
@@ -878,5 +916,21 @@ class ContextManager:
             # No running event loop (e.g. called outside the app's async
             # context, such as in a script) — drop rather than crash.
             logger.debug("No running loop for compaction persist — summary dropped.")
+
+    def reset(self) -> None:
+        """Clear conversation history, conversational state, and open loops for a new session."""
+        self._conv.reset()
+        self._state = ConversationState()
+        self._open_loops.clear()
+        self._evicted_buffer.clear()
+        self._pending_question = None
+        self._pending_question_topic = None
+        self._turn = None
+        for task in list(self._bg_tasks):
+            if not task.done():
+                task.cancel()
+        self._bg_tasks.clear()
+        logger.info("ContextManager reset: conversation state and open loops cleared.")
+
 
 context_manager = ContextManager()

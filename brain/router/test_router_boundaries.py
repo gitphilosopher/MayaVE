@@ -899,3 +899,104 @@ def test_app_opening_remains_app_or_web(utterance, expected_target):
     assert ir.domain == "app_or_web", f"Wrong domain for '{utterance}': {ir.domain}"
     assert ir.operation == "open", f"Wrong operation for '{utterance}': {ir.operation}"
     assert expected_target in ir.target.lower()
+
+
+# ── Phase F.11 Actionability & Capability Gating Tests ────────────────────────
+
+@pytest.mark.parametrize("utterance", [
+    "I set a timer for ten minutes earlier.",
+    "I already started a timer.",
+    "I had a timer running.",
+    "I turned off the computer.",
+    "I searched Google for this earlier.",
+    "I checked the weather tomorrow.",
+    "I was listening to music.",
+    "I turned off the Wi-Fi.",
+    "I set a timer for ten minutes.",
+    "I searched Google for Python.",
+])
+def test_actionability_historical_statements_not_ready(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert not ir.executable, f"Historical statement '{utterance}' should not be executable, got {ir.status}"
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "What did I search for yesterday?",
+    "Show me my Google search history.",
+    "Do you remember what I searched for?",
+    "Search history.",
+    "Look up what I searched for.",
+    "Show past searches.",
+])
+def test_actionability_search_history_not_web_search(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert not ir.executable, f"Search history '{utterance}' should not be executable, got {ir.status}"
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status}"
+    assert ir.domain != "web", f"Search history must never map to web.search, got domain {ir.domain}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "If I set a timer for ten minutes, what happens?",
+    "What if I restart the computer?",
+    "What if I turn off the Wi-Fi?",
+    "What would happen if I delete all notes?",
+])
+def test_actionability_hypotheticals_not_ready(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert not ir.executable, f"Hypothetical '{utterance}' should not be executable, got {ir.status}"
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status}"
+
+
+@pytest.mark.parametrize("utterance", [
+    "Did I set a timer?",
+    "How long was my timer?",
+    "Do you remember the timer I set?",
+    "Did we search Google for that?",
+    "Remember when I asked you to search Google?",
+    "Did I turn off the Wi-Fi?",
+])
+def test_actionability_inquiries_not_ready(utterance):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert not ir.executable, f"Conversational inquiry '{utterance}' should not be executable, got {ir.status}"
+    assert ir.status is Status.UNKNOWN, f"Expected UNKNOWN for '{utterance}', got {ir.status}"
+
+
+@pytest.mark.parametrize("utterance,expected_key", [
+    ("Set a timer for ten minutes.", "timer.create"),
+    ("Start a five minute timer.", "timer.create"),
+    ("Remind me in twenty minutes.", "timer.create"),
+    ("Ten minute timer.", "timer.create"),
+    ("Search Google for cats.", "web.search"),
+    ("Search Google for Python tutorials.", "web.search"),
+    ("Turn off the computer.", "system.shutdown"),
+])
+def test_actionability_genuine_commands_remain_ready(utterance, expected_key):
+    from brain.intent_engine import IntentEngine
+    from brain.router.registry import CommandRegistry, load_specs
+    engine = IntentEngine()
+    reg = CommandRegistry(load_specs())
+    u = CommandUnderstander(engine, reg, guard_fn=_guard_check)
+    ir = run(u.understand(utterance))
+    assert ir.status is Status.READY, f"Expected READY for '{utterance}', got {ir.status}"
+    assert ir.key == expected_key, f"Expected {expected_key} for '{utterance}', got {ir.key}"

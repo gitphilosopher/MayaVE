@@ -64,6 +64,87 @@ _PHYSICAL_SYSTEM_TARGETS = re.compile(
     re.I,
 )
 
+# Unsupported capabilities that must never map to an external command (e.g. search history)
+_UNSUPPORTED_SEARCH_HISTORY_RE = re.compile(
+    r"\b(?:"
+    r"(?:search|browsing|browser|google)\s+history|"
+    r"history\s+of\s+(?:my\s+)?(?:searches|browsing)|"
+    r"(?:what|things?)\s+(?:did\s+)?(?:i|we)\s+search(?:\s+for)?|"
+    r"(?:what|things?)\s+i\s+(?:have\s+)?searched(?:\s+for)?|"
+    r"(?:past|previous|recent)\s+searches|"
+    r"look\s+up\s+what\s+(?:i|we)\s+searched(?:\s+for)?|"
+    r"searched\s+(?:for\s+)?(?:yesterday|earlier|before)|"
+    r"remember\s+what\s+(?:i|we)\s+searched|"
+    r"remember\s+when\s+(?:i|we)\s+(?:asked\s+you\s+to\s+)?search"
+    r")\b",
+    re.I,
+)
+
+# Hypothetical conditionals: asking "what if" or consequence of hypothetical action
+_HYPOTHETICAL_RE = re.compile(
+    r"^(?:(?:and|so|but|well)\s+)*"
+    r"(?:"
+    r"what\s+if\s+(?:i|we|you)\b|"
+    r"what\s+would\s+happen\s+if\b|"
+    r"if\s+(?:i|we|you)\b.+?\b(?:what\s+happens|what\s+will\s+happen|what\s+would\s+happen|will\s+it|would\s+it)\b|"
+    r"suppose\s+(?:i|we)\b"
+    r")",
+    re.I,
+)
+
+# Conversational inquiries / memory questions about past actions
+_PAST_INQUIRY_RE = re.compile(
+    r"^(?:(?:and|so|but|well)\s+)*"
+    r"(?:"
+    r"did\s+(?:i|we|you)\b|"
+    r"how\s+long\s+was\b|"
+    r"do\s+you\s+remember\b|"
+    r"remember\s+when\b|"
+    r"what\s+did\s+(?:i|we)\b|"
+    r".*?\b(?:we\s+talked\s+about|thing\s+we\s+talked\s+about)\b"
+    r")",
+    re.I,
+)
+
+# Declarative past / historical actions (user recounting what they or someone already did)
+_HISTORICAL_STATEMENT_RE = re.compile(
+    r"^(?:(?:and|so|but|well|actually|yeah|yes|no)\s+)*"
+    r"(?:"
+    r"(?:i|we|he|she|they|someone)\s+(?:have\s+|had\s+)?already\b|"
+    r"(?:i|we|he|she|they|someone)\s+(?:already\s+)?(?:had|was|were)\b|"
+    r"(?:i|we|he|she|they|someone)\s+(?:"
+    r"set|started|created|turned(?:\s+off)?|shut(?:\s+down)?|restarted|locked|searched|checked|"
+    r"opened|cleared|copied|deleted|listened|played|paused|asked|looked"
+    r")\b.*?\b(?:earlier|yesterday|ago|before|previously|last\s+(?:night|week|month)|already)\b|"
+    r"(?:earlier|yesterday|previously)\s+(?:i|we|he|she|they|someone)\b|"
+    r"(?:i|we)\s+(?:"
+    r"set\s+a\s+timer|"
+    r"turned\s+off|"
+    r"shut\s+down|"
+    r"restarted|"
+    r"locked|"
+    r"searched(?:\s+google)?\s+for|"
+    r"checked(?:\s+the\s+weather)?|"
+    r"was\s+listening"
+    r")\b"
+    r")",
+    re.I,
+)
+
+
+def evaluate_actionability(domain: str, operation: str, text: str) -> tuple[bool, str]:
+    t = text.lower().strip()
+    if domain == "web" or "search" in operation:
+        if _UNSUPPORTED_SEARCH_HISTORY_RE.search(t):
+            return False, "unsupported_capability"
+    if _HYPOTHETICAL_RE.search(t):
+        return False, "hypothetical"
+    if _PAST_INQUIRY_RE.search(t):
+        return False, "conversational_inquiry"
+    if _HISTORICAL_STATEMENT_RE.search(t):
+        return False, "historical_statement"
+    return True, "actionable"
+
 
 class CommandUnderstander:
     def __init__(self, legacy, registry, *, ctx: ConversationContext | None = None,
@@ -176,6 +257,11 @@ class CommandUnderstander:
             logger.info(f"[router] physical-world target out of scope for {spec.key}: {text!r}")
             return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
                              reason="physical_world_out_of_scope", legacy_intent="unknown", **base)
+        act, act_reason = evaluate_actionability(spec.domain, spec.operation, text)
+        if not act:
+            logger.info(f"[router] non-actionable utterance for {spec.key}: {text!r} ({act_reason})")
+            return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
+                             reason=act_reason, legacy_intent="unknown", **base)
         target = self._target_for(spec, text, target)
         ents, missing = extract_entities(spec, text, target, llm_entities)
         ent_target = ents.get(spec.target_mode.split(":", 1)[1]) if spec.target_mode.startswith("entity:") else None

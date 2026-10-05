@@ -94,6 +94,8 @@ class SQLiteVectorStore(VectorStore):
     def _connect(self):
         conn = sqlite3.connect(self._db_path)
         try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
             with conn:
                 yield conn
         finally:
@@ -143,13 +145,19 @@ class SQLiteVectorStore(VectorStore):
             logger.error(f"Vector store add failed: {e}", exc_info=True)
             return None
 
-    def update(self, record_id: int, content: str, embedding: list[float], timestamp: float) -> None:
+    def update(self, record_id: int, content: str, embedding: list[float], timestamp: float, topic: str | None = None) -> None:
         try:
             with self._connect() as conn:
-                conn.execute(
-                    "UPDATE memories SET content=?, embedding=?, timestamp=? WHERE id=?",
-                    (content, self._to_blob(embedding), timestamp, record_id),
-                )
+                if topic is not None:
+                    conn.execute(
+                        "UPDATE memories SET content=?, embedding=?, timestamp=?, topic=? WHERE id=?",
+                        (content, self._to_blob(embedding), timestamp, topic, record_id),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE memories SET content=?, embedding=?, timestamp=? WHERE id=?",
+                        (content, self._to_blob(embedding), timestamp, record_id),
+                    )
                 conn.commit()
         except Exception as e:
             logger.error(f"Vector store update failed: {e}", exc_info=True)
@@ -214,8 +222,9 @@ class SQLiteVectorStore(VectorStore):
     def find_similar(self, embedding: list[float], mem_type: str, topic: str,
                       threshold: float) -> MemoryRecord | None:
         results = self.search(embedding, top_k=1, mem_type=mem_type, min_similarity=threshold)
-        if results and (not topic or results[0][0].topic == topic):
-            return results[0][0]
+        if results:
+            if not topic or results[0][0].topic == topic or results[0][1] >= threshold:
+                return results[0][0]
         return None
 
     @staticmethod

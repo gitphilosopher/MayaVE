@@ -975,7 +975,8 @@ async def query(intent: dict, text: str) -> str:
             _filler_done.set()   # a cancelled filler never reopens the gate
 
         # Finished reply -> full clean text; interrupted or partial -> only what was played.
-        if _reply_finished[0] and _last_response:
+        is_interrupted = not (_reply_finished[0] and _last_response)
+        if not is_interrupted:
             full_response = _last_response[0]
         else:
             full_response = " ".join(_spoken_phrases)
@@ -986,9 +987,9 @@ async def query(intent: dict, text: str) -> str:
             from services.ws_server import ws_server as _ws
             await _ws.broadcast_transcript(full_response, "maya")
             # Stage 2 bookkeeping: resolves the open loop for the topic just
-            # discussed and, if the memory policy applies, persists a
+            # discussed (unless interrupted) and, if the memory policy applies, persists a
             # semantic memory. Best-effort — never raises.
-            await context_manager.record_assistant_turn(question, full_response, intent)
+            await context_manager.record_assistant_turn(question, full_response, intent, interrupted=is_interrupted)
         else:
             # Barge-in cut the reply off before _ollama_streamer() ever
             # reached its final out_text.append() (including a cancellation
@@ -1516,35 +1517,42 @@ async def _synth_worker(
             synth_failed[0] = True
             await synth_q.put(_DONE)
 
-    while True:
-        t_wait_start = time.perf_counter()
-        item = await synth_q.get()
-        t_dequeued = time.perf_counter()
+    try:
+        while True:
+            t_wait_start = time.perf_counter()
+            item = await synth_q.get()
+            t_dequeued = time.perf_counter()
 
-        if item is _DONE or synth_failed[0]:
-            if pending_tasks:
-                await asyncio.gather(*pending_tasks, return_exceptions=True)
-            await _flush_ordered()
-            await play_q.put(_DONE)
-            return
+            if item is _DONE or synth_failed[0]:
+                if pending_tasks:
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                await _flush_ordered()
+                await play_q.put(_DONE)
+                return
 
-        sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = item
-        phrase_id = meta[0] if meta else None
-        t_phrase_created = meta[1] if len(meta) > 1 else t_dequeued
-        p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
-        queue_wait = t_dequeued - t_phrase_created
+            sentence, expression, actions, is_final, attitude, intensity, continuation, *meta = item
+            phrase_id = meta[0] if meta else None
+            t_phrase_created = meta[1] if len(meta) > 1 else t_dequeued
+            p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+            queue_wait = t_dequeued - t_phrase_created
 
-        logger.info(
-            f"[TIMING]{p_tag}DEQUEUED '{sentence[:30]}' t={t_dequeued:.3f} (queue_wait={queue_wait:.3f}s)"
-        )
+            logger.info(
+                f"[TIMING]{p_tag}DEQUEUED '{sentence[:30]}' t={t_dequeued:.3f} (queue_wait={queue_wait:.3f}s)"
+            )
 
-        task = asyncio.create_task(_do_phrase_synth(item, phrase_id, t_phrase_created))
-        pending_tasks.add(task)
-        task.add_done_callback(pending_tasks.discard)
+            task = asyncio.create_task(_do_phrase_synth(item, phrase_id, t_phrase_created))
+            pending_tasks.add(task)
+            task.add_done_callback(pending_tasks.discard)
 
-        # Bound concurrent lookahead to at most 2 in-flight synthesis tasks (1 CUDA + 1 CPU)
-        while len(pending_tasks) >= 2 and not synth_failed[0]:
-            await asyncio.sleep(0.01)
+            # Bound concurrent lookahead to at most 2 in-flight synthesis tasks (1 CUDA + 1 CPU)
+            while len(pending_tasks) >= 2 and not synth_failed[0]:
+                await asyncio.sleep(0.01)
+    finally:
+        for t in list(pending_tasks):
+            if not t.done():
+                t.cancel()
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
 
 
 def _resolve_tts_device() -> str:
@@ -1716,6 +1724,32 @@ _kokoro_stale_worker = threading.Event()
 _kokoro_worker_seq = 0
 _active_phrase_id: int | None = None
 
+# CUDA Kokoro FIFO queue state (Batch 3)
+_cuda_synth_lock: asyncio.Lock | None = None
+_cuda_synth_queue_depth: int = 0
+_cuda_synth_active: bool = False
+
+
+def _get_cuda_synth_lock() -> asyncio.Lock:
+    """Return the asyncio.Lock ensuring strictly serialized FIFO CUDA synthesis."""
+    global _cuda_synth_lock
+    if _cuda_synth_lock is None:
+        _cuda_synth_lock = asyncio.Lock()
+    return _cuda_synth_lock
+
+
+def get_cuda_synth_queue_depth() -> int:
+    """Return current depth of queued/active CUDA synthesis requests."""
+    return _cuda_synth_queue_depth
+
+
+def clear_cuda_synth_queue_state() -> None:
+    """Reset CUDA synthesis queue depth and active state (primarily for test fixtures)."""
+    global _cuda_synth_queue_depth, _cuda_synth_active, _cuda_synth_lock
+    _cuda_synth_queue_depth = 0
+    _cuda_synth_active = False
+    _cuda_synth_lock = None
+
 
 def get_worker_state() -> WorkerState:
     """Return the current lifecycle state of the CUDA Kokoro worker."""
@@ -1723,8 +1757,8 @@ def get_worker_state() -> WorkerState:
 
 
 def is_kokoro_busy() -> bool:
-    """Return whether a Kokoro synthesis worker is currently running."""
-    return _kokoro_worker_active.is_set()
+    """Return whether a Kokoro synthesis worker is currently running or actively executing."""
+    return _kokoro_worker_active.is_set() or _cuda_synth_active
 
 
 def is_kokoro_stale() -> bool:
@@ -1880,6 +1914,8 @@ def get_active_scheduling_policy() -> GPUSchedulingPolicy:
 
 
 KOKORO_CUDA_MIN_HEADROOM_MB: float = 350.0
+KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB: float = 1200.0
+KOKORO_CUDA_WATCHDOG_TIMEOUT_SEC: float = 3.0
 _mock_gpu_free_vram_mb: float | None = None
 
 
@@ -1984,24 +2020,17 @@ async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSched
         if free_mb is not None and free_mb < KOKORO_CUDA_MIN_HEADROOM_MB:
             return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, f"vram_headroom_low_{free_mb:.0f}mb")
 
-        # Bounded wait if another CUDA worker is actively synthesizing
+        # Proactive contention gate: When Ollama is actively generating on GPU,
+        # constrained VRAM (< 1200MB) introduces severe compute starvation / WDDM queue stalls.
+        # Safely route to CPU fallback before dispatching to CUDA.
+        if is_ollama_generating() and free_mb is not None and free_mb < KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB:
+            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "ollama_gpu_contention_risk")
+
+        # If a prior CUDA worker is actively running, admit to the serialized CUDA FIFO queue
+        # rather than prematurely forcing CPU fallback. The queue guarantees strictly serialized
+        # execution without thread collisions or unsafe concurrency.
         if is_kokoro_busy():
-            t_wait_start = time.perf_counter()
-            while is_kokoro_busy() and (time.perf_counter() - t_wait_start < 0.40):
-                await asyncio.sleep(0.02)
-
-        # Re-check quarantine in case the worker timed out while we waited
-        if is_kokoro_stale() or _cuda_worker_state == WorkerState.TIMED_OUT or _kokoro_stale_worker.is_set():
-            return (GPUSchedulerState.GPU_TTS_QUARANTINED, "cuda_quarantined")
-
-        # If worker is STILL busy after bounded wait, route to CPU fallback
-        if is_kokoro_busy():
-            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, "cuda_worker_busy_timeout")
-
-        # Re-check VRAM headroom after wait
-        free_mb, _ = get_gpu_vram_info()
-        if free_mb is not None and free_mb < KOKORO_CUDA_MIN_HEADROOM_MB:
-            return (GPUSchedulerState.GPU_TTS_CPU_FALLBACK, f"vram_headroom_low_{free_mb:.0f}mb")
+            return (GPUSchedulerState.GPU_TTS_ALLOWED, "adaptive_queue_cuda")
 
         # Worker is idle and VRAM headroom is safe
         if is_ollama_generating():
@@ -2039,7 +2068,7 @@ async def evaluate_tts_admission(phrase_id: int | None = None) -> tuple[GPUSched
 _get_kokoro = get_shared_kokoro
 _reset_kokoro_pipeline = reset_shared_kokoro
 
-_KOKORO_SYNTH_TIMEOUT = 15.0
+_KOKORO_SYNTH_TIMEOUT = KOKORO_CUDA_WATCHDOG_TIMEOUT_SEC
 
 
 def set_kokoro_synth_timeout(timeout: float) -> None:
@@ -2048,83 +2077,48 @@ def set_kokoro_synth_timeout(timeout: float) -> None:
     _KOKORO_SYNTH_TIMEOUT = timeout
 
 
-async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
-    """
-    Runs Kokoro synthesis with bounded soft timeout, adaptive GPU scheduling, and automatic CPU fallback.
+async def _dispatch_cpu_fallback(args, phrase_id: int | None, diag_p_tag: str, p_tag: str):
+    """Execute speech synthesis on the isolated, strictly-serialized CPU fallback pipeline."""
+    global _cpu_fallback_queue_depth, _cpu_fallback_active
+    loop = asyncio.get_running_loop()
+    cpu_lock = _get_cpu_fallback_lock()
 
-    Fault containment & recovery contract (Phase F.1 & F.2):
-    1. Quarantine precedence: If CUDA is quarantined (TIMED_OUT / stale), scheduler forces CPU fallback.
-    2. Adaptive GPU admission: The active scheduling policy dictates whether CUDA is safe or CPU should be used.
-    3. Soft timeout: If CUDA synthesis exceeds _KOKORO_SYNTH_TIMEOUT, asyncio.wait_for
-       terminates the caller wait and marks the worker as TIMED_OUT.
-    4. Deferred CUDA recovery: When the background worker exits native execution, its
-       finally block resets the CUDA pipeline and restores the backend to IDLE.
-    """
-    global _kokoro_worker_seq, _cuda_worker_state, _active_phrase_id
+    _cpu_fallback_queue_depth += 1
+    queue_pos = _cpu_fallback_queue_depth - 1
+    logger.info(f"[CPU_TTS_QUEUE]{p_tag}position={queue_pos} active={_cpu_fallback_active}")
 
-    turn_id = get_diag_turn_id()
-    diag_p_tag = f"[DIAG][TURN={turn_id}][TTS][phrase={phrase_id}] " if phrase_id is not None else f"[DIAG][TURN={turn_id}][TTS] "
-    p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
-
-    # Scheduler Admission Evaluation
-    admission_state, reason = await evaluate_tts_admission(phrase_id=phrase_id)
-    backend_str = "cuda" if admission_state == GPUSchedulerState.GPU_TTS_ALLOWED else "cpu"
-    free_mb, _ = get_gpu_vram_info()
-    free_str = f"{free_mb:.1f}MB" if free_mb is not None else "n/a"
-    logger.info(
-        f"[TTS_ADMISSION]{p_tag}backend={backend_str} decision={admission_state.value} reason={reason} "
-        f"gpu_free={free_str} ollama_active={is_ollama_generating()} kokoro_gpu_active={is_kokoro_busy()}"
-    )
-
-    # 1. If quarantined or scheduler decided CPU fallback:
-    if admission_state in (GPUSchedulerState.GPU_TTS_QUARANTINED, GPUSchedulerState.GPU_TTS_CPU_FALLBACK):
-        if fn == _synthesise_blocking or getattr(fn, "__name__", "") == "_synthesise_blocking":
-            if admission_state == GPUSchedulerState.GPU_TTS_QUARANTINED:
-                logger.warning(
-                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (worker_state={_cuda_worker_state.value}) — "
-                    "routing speech synthesis to isolated CPU fallback pipeline."
-                )
-            else:
-                logger.info(
-                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (scheduler_decision={admission_state.value}) — "
-                    f"routing speech synthesis to CPU ({reason})."
-                )
-
-            global _cpu_fallback_queue_depth, _cpu_fallback_active
-            loop = asyncio.get_running_loop()
-            cpu_lock = _get_cpu_fallback_lock()
-
-            _cpu_fallback_queue_depth += 1
-            queue_pos = _cpu_fallback_queue_depth - 1
-            logger.info(f"[CPU_TTS_QUEUE]{p_tag}position={queue_pos} active={_cpu_fallback_active}")
-
-            async with cpu_lock:
-                _cpu_fallback_active = True
-                logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active=True")
-                logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
-                try:
-                    sentence = args[0]
-                    expression = args[1] if len(args) > 1 else "neutral"
-                    trace_id = args[2] if len(args) > 2 else None
-                    res = await loop.run_in_executor(
-                        None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
-                    )
-                    logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None})")
-                    return res
-                except Exception as e:
-                    logger.error(f"{diag_p_tag}CPU fallback synthesis failed: {e}", exc_info=True)
-                    return None
-                finally:
-                    _cpu_fallback_queue_depth -= 1
-                    _cpu_fallback_active = (_cpu_fallback_queue_depth > 0)
-                    logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active={_cpu_fallback_active}")
-        else:
-            logger.warning(
-                f"{p_tag}Kokoro synthesis rejected: prior worker still active on GPU after timeout."
+    lock_acquired = False
+    try:
+        await cpu_lock.acquire()
+        lock_acquired = True
+        _cpu_fallback_active = True
+        logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active=True")
+        logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
+        try:
+            sentence = args[0]
+            expression = args[1] if len(args) > 1 else "neutral"
+            trace_id = args[2] if len(args) > 2 else None
+            t_cpu_start = time.perf_counter()
+            res = await loop.run_in_executor(
+                None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
             )
+            t_cpu_dur = time.perf_counter() - t_cpu_start
+            logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None}) compute={t_cpu_dur:.3f}s")
+            return res
+        except Exception as e:
+            logger.error(f"{diag_p_tag}CPU fallback synthesis failed: {e}", exc_info=True)
             return None
+    finally:
+        if lock_acquired:
+            cpu_lock.release()
+        _cpu_fallback_queue_depth -= 1
+        _cpu_fallback_active = (_cpu_fallback_queue_depth > 0)
+        logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active={_cpu_fallback_active}")
 
-    # 2. CUDA is healthy: dispatch to CUDA worker thread
+
+async def _execute_cuda_worker(fn, args, phrase_id: int | None, diag_p_tag: str, p_tag: str, turn_id: int, on_timeout=None):
+    """Execute a single CUDA Kokoro synthesis worker thread with soft watchdog timeout."""
+    global _kokoro_worker_seq, _cuda_worker_state, _active_phrase_id
     fut = concurrent.futures.Future()
     _kokoro_worker_active.set()
     _kokoro_worker_seq += 1
@@ -2208,6 +2202,121 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
             except Exception as e:
                 logger.warning(f"{p_tag}Kokoro on_timeout callback failed (non-fatal): {e}")
         return None
+
+
+async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
+    """
+    Runs Kokoro synthesis with bounded soft timeout, adaptive GPU scheduling,
+    FIFO CUDA queue serialization, and automatic serialized CPU fallback.
+
+    Fault containment & recovery contract (Phase F.1, F.2 & Batch 3):
+    1. Quarantine precedence: If CUDA is quarantined (TIMED_OUT / stale), scheduler forces CPU fallback.
+    2. Adaptive GPU admission: Safe VRAM (>= 350MB) admits to CUDA fast path; worker busy admits to CUDA FIFO queue.
+    3. Serialized CUDA Queue: Concurrent or subsequent CUDA phrases queue in FIFO order on _cuda_synth_lock,
+       completely eliminating unnecessary CPU fallback while preventing thread collisions or unsafe CUDA concurrency.
+    4. Soft timeout: If CUDA synthesis exceeds _KOKORO_SYNTH_TIMEOUT, asyncio.wait_for
+       terminates the caller wait and marks the worker as TIMED_OUT.
+    5. Deferred CUDA recovery: When the background worker exits native execution, its
+       finally block resets the CUDA pipeline and restores the backend to IDLE.
+    """
+    turn_id = get_diag_turn_id()
+    diag_p_tag = f"[DIAG][TURN={turn_id}][TTS][phrase={phrase_id}] " if phrase_id is not None else f"[DIAG][TURN={turn_id}][TTS] "
+    p_tag = f"[TTS][phrase={phrase_id}] " if phrase_id is not None else "[TTS] "
+
+    t_adm_start = time.perf_counter()
+    admission_state, reason = await evaluate_tts_admission(phrase_id=phrase_id)
+    t_adm_wait = time.perf_counter() - t_adm_start
+
+    backend_str = "cuda" if admission_state == GPUSchedulerState.GPU_TTS_ALLOWED else "cpu"
+    free_mb, _ = get_gpu_vram_info()
+    free_str = f"{free_mb:.1f}MB" if free_mb is not None else "n/a"
+    logger.info(
+        f"[TTS_ADMISSION]{p_tag}backend={backend_str} decision={admission_state.value} reason={reason} "
+        f"gpu_free={free_str} ollama_active={is_ollama_generating()} kokoro_gpu_active={is_kokoro_busy()} "
+        f"adm_wait={t_adm_wait:.4f}s"
+    )
+
+    # 1. If quarantined or scheduler decided CPU fallback:
+    if admission_state in (GPUSchedulerState.GPU_TTS_QUARANTINED, GPUSchedulerState.GPU_TTS_CPU_FALLBACK):
+        if fn == _synthesise_blocking or getattr(fn, "__name__", "") == "_synthesise_blocking":
+            if admission_state == GPUSchedulerState.GPU_TTS_QUARANTINED:
+                logger.warning(
+                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (worker_state={_cuda_worker_state.value}) — "
+                    "routing speech synthesis to isolated CPU fallback pipeline."
+                )
+            else:
+                logger.info(
+                    f"{diag_p_tag}CPU_FALLBACK_SELECTED (scheduler_decision={admission_state.value}) — "
+                    f"routing speech synthesis to CPU ({reason})."
+                )
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+        else:
+            logger.warning(
+                f"{p_tag}Kokoro synthesis rejected: prior worker still active on GPU after timeout."
+            )
+            return None
+
+    # 2. CUDA is healthy: acquire single CUDA worker lock (FIFO Queue)
+    global _cuda_synth_queue_depth, _cuda_synth_active
+    cuda_lock = _get_cuda_synth_lock()
+
+    _cuda_synth_queue_depth += 1
+    queue_pos = _cuda_synth_queue_depth - 1
+    t_queue_enter = time.perf_counter()
+    logger.info(
+        f"[CUDA_TTS_QUEUE]{p_tag}position={queue_pos} active={_cuda_synth_active}"
+    )
+
+    lock_acquired = False
+    try:
+        try:
+            # Bounded wait for CUDA worker: up to 10.0s before considering fallback
+            await asyncio.wait_for(cuda_lock.acquire(), timeout=10.0)
+            lock_acquired = True
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"{diag_p_tag}CUDA queue wait timeout (>10.0s) — routing to CPU fallback."
+            )
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+
+        t_queue_wait = time.perf_counter() - t_queue_enter
+        _cuda_synth_active = True
+        logger.info(f"[CUDA_TTS_QUEUE]{p_tag}position=0 active=True queue_wait={t_queue_wait:.3f}s")
+
+        # Check if quarantine occurred while waiting in the lock:
+        if is_kokoro_stale() or _cuda_worker_state == WorkerState.TIMED_OUT or _kokoro_stale_worker.is_set():
+            logger.warning(
+                f"{diag_p_tag}CUDA quarantined while waiting in queue — routing speech synthesis to CPU fallback."
+            )
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+
+        # Check VRAM headroom again just before launching GPU execution:
+        free_mb_exec, _ = get_gpu_vram_info()
+        if free_mb_exec is not None and free_mb_exec < KOKORO_CUDA_MIN_HEADROOM_MB:
+            logger.warning(
+                f"{diag_p_tag}VRAM dropped below {KOKORO_CUDA_MIN_HEADROOM_MB}MB while queued ({free_mb_exec:.1f}MB) — "
+                "routing to CPU fallback."
+            )
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+
+        if is_ollama_generating() and free_mb_exec is not None and free_mb_exec < KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB:
+            logger.warning(
+                f"{diag_p_tag}VRAM under Ollama contention threshold ({free_mb_exec:.1f}MB < {KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB}MB) "
+                "while queued — routing to CPU fallback (ollama_gpu_contention_risk)."
+            )
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+
+        t_compute_start = time.perf_counter()
+        res = await _execute_cuda_worker(fn, args, phrase_id, diag_p_tag, p_tag, turn_id, on_timeout)
+        t_compute = time.perf_counter() - t_compute_start
+        logger.info(f"[TIMING]{p_tag}Kokoro CUDA compute: {t_compute:.3f}s")
+        return res
+    finally:
+        if lock_acquired:
+            cuda_lock.release()
+        _cuda_synth_queue_depth -= 1
+        _cuda_synth_active = (_cuda_synth_queue_depth > 0)
+        logger.info(f"[CUDA_TTS_QUEUE]{p_tag}position=0 active={_cuda_synth_active}")
 
 
 def warmup() -> None:

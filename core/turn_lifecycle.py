@@ -31,8 +31,14 @@ async def rest(force_idle: bool = False) -> None:
     """Return Maya to a resting state and broadcast the matching frontend update."""
     from services.ws_server import ws_server
 
+    # If already sleeping, stay sleeping.
     if state.is_sleeping():
         await ws_server.broadcast_state("sleeping")
+        return
+
+    # If the turn was interrupted, the state machine has already transitioned to
+    # INTERRUPTED or LISTENING for the new user utterance — do not stomp on it.
+    if state.current in (MayaState.INTERRUPTED, MayaState.LISTENING) and not force_idle:
         return
 
     # If already idle and not forced, the turn has already rested (e.g. via Speaker.speak).

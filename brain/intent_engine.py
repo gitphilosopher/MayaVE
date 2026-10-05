@@ -900,6 +900,11 @@ class IntentEngine:
                 if not valid:
                     continue
 
+            if intent == "search_web":
+                # Capability guard: requests for past search/browsing history must not trigger web.search.
+                if re.search(r"\b(?:search\s+history|browsing\s+history|what\s+did\s+(?:i|we)\s+search|what\s+(?:i|we)\s+searched)\b", t):
+                    continue
+
             if intent == "farewell":
                 # Conversational guard: Phrases like "see you" / "see ya" only function as a
                 # farewell at the start of an utterance or preceded solely by discourse markers

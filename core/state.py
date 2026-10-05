@@ -188,6 +188,7 @@ class StateManager:
             old = self._state
             self._state = MayaState.INTERRUPTED
             logger.info(f"State: {old.name} → INTERRUPTED (barge-in)")
+        self._notify(old, MayaState.INTERRUPTED)
 
         # Hard-stop physical audio first so blocking waits (sd.wait(),
         # ws_server.wait_for_audio_done()) unblock immediately instead

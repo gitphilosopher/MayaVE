@@ -194,12 +194,16 @@ class Speaker:
             # playback was still active. In both cases, the final state must remain
             # asleep rather than returning to idle.
             sleeping_now = was_sleeping or state.is_sleeping()
-            await state.set(MayaState.SLEEPING if sleeping_now else MayaState.IDLE)
-            if sleeping_now:
-                await ws_server.broadcast_state("sleeping")
+            if not sleeping_now and state.current in (MayaState.INTERRUPTED, MayaState.LISTENING):
+                # Interrupted turn: state.interrupt() has taken ownership of the FSM transition.
+                pass
             else:
-                await ws_server.broadcast_state("idle")
-                await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
+                await state.set(MayaState.SLEEPING if sleeping_now else MayaState.IDLE)
+                if sleeping_now:
+                    await ws_server.broadcast_state("sleeping")
+                else:
+                    await ws_server.broadcast_state("idle")
+                    await ws_server.broadcast_behavior(behavior_engine.compose(mood_manager.baseline_expression(), source="idle"))
 
     async def _synthesise_guarded(self, text: str) -> np.ndarray | None:
         """
