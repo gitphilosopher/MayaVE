@@ -218,13 +218,21 @@ class Speaker:
         backend instead of retrying the same stuck one. A normal "no
         audio produced" result does not trigger a rebuild.
         """
-        def _job():
-            audio = self._synthesise(text)
+        def _cuda_job():
+            audio = self._synthesise(text, force_cpu=False)
             return _NO_AUDIO if audio is None else audio
+
+        def _cpu_job():
+            try:
+                audio = self._synthesise(text, force_cpu=True)
+                return _NO_AUDIO if audio is None else audio
+            except Exception as e:
+                logger.error(f"Speaker CPU synthesis failed: {e}", exc_info=True)
+                return _NO_AUDIO
 
         # on_timeout no-op: this Speaker's pipeline is rebuilt below, and
         # llm_service's own pipeline wasn't the one that got stuck.
-        result = await _run_kokoro(_job, on_timeout=lambda: None)
+        result = await _run_kokoro(_cuda_job, fallback_fn=_cpu_job, on_timeout=lambda: None)
         if result is None:   # _run_kokoro returns None only on timeout
             try:
                 lang = getattr(config.tts, "lang_code", "a")
@@ -239,7 +247,7 @@ class Speaker:
             return None
         return None if result is _NO_AUDIO else result
 
-    def _synthesise(self, text: str, trace_id: str | None = None) -> np.ndarray | None:
+    def _synthesise(self, text: str, trace_id: str | None = None, force_cpu: bool = False) -> np.ndarray | None:
         """Blocking Kokoro synthesis — called in executor."""
         try:
             from services.tracer import log_event
@@ -248,8 +256,9 @@ class Speaker:
         except Exception:
             pass
 
-        if is_kokoro_stale():
-            logger.warning("[SPEAKER][DIAG] CPU_FALLBACK_SELECTED (quarantined / stale worker) — falling back to CPU Kokoro.")
+        if force_cpu or is_kokoro_stale():
+            reason_str = "scheduler fallback" if force_cpu and not is_kokoro_stale() else "quarantined / stale worker"
+            logger.info(f"[SPEAKER][DIAG] CPU_FALLBACK_SELECTED ({reason_str}) — falling back to CPU Kokoro.")
             logger.info("[SPEAKER][DIAG] CPU_FALLBACK_DISPATCH")
             pipeline, voice = get_cpu_kokoro()
             with _cpu_kokoro_lock:

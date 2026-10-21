@@ -2098,7 +2098,7 @@ def set_kokoro_synth_timeout(timeout: float) -> None:
     _KOKORO_SYNTH_TIMEOUT = timeout
 
 
-async def _dispatch_cpu_fallback(args, phrase_id: int | None, diag_p_tag: str, p_tag: str):
+async def _dispatch_cpu_fallback(args, phrase_id: int | None, diag_p_tag: str, p_tag: str, fallback_fn=None):
     """Execute speech synthesis on the isolated, strictly-serialized CPU fallback pipeline."""
     global _cpu_fallback_queue_depth, _cpu_fallback_active
     loop = asyncio.get_running_loop()
@@ -2116,13 +2116,18 @@ async def _dispatch_cpu_fallback(args, phrase_id: int | None, diag_p_tag: str, p
         logger.info(f"[CPU_TTS_QUEUE]{p_tag}position=0 active=True")
         logger.info(f"{diag_p_tag}CPU_FALLBACK_DISPATCH")
         try:
-            sentence = args[0]
-            expression = args[1] if len(args) > 1 else "neutral"
-            trace_id = args[2] if len(args) > 2 else None
             t_cpu_start = time.perf_counter()
-            res = await loop.run_in_executor(
-                None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
-            )
+            if fallback_fn is not None:
+                res = await loop.run_in_executor(None, fallback_fn, *args)
+            elif args:
+                sentence = args[0]
+                expression = args[1] if len(args) > 1 else "neutral"
+                trace_id = args[2] if len(args) > 2 else None
+                res = await loop.run_in_executor(
+                    None, _synthesise_cpu_blocking, sentence, expression, trace_id, phrase_id
+                )
+            else:
+                res = None
             t_cpu_dur = time.perf_counter() - t_cpu_start
             logger.info(f"{diag_p_tag}CPU_FALLBACK_COMPLETE (success={res is not None}) compute={t_cpu_dur:.3f}s")
             return res
@@ -2225,7 +2230,7 @@ async def _execute_cuda_worker(fn, args, phrase_id: int | None, diag_p_tag: str,
         return None
 
 
-async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
+async def _run_kokoro(fn, *args, fallback_fn=None, phrase_id: int | None = None, on_timeout=None):
     """
     Runs Kokoro synthesis with bounded soft timeout, adaptive GPU scheduling,
     FIFO CUDA queue serialization, and automatic serialized CPU fallback.
@@ -2259,7 +2264,7 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
 
     # 1. If quarantined or scheduler decided CPU fallback:
     if admission_state in (GPUSchedulerState.GPU_TTS_QUARANTINED, GPUSchedulerState.GPU_TTS_CPU_FALLBACK):
-        if fn == _synthesise_blocking or getattr(fn, "__name__", "") == "_synthesise_blocking":
+        if fn == _synthesise_blocking or getattr(fn, "__name__", "") == "_synthesise_blocking" or fallback_fn is not None:
             if admission_state == GPUSchedulerState.GPU_TTS_QUARANTINED:
                 logger.warning(
                     f"{diag_p_tag}CPU_FALLBACK_SELECTED (worker_state={_cuda_worker_state.value}) — "
@@ -2270,7 +2275,7 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
                     f"{diag_p_tag}CPU_FALLBACK_SELECTED (scheduler_decision={admission_state.value}) — "
                     f"routing speech synthesis to CPU ({reason})."
                 )
-            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag, fallback_fn=fallback_fn)
         else:
             logger.warning(
                 f"{p_tag}Kokoro synthesis rejected: prior worker still active on GPU after timeout."
@@ -2298,7 +2303,7 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
             logger.warning(
                 f"{diag_p_tag}CUDA queue wait timeout (>10.0s) — routing to CPU fallback."
             )
-            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag, fallback_fn=fallback_fn)
 
         t_queue_wait = time.perf_counter() - t_queue_enter
         _cuda_synth_active = True
@@ -2309,7 +2314,7 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
             logger.warning(
                 f"{diag_p_tag}CUDA quarantined while waiting in queue — routing speech synthesis to CPU fallback."
             )
-            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag, fallback_fn=fallback_fn)
 
         # Check VRAM headroom again just before launching GPU execution:
         free_mb_exec, _ = get_gpu_vram_info()
@@ -2318,14 +2323,14 @@ async def _run_kokoro(fn, *args, phrase_id: int | None = None, on_timeout=None):
                 f"{diag_p_tag}VRAM dropped below {KOKORO_CUDA_MIN_HEADROOM_MB}MB while queued ({free_mb_exec:.1f}MB) — "
                 "routing to CPU fallback."
             )
-            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag, fallback_fn=fallback_fn)
 
         if is_ollama_generating() and free_mb_exec is not None and free_mb_exec < KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB:
             logger.warning(
                 f"{diag_p_tag}VRAM under Ollama contention threshold ({free_mb_exec:.1f}MB < {KOKORO_CUDA_OLLAMA_CONTENTION_HEADROOM_MB}MB) "
                 "while queued — routing to CPU fallback (ollama_gpu_contention_risk)."
             )
-            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag)
+            return await _dispatch_cpu_fallback(args, phrase_id, diag_p_tag, p_tag, fallback_fn=fallback_fn)
 
         t_compute_start = time.perf_counter()
         res = await _execute_cuda_worker(fn, args, phrase_id, diag_p_tag, p_tag, turn_id, on_timeout)
