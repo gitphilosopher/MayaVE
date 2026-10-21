@@ -49,6 +49,7 @@ function _isCalmPeriodActive() {
 
 // Tracks current playback so stopCurrentAudio() can halt a barge-in immediately.
 let _currentSource  = null;   // AudioBufferSourceNode from speakFromBytes
+let _currentPlaybackItem = null; // currently playing queue item with playbackId
 let _audioGen = 0;            // invalidates audio whose decode finishes after a stop
 let _currentAudioEl = null;   // HTMLAudioElement from speak()
 const _audioQueue = [];       // Queue of decoded audio buffers for gapless phrase playback
@@ -281,15 +282,18 @@ function _stopLipSync() {
 function _playNextAudioInQueue() {
     if (_audioQueue.length === 0) {
         _currentSource = null;
+        _currentPlaybackItem = null;
         isSpeaking = false;
         _stopLipSync();
         _onSpeakingEnd();
-        if (typeof _onAudioDone === "function") _onAudioDone();
         return;
     }
 
     const item = _audioQueue.shift();
     if (item.gen !== _audioGen) {
+        if (typeof _onAudioDone === "function" && item.playbackId) {
+            _onAudioDone(item.playbackId, "interrupted", "stale_generation");
+        }
         _playNextAudioInQueue();
         return;
     }
@@ -305,13 +309,20 @@ function _playNextAudioInQueue() {
 
     isSpeaking = true;
     _currentSource = source;
+    _currentPlaybackItem = item;
     _onSpeakingStart();
 
     source.onended = () => {
         if (item.traceId) recordTrace(item.traceId, "audio_playback_end", {
             audio_current_time: Number(ctx.currentTime.toFixed(3))
         });
-        if (_currentSource === source) _currentSource = null;
+        if (_currentSource === source) {
+            _currentSource = null;
+            _currentPlaybackItem = null;
+        }
+        if (typeof _onAudioDone === "function" && item.playbackId) {
+            _onAudioDone(item.playbackId, "completed");
+        }
         _playNextAudioInQueue();
     };
 
@@ -328,9 +339,11 @@ function _playNextAudioInQueue() {
  * Decode and play backend audio, reporting completion through the registered
  * callback. Queues subsequent phrases for gapless continuous speech.
  */
-export async function speakFromBytes(arrayBuffer, traceId = null) {
+export async function speakFromBytes(arrayBuffer, traceId = null, playbackId = null) {
     if (!vrm) {
-        if (typeof _onAudioDone === "function") _onAudioDone();   // don't leave the backend waiting 30 s
+        if (typeof _onAudioDone === "function" && playbackId) {
+            _onAudioDone(playbackId, "failed", "missing_vrm");
+        }
         return;
     }
 
@@ -344,20 +357,25 @@ export async function speakFromBytes(arrayBuffer, traceId = null) {
         decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
     } catch (e) {
         console.error("[Maya] decodeAudioData failed:", e);
-        if (gen === _audioGen && typeof _onAudioDone === "function" && !_currentSource && _audioQueue.length === 0) {
-            _onAudioDone();
+        if (gen === _audioGen && typeof _onAudioDone === "function" && playbackId) {
+            _onAudioDone(playbackId, "failed", "decode_error");
         }
         return;
     }
     if (traceId) recordTrace(traceId, "audio_decode_end");
-    if (gen !== _audioGen) return;   // stop_audio arrived during decode
+    if (gen !== _audioGen) {
+        if (typeof _onAudioDone === "function" && playbackId) {
+            _onAudioDone(playbackId, "interrupted", "stopped_during_decode");
+        }
+        return;
+    }
 
     if (traceId) recordTrace(traceId, "audio_buffer_created", {
         duration_s: Number(decoded.duration.toFixed(3)),
         sample_rate: decoded.sampleRate
     });
 
-    _audioQueue.push({ decoded, traceId, gen });
+    _audioQueue.push({ decoded, traceId, playbackId, gen });
     if (!_currentSource) {
         _playNextAudioInQueue();
     }
@@ -392,14 +410,28 @@ export function speak(audioFile) {
 // ── Stop active audio ───────────────────────────────────────────────────────
 
 /** Halts whichever audio path is active + stops lip-sync. Safe no-op if idle. */
-export function stopCurrentAudio() {
+export function stopCurrentAudio(targetPlaybackId = null) {
     _audioGen++;
-    _audioQueue.length = 0;
     if (_currentSource) {
         const s = _currentSource;
+        const item = _currentPlaybackItem;
         _currentSource = null;
+        _currentPlaybackItem = null;
         s.onended = null;   // avoid a duplicate audio_done from the native 'ended' event
         try { s.stop(0); } catch (e) { /* already stopped/ended */ }
+        if (item && typeof _onAudioDone === "function" && item.playbackId) {
+            if (!targetPlaybackId || targetPlaybackId === item.playbackId) {
+                _onAudioDone(item.playbackId, "interrupted", "stopped");
+            }
+        }
+    }
+    while (_audioQueue.length > 0) {
+        const item = _audioQueue.shift();
+        if (item && typeof _onAudioDone === "function" && item.playbackId) {
+            if (!targetPlaybackId || targetPlaybackId === item.playbackId) {
+                _onAudioDone(item.playbackId, "interrupted", "stopped_in_queue");
+            }
+        }
     }
     if (_currentAudioEl) {
         const a = _currentAudioEl;

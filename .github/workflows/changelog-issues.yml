@@ -46,66 +46,137 @@ jobs:
             exit 0
           }
 
-          # Prints "<number> <STATE>" for the issue with this exact title
-          # (an OPEN one is preferred if duplicates exist), or nothing.
-          find_issue() {
-            gh issue list --repo "$GH_REPO" --state all --limit 1000 \
-              --json number,title,state |
-              jq -r --arg t "$1" '
-                [.[] | select(.title == $t)]
-                | sort_by(.state != "OPEN")
-                | first // empty
-                | "\(.number) \(.state)"'
+          # Finds issue by title across repository using gh's built-in jq.
+          # - Exactly 1 match: prints "<number> <STATE>"
+          # - 0 matches: prints nothing
+          # - >1 matches: fails and aborts to prevent updating the wrong issue
+          find_issue_by_title() {
+            local search_title="$1"
+            local lines count=0
+            lines="$(
+              gh issue list --repo "$GH_REPO" --state all --limit 1000 \
+                --json number,title,state \
+                --jq ".[] | select(.title == \"$search_title\") | \"\(.number) \(.state)\""
+            )"
+
+            if [[ -n "$lines" ]]; then
+              count="$(wc -l <<< "$lines")"
+            fi
+
+            if [[ "$count" -gt 1 ]]; then
+              echo "ERROR: Multiple issues found with title '$search_title' (count: $count). Stopping to prevent updating wrong issue." >&2
+              exit 1
+            elif [[ "$count" -eq 1 ]]; then
+              echo "$lines"
+            fi
+          }
+
+          # Inspects issue by known issue number.
+          # Returns "<number> <STATE>" if issue exists, empty otherwise.
+          get_issue_by_number() {
+            local num="$1"
+            gh issue view "$num" --repo "$GH_REPO" --json number,state \
+              --jq '"\(.number) \(.state)"' 2>/dev/null || true
           }
 
           # Creates an issue and prints its number.
           create_issue() {
+            local title="$1"
+            local desc="$2"
             local url body
-            body="$(printf '%s\n\n%s' "$2" '<!-- Automatically created from docs/CHANGELOG.md -->')"
-            url="$(gh issue create --repo "$GH_REPO" --title "$1" --body "$body")"
+            body="$(printf '%s\n\n%s' "$desc" '<!-- Automatically created from docs/CHANGELOG.md -->')"
+            url="$(gh issue create --repo "$GH_REPO" --title "$title" --body "$body")"
             echo "${url##*/}"
           }
 
           category=""
+          category_re='^###[[:space:]]+(Features|Improvements|Architecture|Fixes|Fixed|Issues)$'
+          entry_re='^-[[:space:]]+\*\*([^*]+)\*\*[[:space:]]*(.*)$'
+          num_re='\[?#([0-9]+)\]?'
+          prefix_re='^(\(\[?#[0-9]+\]?[^)]*\)|\[#[0-9]+\])[[:space:]]*(.*)$'
 
           while IFS= read -r line; do
 
-            if [[ "$line" =~ ^###\ (Features|Improvements|Architecture|Fixes|Issues)$ ]]; then
-              category="${BASH_REMATCH[1]}"
+            # Match category headers (supporting both Fixes and Fixed)
+            if [[ "$line" =~ $category_re ]]; then
+              raw_category="${BASH_REMATCH[1]}"
+              if [[ "$raw_category" == "Fixes" || "$raw_category" == "Fixed" ]]; then
+                category="Fixes"
+              else
+                category="$raw_category"
+              fi
               continue
             fi
 
-            # Only Issues and Fixes drive GitHub Issues.
+            # Only Issues and Fixes drive GitHub Issues
             [[ "$category" == "Issues" || "$category" == "Fixes" ]] || continue
 
-            if [[ "$line" =~ ^-\ \*\*(.+)\*\*\ —\ (.+)$ ]]; then
+            # Match changelog list item
+            if [[ "$line" =~ $entry_re ]]; then
               title="${BASH_REMATCH[1]}"
-              description="${BASH_REMATCH[2]}"
+              remainder="${BASH_REMATCH[2]}"
+              explicit_num=""
+              description=""
+
+              # Extract issue number if present in remainder
+              if [[ "$remainder" =~ $num_re ]]; then
+                explicit_num="${BASH_REMATCH[1]}"
+              fi
+
+              # Extract description after first em-dash
+              after_dash="${remainder#*—}"
+              description="${after_dash#"${after_dash%%[![:space:]]*}"}"
+
+              # Strip any leading issue badge/link from description
+              if [[ "$description" =~ $prefix_re ]]; then
+                description="${BASH_REMATCH[2]}"
+              fi
+
               issue_title="[Changelog] $title"
 
-              found="$(find_issue "$issue_title")"
-              read -r number state <<< "$found"
+              found=""
+              if [[ -n "$explicit_num" ]]; then
+                found="$(get_issue_by_number "$explicit_num")"
+                if [[ -z "$found" ]]; then
+                  echo "Warning: Referenced issue #$explicit_num not found. Falling back to title search." >&2
+                  found="$(find_issue_by_title "$issue_title")"
+                fi
+              else
+                found="$(find_issue_by_title "$issue_title")"
+              fi
+
+              number=""
+              state=""
+              if [[ -n "$found" ]]; then
+                read -r number state <<< "$found"
+              fi
 
               case "$category:${state:-}" in
                 Issues:)
                   number="$(create_issue "$issue_title" "$description")"
                   echo "Created open #$number: $issue_title"
                   ;;
+                Issues:OPEN)
+                  echo "Stays OPEN: #$number $issue_title"
+                  ;;
                 Issues:CLOSED)
                   gh issue reopen "$number" --repo "$GH_REPO"
-                  echo "Reopened #$number: $issue_title"
+                  echo "Reopened to OPEN: #$number $issue_title"
+                  ;;
+                Fixes:OPEN)
+                  gh issue close "$number" --repo "$GH_REPO"
+                  echo "Moved to Fixes — Closed #$number: $issue_title"
+                  ;;
+                Fixes:CLOSED)
+                  echo "Already CLOSED: #$number $issue_title"
                   ;;
                 Fixes:)
                   number="$(create_issue "$issue_title" "$description")"
                   gh issue close "$number" --repo "$GH_REPO"
-                  echo "Created and closed #$number: $issue_title"
-                  ;;
-                Fixes:OPEN)
-                  gh issue close "$number" --repo "$GH_REPO"
-                  echo "Closed #$number: $issue_title"
+                  echo "Created and closed: #$number $issue_title"
                   ;;
                 *)
-                  echo "Already ${state}: #$number $issue_title"
+                  echo "Unhandled state '$state' for #$number $issue_title"
                   ;;
               esac
             fi

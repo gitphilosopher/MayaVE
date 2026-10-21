@@ -625,7 +625,6 @@ def _fragment_for_energy(text: str, terminator: str = "!") -> str:
       - Strip trailing punctuation from each fragment
       - Skip fragments under 3 chars (leftover particles like "and", "but")
       - Re-join with the target terminator between fragments
-      - Cap at 4 fragments so it doesn't sound like a list
 
     "Oh, senpai, I just can't WAIT to see the results, it's GOING TO BE AMAZING!"
       → "Oh, senpai! I just can't WAIT to see the results! It's GOING TO BE AMAZING!"
@@ -637,7 +636,7 @@ def _fragment_for_energy(text: str, terminator: str = "!") -> str:
         p = _TRAIL_PUNCT.sub("", p).strip()
         if len(p) < 3:
             # Too short to stand alone — glue it to the next fragment
-            if cleaned:
+            if cleaned and p:
                 cleaned[-1] = cleaned[-1] + ", " + p
             continue
         # Capitalise first letter of each fragment
@@ -646,8 +645,6 @@ def _fragment_for_energy(text: str, terminator: str = "!") -> str:
     if not cleaned:
         return text
 
-    # Cap at 4 fragments — beyond that it sounds like a grocery list
-    cleaned = cleaned[:4]
     return (terminator + " ").join(cleaned) + terminator
 
 
@@ -711,9 +708,7 @@ def _enhance_prosody(text: str, expression: str, is_final: bool = True,
 
     elif expression == "angry":
         # Hard stops between every fragment — clipped, deliberate
-        parts = re.split(r',\s*|(?<!\w)—\s*', base)
-        cleaned = [_TRAIL_PUNCT.sub("", p).strip() for p in parts if len(p.strip()) >= 3]
-        enhanced = ". ".join(p[0].upper() + p[1:] for p in cleaned[:4]) + "."
+        enhanced = _fragment_for_energy(base, terminator=".")
 
     elif expression == "sad":
         # Keep as one flowing unit — clean cadence
@@ -901,14 +896,15 @@ async def _play_filler() -> None:
         output = getattr(config.tts, "output", "avatar")
 
         if output in ("avatar", "both"):
-            await _ws.broadcast_behavior(behavior_engine.compose("neutral", source="filler"))
-            await _ws.broadcast_state("speaking")
-            wav = await loop.run_in_executor(None, _numpy_to_wav, audio, samplerate)
-            await _ws.broadcast_audio(wav)
-            await _ws.wait_for_audio_done()
-            # Hold thinking expression while Ollama generates
-            await _ws.broadcast_behavior(behavior_engine.compose("surprised", source="filler"))
-            await _ws.broadcast_state("processing")
+            async with _ws.playback_lock:
+                await _ws.broadcast_behavior(behavior_engine.compose("neutral", source="filler"))
+                await _ws.broadcast_state("speaking")
+                wav = await loop.run_in_executor(None, _numpy_to_wav, audio, samplerate)
+                res = await _ws.play_audio_and_wait(wav)
+                if res.is_completed:
+                    # Hold thinking expression while Ollama generates
+                    await _ws.broadcast_behavior(behavior_engine.compose("surprised", source="filler"))
+                    await _ws.broadcast_state("processing")
 
         if output in ("local", "both"):
             import sounddevice as sd
@@ -1071,7 +1067,19 @@ async def _stream_and_speak(question: str, t_cmd_start: float) -> None:
     synther  = asyncio.create_task(_synth_worker(synth_q, play_q, t_cmd_start, cancel_streamer=_cancel_streamer))
     player   = asyncio.create_task(_play_worker(play_q, t_cmd_start))
 
-    await asyncio.gather(streamer, synther, player, return_exceptions=True)
+    try:
+        await asyncio.gather(streamer, synther, player, return_exceptions=False)
+    except Exception as e:
+        logger.warning(f"[TIMING] Pipeline task failed ({type(e).__name__}: {e}) — cancelling remaining tasks.")
+        for t in (streamer, synther, player):
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(streamer, synther, player, return_exceptions=True)
+        raise
+    finally:
+        for t in (streamer, synther, player):
+            if not t.done():
+                t.cancel()
     logger.info(f"[TIMING] full pipeline (streamer+synth+play): {time.perf_counter()-t2:.3f}s")
 
 
@@ -1352,6 +1360,7 @@ async def _ollama_streamer(
     resp = None
     stream_cancelled = False
     _ollama_generating.set()
+    _stream_done_sent = False
     try:
         async with client.stream("POST", url, json=payload) as response:
             resp = response
@@ -1408,6 +1417,12 @@ async def _ollama_streamer(
         logger.info(f"{d_tag}OLLAMA_REQUEST_DURATION: {t_dur:.3f}s (cancelled={stream_cancelled})")
         if resp is not None:
             logger.info(f"{d_tag}OLLAMA_RESPONSE_CLOSED: resp.is_closed={resp.is_closed}")
+        if stream_cancelled or 'e' in locals():
+            try:
+                synth_q.put_nowait(_DONE)
+                _stream_done_sent = True
+            except Exception:
+                pass
 
     # Log raw Ollama output before any parsing so we can debug tag issues
     logger.debug(f"Ollama raw output: {repr(full_text)}")
@@ -1432,7 +1447,9 @@ async def _ollama_streamer(
     # get misread as her having cooled off.
     mood_manager.observe_turn(turn_expressions)
 
-    await synth_q.put(_DONE)
+    if not _stream_done_sent:
+        await synth_q.put(_DONE)
+        _stream_done_sent = True
 
 
 # ── Stage 2: sentence → synthesised audio ────────────────────────────────────
@@ -1553,6 +1570,10 @@ async def _synth_worker(
                 t.cancel()
         if pending_tasks:
             await asyncio.gather(*pending_tasks, return_exceptions=True)
+        try:
+            play_q.put_nowait(_DONE)
+        except Exception:
+            pass
 
 
 def _resolve_tts_device() -> str:
@@ -2432,41 +2453,57 @@ async def _play_worker(play_q: asyncio.Queue, t_cmd_start: float) -> None:
             await _filler_done.wait()
             first_sentence = False
 
-        for action in actions:
-            await _ws.broadcast_animation(action)
-
-        await _ws.broadcast_behavior(
-            behavior_engine.compose(expression, actions, source="dialogue",
-                                     attitude=attitude, intensity=intensity)
-        )
-        await state.set(MayaState.SPEAKING)
-        await _ws.broadcast_state("speaking")
-
-        if not first_played:
-            logger.info(
-                f"[TIMING][TTFA] audio playback start: "
-                f"+{time.perf_counter()-t_cmd_start:.3f}s since command start (== TTFA)"
-            )
-            first_played = True
-
-        _spoken_phrases.append(phrase)
         if output in ("avatar", "both"):
             from core.speaker import _numpy_to_wav
             wav_bytes = await loop.run_in_executor(None, _numpy_to_wav, data, samplerate)
-            t0 = time.perf_counter()
-            logger.info(f"[TIMING]{p_tag}AUDIO_BROADCAST_START samples={len(data)} sr={samplerate} t={t0:.3f}")
-            await _ws.broadcast_audio(wav_bytes)
-            await _ws.wait_for_audio_done()
-            t_sync = time.perf_counter() - t0
-            audio_dur = len(data) / samplerate if samplerate else 0.0
-            total_str = f" total_lifecycle={time.perf_counter() - t_phrase_created:.3f}s" if t_phrase_created else ""
-            logger.info(
-                f"[TIMING]{p_tag}AUDIO_DONE: {t_sync:.3f}s "
-                f"(playback_sync: audio_dur={audio_dur:.3f}s, overhead={t_sync - audio_dur:+.3f}s){total_str}"
-            )
+            async with _ws.playback_lock:
+                for action in actions:
+                    await _ws.broadcast_animation(action)
+                await _ws.broadcast_behavior(
+                    behavior_engine.compose(expression, actions, source="dialogue",
+                                             attitude=attitude, intensity=intensity)
+                )
+                await state.set(MayaState.SPEAKING)
+                await _ws.broadcast_state("speaking")
 
-        if output in ("local", "both"):
-            await loop.run_in_executor(None, _play_blocking, data, samplerate)
+                if not first_played:
+                    logger.info(
+                        f"[TIMING][TTFA] audio playback start: "
+                        f"+{time.perf_counter()-t_cmd_start:.3f}s since command start (== TTFA)"
+                    )
+                    first_played = True
+
+                _spoken_phrases.append(phrase)
+                t0 = time.perf_counter()
+                logger.info(f"[TIMING]{p_tag}AUDIO_BROADCAST_START samples={len(data)} sr={samplerate} t={t0:.3f}")
+                res = await _ws.play_audio_and_wait(wav_bytes)
+                t_sync = time.perf_counter() - t0
+                audio_dur = len(data) / samplerate if samplerate else 0.0
+                total_str = f" total_lifecycle={time.perf_counter() - t_phrase_created:.3f}s" if t_phrase_created else ""
+                logger.info(
+                    f"[TIMING]{p_tag}AUDIO_DONE ({res.outcome.value}): {t_sync:.3f}s "
+                    f"(playback_sync: audio_dur={audio_dur:.3f}s, overhead={t_sync - audio_dur:+.3f}s){total_str}"
+                )
+                if output == "both":
+                    await loop.run_in_executor(None, _play_blocking, data, samplerate)
+        else:
+            async with _ws.playback_lock:
+                for action in actions:
+                    await _ws.broadcast_animation(action)
+                await _ws.broadcast_behavior(
+                    behavior_engine.compose(expression, actions, source="dialogue",
+                                             attitude=attitude, intensity=intensity)
+                )
+                await state.set(MayaState.SPEAKING)
+                await _ws.broadcast_state("speaking")
+                if not first_played:
+                    logger.info(
+                        f"[TIMING][TTFA] audio playback start: "
+                        f"+{time.perf_counter()-t_cmd_start:.3f}s since command start (== TTFA)"
+                    )
+                    first_played = True
+                _spoken_phrases.append(phrase)
+                await loop.run_in_executor(None, _play_blocking, data, samplerate)
 
 
 def _play_blocking(data, samplerate: int) -> None:

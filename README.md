@@ -15,12 +15,13 @@ The system runs primarily on local AI infrastructure, with internet connectivity
 ### 🧠 Intelligence
 
 * Local LLM inference through **Ollama** (`llama3.2`, optimized 2048 context with 100% GPU residency)
-* Hybrid semantic command router (default runtime path): deterministic guards, classifier margin gating, semantic retrieval, and validated LLM fallback
+* Hybrid semantic command router on the default runtime path: deterministic guards, classifier confidence/margin gates, command-level semantic retrieval, validated LLM fallback, and fail-closed dispatch ([runtime](core/processor.py), [router](brain/router/understand.py), [command registry](config/command_domains.json))
 * ML-based intent classification using **PyTorch + TensorFlow**
-* Context-aware conversation handling
-* Topic and conversational-state tracking
+* Schema-validated `CommandIR` for single-command routing, with parameter extraction, required-entity clarification, and guarded skill dispatch ([entities](brain/router/entities.py), [validation](brain/router/validate.py), [dispatch](brain/router/dispatch.py))
+* Context-aware conversation handling, including topic/state tracking, open loops, conservative reference hints, and short-lived timer clarification/correction context ([conversation context](brain/conversation.py), [router context](brain/router/context.py))
 * Short-term conversation memory
-* Long-term semantic memory using **SQLite + local BGE embeddings**
+* Persistent structured semantic memories in SQLite with local BGE embeddings, similarity retrieval, deduplication, and injection into the LLM context ([memory store](brain/vector_store.py), [context assembly](brain/conversation.py), [LLM integration](services/llm/llm_service.py))
+* Router evaluation and regression tooling, including IR-level cases and cross-seed failure analysis ([evaluation](brain/router/eval_ir.py), [evaluation cases](datasets/router_eval/cases.jsonl), [failure matrix](brain/router/failure_matrix.py))
 
 ### 🎙️ Voice
 
@@ -316,39 +317,31 @@ She can be awakened again using the configured wake word.
 
 ## 🔭 Future Features
 
-The following capabilities are still pending or materially incomplete in the current codebase.
+The following capabilities are still missing or materially incomplete. Existing router, context, semantic-memory, and evaluation foundations are described above and are not repeated here.
 
-### 📓 Diary
+### 🧩 Dialogue, Tools & Planning
 
-A separate chronological diary for Maya's own observations and experiences, distinct from the semantic memory used for retrieval and live context.
+* Generalized multi-turn slot filling and durable dialogue state beyond the current required-entity clarification and in-memory context tracking.
+* General-purpose LLM tool/function calling and multi-tool workflows. The current router validates and dispatches one command at a time; it does not dynamically decompose requests, manage dependencies, or replan after execution failures.
 
-### 🌙 Dream Mode
+### 🔎 Retrieval & Memory
 
-A scheduled autonomous reflection cycle that runs while the user is away, consolidating recent interactions and feeding higher-level insight back into memory and diary flows.
+* Knowledge-base RAG with lexical/vector fusion and metadata-, temporal-, importance-, or relationship-aware retrieval. Current semantic retrieval is for Maya's own memories, not a general document knowledge base.
+* Second-stage reranking for memory or command candidates, beyond the current similarity scoring and command-level aggregation.
+* Meaning-aware result caching with freshness and invalidation controls. Existing embedding caches only reuse exact-text vectors.
+* Metacognitive memory synthesis beyond write-time deduplication: identify contradictions, temporal changes, and relationships while preserving source history and provenance.
 
-### 🔎 Autonomous Research
+### 🌱 Autonomous Cognition
 
-Independent research initiation without an immediate user prompt, including source gathering, synthesis, and follow-up knowledge acquisition beyond direct request-driven web actions.
+* A separate chronological diary for Maya's observations and experiences, distinct from curated semantic memory.
+* Scheduled Dream Mode for autonomous reflection, memory consolidation, contradiction/relationship discovery, and unresolved-question discovery.
+* Autonomous research initiated by Maya, including source evaluation and synthesis, plus a separate store of research-derived learning notes. Existing web search is request-driven.
+* Autonomous curiosity that identifies and prioritizes useful next research questions from knowledge gaps, unresolved issues, novelty, and context.
+* Switchable cognitive states such as `focused`, `chill`, `creative`, and `chaos` that control inference behavior independently of emotional mood.
 
-### 📚 Learning Notes
+### 📈 Observability
 
-A dedicated store for research-derived knowledge that remains distinct from personal memory, user notes, and raw interaction history.
-
-### 🧭 Autonomous Curiosity
-
-A self-directed prioritization system for choosing what Maya should investigate next based on unresolved questions, knowledge gaps, novelty, and recent context.
-
-### 🧠 Cognitive States
-
-Explicit runtime cognition modes such as focused, exploratory, or reflective behavior, separate from emotional mood and avatar animation state.
-
-### 🔁 Advanced Retrieval Reranking
-
-A second-stage ranking step for semantic retrieval and command candidates so the router can refine top matches before dispatch or fallback decisions.
-
-### 🧬 Metacognitive Memory Curation
-
-Autonomous memory synthesis beyond simple deduplication: detecting redundancy, contradiction, temporal drift, and fragmented knowledge while preserving provenance and source traces.
+* Unified end-to-end tracing and production metrics across routing, memory retrieval, LLM/tool execution, and voice output. Existing logs, latency diagnostics, tracing hooks, and router/classifier evaluations are useful foundations, but do not yet provide that integrated coverage.
 
 ---
 

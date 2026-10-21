@@ -24,6 +24,7 @@ logs/stage_a_benchmark_results.json
 *.log
 opt*/
 scratch/
+.agents/
 
 # Local/model files
 frontend/assets/mmodel.vroid

@@ -320,3 +320,5 @@
 {"text": "the clock tower in town square is beautiful", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "the clock on my microwave is always wrong", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "close all of my browser tabs", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the living room lamp", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the light on the porch", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}

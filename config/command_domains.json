@@ -100,7 +100,9 @@
             "notify me after twenty minutes",
             "let me know in forty five minutes",
             "give me a heads up in fifteen minutes so i can leave",
-            "ping me in ninety minutes to stretch"
+            "ping me in ninety minutes to stretch",
+            "hit me up in twelve minutes",
+            "hit me up in twenty minutes"
           ]
         },
         "cancel": {

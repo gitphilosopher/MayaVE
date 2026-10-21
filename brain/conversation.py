@@ -153,6 +153,24 @@ class ContextPackage:
         return ("\n\n" + "\n".join(lines)) if lines else ""
 
 
+@dataclass(frozen=True)
+class MemoryApplyResult:
+    """Outcome of attempting to apply a single remote-memory change item."""
+    seq: int | None
+    status: str  # "applied" | "terminal_duplicate" | "terminal_ignored" | "terminal_invalid" | "failed_transient"
+    key: str = ""
+    error: str | None = None
+
+    @property
+    def is_success_or_terminal(self) -> bool:
+        return self.status in {
+            "applied",
+            "terminal_duplicate",
+            "terminal_ignored",
+            "terminal_invalid",
+        }
+
+
 # Conversational-noise intents — never durable, never a genuine topic
 # departure by themselves. Shared by memory-persist gating, last_intent
 # tracking, and topic-reconciliation's digression check.
@@ -801,7 +819,7 @@ class ContextManager:
 
     # ── Incoming MayaNode changes (Step 4) ──────────────────────────────────
 
-    async def apply_remote_memory_changes(self, changes: list[dict]) -> None:
+    async def apply_remote_memory_changes(self, changes: list[dict]) -> list[MemoryApplyResult]:
         """
         Called by services/node/sync_manager.py after each successful
         `/sync` round with whatever `changes["memory"]` MayaNode
@@ -813,37 +831,87 @@ class ContextManager:
         Only keys matching our own `semantic_memory:*` export format
         (see `_sync_memory_to_node`) are recognized; anything else —
         another client's differently-shaped memory keys, unrelated
-        application state — is silently ignored rather than guessed at.
-        Best-effort throughout: embedding failures, store errors, or a
-        malformed value just skip that one item; nothing here raises out
-        to the sync manager, and a skipped item is not retried once the
-        cursor has advanced past it (accepted as a rare, non-fatal loss,
-        consistent with this module's existing "degrade gracefully"
-        design elsewhere).
+        application state — is classified as terminal_ignored so the
+        cursor advances past it rather than blocking the sync loop.
+
+        Returns a list of MemoryApplyResult objects indicating per-item
+        outcomes ('applied', 'terminal_duplicate', 'terminal_ignored',
+        'terminal_invalid', or 'failed_transient').
+        Transient errors (e.g. temporary embedding failure or store
+        write error) halt further batch application so the sync manager
+        holds the cursor before the failing item, ensuring it is retried
+        on the next sync round.
         """
-        if self._store is None or not changes:
-            return
+        if not changes:
+            return []
+
+        if self._store is None:
+            return [
+                MemoryApplyResult(
+                    seq=item.get("seq") if isinstance(item, dict) and isinstance(item.get("seq"), int) else None,
+                    status="failed_transient",
+                    key=item.get("key", "") if isinstance(item, dict) else "",
+                    error="store_unavailable",
+                )
+                for item in changes
+            ]
+
+        results: list[MemoryApplyResult] = []
         for item in changes:
             try:
-                await self._apply_one_remote_memory(item)
+                res = await self._apply_one_remote_memory(item)
             except Exception as e:
-                logger.debug(f"Skipping remote memory change (non-fatal): {e}")
+                logger.warning(f"Unexpected error applying remote memory change: {e}", exc_info=True)
+                seq = item.get("seq") if isinstance(item, dict) and isinstance(item.get("seq"), int) else None
+                key = item.get("key", "") if isinstance(item, dict) else ""
+                res = MemoryApplyResult(seq=seq, status="failed_transient", key=key, error=str(e))
+            results.append(res)
+            if res.status == "failed_transient":
+                # Halt further memory application in this batch to prevent
+                # out-of-order partial application. Subsequent changes
+                # will be retried when the sync cursor resumes from this point.
+                break
 
-    async def _apply_one_remote_memory(self, item: dict) -> None:
+        return results
+
+    async def _apply_one_remote_memory(self, item: dict) -> MemoryApplyResult:
         if not isinstance(item, dict):
-            return
-        key = item.get("key") or ""
-        if not key.startswith("semantic_memory:"):
-            return   # not one of ours — another client's key shape, ignore
+            return MemoryApplyResult(
+                seq=None,
+                status="terminal_invalid",
+                error="item_not_a_dict",
+            )
+
+        raw_seq = item.get("seq")
+        seq = raw_seq if isinstance(raw_seq, int) else None
+
+        key = item.get("key")
+        if not isinstance(key, str) or not key.startswith("semantic_memory:"):
+            return MemoryApplyResult(
+                seq=seq,
+                status="terminal_ignored",
+                key=str(key) if key is not None else "",
+                error="unsupported_memory_key",
+            )
 
         value = item.get("value")
         if not isinstance(value, dict):
-            return
+            return MemoryApplyResult(
+                seq=seq,
+                status="terminal_invalid",
+                key=key,
+                error="value_not_a_dict",
+            )
 
         content = (value.get("content") or "").strip()
         mem_type = value.get("mem_type")
         if not content or mem_type not in VALID_MEM_TYPES:
-            return
+            return MemoryApplyResult(
+                seq=seq,
+                status="terminal_invalid",
+                key=key,
+                error="invalid_content_or_mem_type",
+            )
 
         topic = value.get("topic") or ""
         try:
@@ -851,33 +919,82 @@ class ContextManager:
         except (TypeError, ValueError):
             importance = 0.5
 
-        embedding = await self._embedder.embed(content)
+        if self._embedder is None:
+            logger.debug(f"Remote memory '{key}' skipped — embedder unavailable.")
+            return MemoryApplyResult(
+                seq=seq,
+                status="failed_transient",
+                key=key,
+                error="embedder_unavailable",
+            )
+
+        try:
+            embedding = await self._embedder.embed(content)
+        except Exception as e:
+            logger.debug(f"Remote memory '{key}' embedding exception: {e}")
+            return MemoryApplyResult(
+                seq=seq,
+                status="failed_transient",
+                key=key,
+                error=f"embed_exception: {e}",
+            )
+
         if embedding is None:
-            # Can't verify/store without an embedding this round — skip
-            # rather than block or crash; this is a best-effort merge.
             logger.debug(f"Remote memory '{key}' skipped — embedding unavailable.")
-            return
+            return MemoryApplyResult(
+                seq=seq,
+                status="failed_transient",
+                key=key,
+                error="embedding_returned_none",
+            )
 
         loop = asyncio.get_running_loop()
-        existing = await loop.run_in_executor(
-            None,
-            functools.partial(
-                self._store.find_similar, embedding, mem_type, topic,
-                threshold=config.context.dedup_threshold,
-            ),
-        )
+        try:
+            existing = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    self._store.find_similar, embedding, mem_type, topic,
+                    threshold=config.context.dedup_threshold,
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"Remote memory '{key}' dedup check failed: {e}")
+            return MemoryApplyResult(
+                seq=seq,
+                status="failed_transient",
+                key=key,
+                error=f"find_similar_exception: {e}",
+            )
+
         if existing is not None:
-            # Already have an equivalent memory locally (very likely this
-            # is the echo of our own earlier push) — nothing to do.
-            return
+            logger.debug(f"Remote memory '{key}' already exists locally (id={existing.id}).")
+            return MemoryApplyResult(
+                seq=seq,
+                status="terminal_duplicate",
+                key=key,
+            )
 
         record = MemoryRecord(
             content=content, mem_type=mem_type, topic=topic,
             importance=importance, source="mayanode_sync", embedding=embedding,
             metadata={"model_id": getattr(self._embedder, "model_id", "local")},
         )
-        new_id = await loop.run_in_executor(None, self._store.add, record)
-        logger.info(f"Semantic memory merged from MayaNode (id={new_id}, key='{key}'): '{content[:50]}'")
+        try:
+            new_id = await loop.run_in_executor(None, self._store.add, record)
+            logger.info(f"Semantic memory merged from MayaNode (id={new_id}, key='{key}'): '{content[:50]}'")
+            return MemoryApplyResult(
+                seq=seq,
+                status="applied",
+                key=key,
+            )
+        except Exception as e:
+            logger.warning(f"Remote memory '{key}' store.add failed: {e}")
+            return MemoryApplyResult(
+                seq=seq,
+                status="failed_transient",
+                key=key,
+                error=f"store_add_exception: {e}",
+            )
 
     # ── Long-conversation compaction ───────────────────────────────────────
 

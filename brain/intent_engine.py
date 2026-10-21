@@ -64,7 +64,19 @@ _INTENTS_FILE     = _DATASETS_DIR / "intents.json"
 _TRAIN_FILE       = _DATASETS_DIR / "training" / "train_data.jsonl"
 _VALIDATION_FILE  = _DATASETS_DIR / "training" / "validation_data.jsonl"
 _TEST_FILE        = _DATASETS_DIR / "training" / "test_data.jsonl"
-_FAILURES_FILE    = _LOG_DIR / "intent_failures.jsonl"
+_HISTORICAL_FAILURES_FILE = _LOG_DIR / "intent_failures.jsonl"
+_DEFAULT_FAILURES_DIR     = Path.home() / "Maya" / "Classifier"
+
+
+def _get_default_failures_file() -> Path:
+    env_override = os.environ.get("MAYA_FAILURES_PATH") or os.environ.get("MAYAVE_FAILURES_PATH")
+    if env_override:
+        return Path(env_override)
+    return _DEFAULT_FAILURES_DIR / "intent_failures.jsonl"
+
+
+_FAILURES_FILE = _get_default_failures_file()
+_MAX_FAILURES  = int(os.environ.get("MAYA_FAILURES_MAX", os.environ.get("MAYAVE_FAILURES_MAX", "1000")))
 
 _DATASETS_DIR.mkdir(exist_ok=True)
 _MODEL_DIR.mkdir(exist_ok=True)
@@ -284,8 +296,9 @@ def _dataset_fingerprint(train_rows: list[dict], intents_cfg: dict) -> str:
 def log_classification_failure(utterance: str, predicted_intent: str, confidence: float,
                                 correct_intent: str | None = None) -> None:
     """
-    Upsert one failure record in logs/intent_failures.jsonl. Repeated
-    utterances refresh their latest prediction and increment occurrences.
+    Upsert one failure record in the local failures log (_FAILURES_FILE).
+    Repeated utterances refresh their latest prediction and increment occurrences.
+    Bounded to _MAX_FAILURES entries (pruning oldest timestamps when exceeded).
     Best-effort — a logging failure must never break classification. Failures
     are NEVER auto-trained on; brain/dataset_tools.py's review/promote
     workflow is the only path from here into datasets/training/train_data.jsonl.
@@ -298,15 +311,24 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
         "timestamp": time.time(),
     }
     try:
+        target_file = _FAILURES_FILE
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+
         rows: list[dict] = []
         row_indexes: dict[str, int] = {}
 
-        if _FAILURES_FILE.exists():
-            for line in _FAILURES_FILE.read_text(encoding="utf-8").splitlines():
+        if target_file.exists():
+            for line in target_file.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
-                existing = json.loads(line)
-                key = " ".join(existing["utterance"].casefold().split())
+                try:
+                    existing = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                utt = existing.get("utterance")
+                if not utt:
+                    continue
+                key = " ".join(utt.casefold().split())
                 existing["occurrences"] = max(1, int(existing.get("occurrences", 1)))
                 if key in row_indexes:
                     index = row_indexes[key]
@@ -323,7 +345,7 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
         if key in row_indexes:
             index = row_indexes[key]
             previous = rows[index]
-            record["occurrences"] = previous["occurrences"] + 1
+            record["occurrences"] = previous.get("occurrences", 1) + 1
             if not correct_intent:
                 record["correct_intent"] = previous.get("correct_intent")
             rows[index] = {**previous, **record}
@@ -332,14 +354,21 @@ def log_classification_failure(utterance: str, predicted_intent: str, confidence
             row_indexes[key] = len(rows)
             rows.append(record)
 
-        temp_file = _FAILURES_FILE.with_suffix(".jsonl.tmp")
+        # Enforce bounded retention policy
+        max_failures = _MAX_FAILURES
+        if max_failures > 0 and len(rows) > max_failures:
+            # Sort by timestamp ascending (oldest first), keep the newest max_failures entries
+            rows.sort(key=lambda r: float(r.get("timestamp", 0.0)))
+            rows = rows[-max_failures:]
+
+        temp_file = target_file.with_suffix(".jsonl.tmp")
         temp_file.write_text(
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
             encoding="utf-8",
         )
-        temp_file.replace(_FAILURES_FILE)
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        logger.debug(f"Could not write intent failure log (non-fatal): {e}")
+        temp_file.replace(target_file)
+    except Exception as e:
+        logger.warning(f"Could not write intent failure log (non-fatal): {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -900,6 +929,12 @@ class IntentEngine:
                 if not valid:
                     continue
 
+            if intent == "shutdown":
+                # System operations apply strictly to host computer / PC.
+                # Physical devices, lights, lamps, appliances are out of scope.
+                if re.search(r"\b(?:lights?|lamps?|porch|living\s+room|bedroom|kitchen|appliances?|doors?|gates?|shops?|house|tv)\b", t):
+                    continue
+
             if intent == "search_web":
                 # Capability guard: requests for past search/browsing history must not trigger web.search.
                 if re.search(r"\b(?:search\s+history|browsing\s+history|what\s+did\s+(?:i|we)\s+search|what\s+(?:i|we)\s+searched)\b", t):
@@ -926,6 +961,29 @@ class IntentEngine:
                             continue
                     valid = True
                     break
+                if not valid:
+                    continue
+
+            if intent == "greet":
+                # Conversational guard: Greeting keywords (e.g. "hey maya", "hi maya", "hello")
+                # only function as a standalone greeting when not accompanied by an actionable
+                # command, query, or conversational request. If substantive tokens remain after
+                # removing greeting keywords and allowed vocatives/discourse markers, do not match.
+                valid = False
+                for m in matches:
+                    cleaned = pattern.sub(" ", t)
+                    allowed_tokens = {
+                        "maya", "eve", "senpai", "there", "everyone", "folks",
+                        "friend", "guys", "all", "please", "well", "oh", "ok", "okay",
+                        config.name.lower(), config.user_name.lower(),
+                    }
+                    wake = getattr(config, "wake_word", "")
+                    if wake:
+                        allowed_tokens.update(re.findall(r"[a-z0-9]+", wake.lower()))
+                    remainder = [w for w in re.findall(r"[a-z0-9]+", cleaned) if w not in allowed_tokens]
+                    if not remainder:
+                        valid = True
+                        break
                 if not valid:
                     continue
 

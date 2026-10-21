@@ -52,10 +52,11 @@ CLI:
     python -m brain.dataset_tools candidates audit                     # re-run the audit on demand
     python -m brain.dataset_tools candidates audit --use-llm --max-llm-calls 30
     python -m brain.dataset_tools candidates review                   # print pending candidates (+ audit flags)
-    python -m brain.dataset_tools candidates promote --split train    # promote all verified candidates
+    python -m brain.dataset_tools candidates promote                  # auto-distribute verified candidates ≈80/10/10
+    python -m brain.dataset_tools candidates promote --split train    # promote all verified candidates into target split
     python -m brain.dataset_tools failures list [--min-confidence X]
     python -m brain.dataset_tools failures promote --index N --correct-intent get_weather --split train
-    python -m brain.dataset_tools migrate-legacy-intents               # help/unknown -> general_query
+    python -m brain.dataset_tools migrate-legacy-intents               # apply the built-in retired-intent mappings
     python -m brain.dataset_tools migrate-legacy-intents --map old_id=new_id   # additional/custom mapping
 """
 
@@ -81,7 +82,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import config
 from brain.intent_engine import (
     IntentConfigError, load_intent_config, load_dataset, build_keyword_patterns,
-    _TRAIN_FILE, _VALIDATION_FILE, _TEST_FILE, _FAILURES_FILE, _DATASETS_DIR,
+    _TRAIN_FILE, _VALIDATION_FILE, _TEST_FILE, _FAILURES_FILE, _HISTORICAL_FAILURES_FILE,
+    _DATASETS_DIR, _CONF_THRESH, _LOW_CONF_FLOOR_MULTIPLIER, _LOW_CONF_FLOOR_MIN,
 )
 
 logger = logging.getLogger(__name__)
@@ -221,6 +223,14 @@ _SLOT_PROPER_RE = re.compile(r"\b[A-Z][a-zA-Z]*\b")
 
 _VALID_VERDICT_RE   = re.compile(r"^\s*valid\s*$", re.IGNORECASE)
 _INVALID_VERDICT_RE = re.compile(r"invalid\s*:\s*([a-zA-Z0-9_]+)", re.IGNORECASE)
+
+# Codes selected for optional LLM-assisted semantic audit judgment
+_LLM_AUDIT_CONFLICT_CODES: frozenset[str] = frozenset({
+    "vocab_confusable",
+    "keyword_boundary_conflict",
+    "keyword_overlap",
+    "keyword_mismatch",
+})
 
 # ── Restored-intent semantic checks (help / unknown) ────────────────────────
 # 'help' requires an actual, explicit request for assistance — not just any
@@ -541,7 +551,8 @@ def audit_candidate_rows(
 
     Optional LLM-assisted check (`use_llm=True`, capped at
     `max_llm_calls`): only for candidates a deterministic check already
-    flagged as vocabulary/keyword-confusable — semantic judgment is used
+    flagged as vocabulary/keyword-confusable (vocab_confusable,
+    keyword_boundary_conflict, keyword_overlap) — semantic judgment is used
     where it's actually needed, not on every row.
     """
     valid_ids = {e["id"] for e in cfg["intents"]}
@@ -751,7 +762,7 @@ def audit_candidate_rows(
     if use_llm and max_llm_calls > 0:
         ambiguous = [
             idx for idx, issues in issues_by_index.items()
-            if any(i.code in ("vocab_confusable", "keyword_mismatch") for i in issues)
+            if any(i.code in _LLM_AUDIT_CONFLICT_CODES for i in issues)
             and not any(i.severity == "reject" for i in issues)
         ]
         for idx in ambiguous[:max_llm_calls]:
@@ -1029,6 +1040,12 @@ def cmd_candidates_review(args: argparse.Namespace) -> None:
 
 
 def cmd_candidates_promote(args: argparse.Namespace) -> None:
+    target_split = getattr(args, "split", None)
+    if target_split is not None and target_split not in _SPLIT_FILES:
+        raise ValueError(
+            f"Invalid split '{target_split}'. Must be one of {sorted(_SPLIT_FILES)} or None."
+        )
+
     cfg = load_intent_config()
     valid_ids = {e["id"] for e in cfg["intents"]}
 
@@ -1051,8 +1068,20 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
     # participate in promotion deduplication.
     existing = _trusted_split_texts(valid_ids)
 
-    # Group verified candidates by intent so each intent receives its
-    # own approximately 80/10/10 distribution.
+    # Pre-load text sets per split to prevent eval/train data leakage
+    train_texts = {
+        row["text"].strip().lower()
+        for row in _read_jsonl(_TRAIN_FILE)
+        if row.get("text")
+    }
+    eval_texts = {
+        row["text"].strip().lower()
+        for path in (_VALIDATION_FILE, _TEST_FILE)
+        for row in _read_jsonl(path)
+        if row.get("text")
+    }
+
+    # Group verified candidates by intent
     by_intent: dict[str, list[dict]] = {}
     for row in verified:
         by_intent.setdefault(row["intent"], []).append(row)
@@ -1064,7 +1093,7 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
     }
 
     # Track everything assigned during this promotion so an example can
-    # never appear in more than one split.
+    # never appear in more than one split or duplicate within a batch.
     seen_this_batch: set[tuple[str, str]] = set()
 
     rng = random.SystemRandom()
@@ -1072,19 +1101,25 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
     for intent in sorted(by_intent):
         candidates = by_intent[intent]
 
-        # Remove duplicates against existing trusted data and within
-        # this promotion batch.
+        # Remove duplicates against existing trusted data, leak checks,
+        # and within this promotion batch.
         eligible = []
         seen_intent: set[tuple[str, str]] = set()
 
         for row in candidates:
-            text = row["text"].strip()
+            text = row.get("text", "").strip()
             key = (text.lower(), intent)
 
             if not text:
                 continue
 
             if key in existing or key in seen_intent or key in seen_this_batch:
+                continue
+
+            # Prevent cross-split data leakage:
+            if target_split == "train" and text.lower() in eval_texts:
+                continue
+            if target_split in ("validation", "test") and text.lower() in train_texts:
                 continue
 
             seen_intent.add(key)
@@ -1094,35 +1129,55 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
             print(f"{intent}: no new candidates to promote")
             continue
 
-        # Randomize before assigning splits.
-        rng.shuffle(eligible)
-
         count = len(eligible)
 
-        # Allocate approximately 80/10/10 while ensuring every candidate is
-        # assigned to exactly one split.
-        if count < 3:
-            train_count = count
-            validation_count = 0
+        if target_split is not None:
+            assignments = {
+                "train": eligible if target_split == "train" else [],
+                "validation": eligible if target_split == "validation" else [],
+                "test": eligible if target_split == "test" else [],
+            }
+            print(f"{intent}: {count} → {target_split}={count}")
         else:
-            train_count = max(1, round(count * 0.80))
-            validation_count = round(count * 0.10)
+            # Randomize before assigning splits.
+            rng.shuffle(eligible)
 
-        test_count = count - train_count - validation_count
+            # Allocate approximately 80/10/10 while ensuring every candidate is
+            # assigned to exactly one split and does not leak across splits.
+            if count < 3:
+                train_count = count
+                validation_count = 0
+            else:
+                train_count = max(1, round(count * 0.80))
+                validation_count = round(count * 0.10)
 
-        train_candidates = eligible[:train_count]
-        validation_candidates = eligible[
-            train_count:train_count + validation_count
-        ]
-        test_candidates = eligible[
-            train_count + validation_count:
-        ]
+            test_count = count - train_count - validation_count
 
-        assignments = {
-            "train": train_candidates,
-            "validation": validation_candidates,
-            "test": test_candidates,
-        }
+            train_candidates = [
+                r for r in eligible[:train_count]
+                if r["text"].strip().lower() not in eval_texts
+            ]
+            validation_candidates = [
+                r for r in eligible[train_count:train_count + validation_count]
+                if r["text"].strip().lower() not in train_texts
+            ]
+            test_candidates = [
+                r for r in eligible[train_count + validation_count:]
+                if r["text"].strip().lower() not in train_texts
+            ]
+
+            assignments = {
+                "train": train_candidates,
+                "validation": validation_candidates,
+                "test": test_candidates,
+            }
+
+            print(
+                f"{intent}: {count} → "
+                f"train={len(train_candidates)}, "
+                f"validation={len(validation_candidates)}, "
+                f"test={len(test_candidates)}"
+            )
 
         for split, candidates_for_split in assignments.items():
             for row in candidates_for_split:
@@ -1147,13 +1202,6 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
 
                 split_rows[split].append(clean)
                 seen_this_batch.add(key)
-
-        print(
-            f"{intent}: {count} → "
-            f"train={len(train_candidates)}, "
-            f"validation={len(validation_candidates)}, "
-            f"test={len(test_candidates)}"
-        )
 
     total_promoted = 0
 
@@ -1180,16 +1228,70 @@ def cmd_candidates_promote(args: argparse.Namespace) -> None:
     # Unverified candidates remain available for later review.
     _write_jsonl(_CANDIDATES_FILE, unverified)
 
-    print(
-        f"Promotion complete: {total_promoted} new example(s) "
-        f"distributed across train/validation/test."
-    )
+    if target_split is not None:
+        print(
+            f"Promotion complete: {total_promoted} new example(s) "
+            f"promoted into {target_split}."
+        )
+    else:
+        print(
+            f"Promotion complete: {total_promoted} new example(s) "
+            f"distributed across train/validation/test."
+        )
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. Failure-log review / promotion
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _load_all_failures() -> list[dict]:
+    """
+    Read logged classification failures, combining local failure records with
+    historical records (logs/intent_failures.jsonl) without modifying historical data.
+    Local records take precedence for identical utterances.
+    """
+    from brain import intent_engine
+    active_file = getattr(intent_engine, "_FAILURES_FILE", _FAILURES_FILE)
+    historical_file = getattr(intent_engine, "_HISTORICAL_FAILURES_FILE", _HISTORICAL_FAILURES_FILE)
+
+    files_to_read: list[Path] = []
+    if historical_file.exists():
+        files_to_read.append(historical_file)
+
+    try:
+        is_same = active_file.resolve() == historical_file.resolve()
+    except (OSError, RuntimeError):
+        is_same = active_file == historical_file
+
+    if not is_same and active_file.exists():
+        files_to_read.append(active_file)
+    elif not files_to_read and active_file.exists():
+        files_to_read.append(active_file)
+
+    merged: dict[str, dict] = {}
+    for f in files_to_read:
+        for r in _read_jsonl(f):
+            utt = r.get("utterance", "")
+            if not utt:
+                continue
+            key = " ".join(utt.casefold().split())
+            if key in merged:
+                prev = merged[key]
+                occ = prev.get("occurrences", 1)
+                if f != files_to_read[0]:
+                    occ += r.get("occurrences", 1)
+                merged[key] = {
+                    **prev,
+                    **r,
+                    "occurrences": occ,
+                    "correct_intent": r.get("correct_intent") or prev.get("correct_intent"),
+                }
+            else:
+                merged[key] = dict(r)
+
+    return list(merged.values())
+
+
 def cmd_failures_list(args: argparse.Namespace) -> None:
-    rows = _read_jsonl(_FAILURES_FILE)
+    rows = _load_all_failures()
     if args.min_confidence is not None:
         rows = [r for r in rows if r["confidence"] >= args.min_confidence]
     if not rows:
@@ -1209,7 +1311,7 @@ def cmd_failures_promote(args: argparse.Namespace) -> None:
     if args.correct_intent not in valid_ids:
         raise IntentConfigError(f"'{args.correct_intent}' is not a declared intent.")
 
-    rows = _read_jsonl(_FAILURES_FILE)
+    rows = _load_all_failures()
     if not (0 <= args.index < len(rows)):
         print(f"Index {args.index} out of range (0..{len(rows)-1}).")
         return
@@ -1387,7 +1489,12 @@ def main() -> None:
     cr = cand_sub.add_parser("review", help="List unverified candidates (with audit flags).")
     cr.set_defaults(func=cmd_candidates_review)
     cp = cand_sub.add_parser("promote", help="Promote verified candidates into a dataset split.")
-    cp.add_argument("--split", choices=list(_SPLIT_FILES), default="train")
+    cp.add_argument(
+        "--split",
+        choices=list(_SPLIT_FILES),
+        default=None,
+        help="Target split ('train', 'validation', 'test'). If omitted, distributes ≈80/10/10 across splits.",
+    )
     cp.set_defaults(func=cmd_candidates_promote)
 
     fail = sub.add_parser("failures", help="Review/promote logged classification failures.")

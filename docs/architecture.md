@@ -300,7 +300,13 @@ Arbitration: `expression-controller.js` (`BASE<EMOTION<ACTION<LIPSYNC<BLINK` per
 
 ## 12. WebSocket protocol (`services/ws_server.py` ⇄ `frontend/js/websocket.js`)
 
-Server → client: `audio` (base64 WAV), `stop_audio`, `state` (`listening|processing|speaking|idle|sleeping`; last state replayed on connect), `behavior` (sent before the phrase audio), `transcript` (ignored by UI), `animation` (`wave|nod|giggle|sigh|shrug|wink`), `expression` (legacy, unused). Client → server: `audio_done` (gates the next phrase), `interrupt` (handler exists; no frontend sender). Origins are restricted by `config.ws_allowed_origins`. `wait_for_audio_done` returns immediately with no client, otherwise 30 s timeout then continues.
+Server → client: `audio` (base64 WAV, `playback_id`), `stop_audio` (`playback_id`), `state` (`listening|processing|speaking|idle|sleeping`; last state replayed atomically on connect), `behavior` (sent before phrase audio under `playback_lock`), `transcript` (ignored by UI), `animation` (`wave|nod|giggle|sigh|shrug|wink`), `expression` (legacy, unused). Client → server: `audio_done` (`playback_id`, `status: completed|failed|interrupted`), `interrupt` (handler exists; no frontend sender). Origins are restricted by `config.ws_allowed_origins`.
+
+**Playback Transactions & Authority**:
+- **Authoritative Renderer**: The first connected WebSocket client is designated as the authoritative playback renderer. Audio is dispatched strictly to the authority, while UI state/animations/transcripts are broadcast to all clients. On authority disconnect, pending playback is settled as `disconnected`, and the next connected client is promoted for future playbacks (in-flight audio is not replayed).
+- **Correlated Transactions**: Every audio transmission carries a unique `playback_id`. The transaction waiter is registered *before* transmission and remains protected through both the awaited send and acknowledgement wait; cancellation propagates while transaction cleanup runs. The `timeout` argument bounds the acknowledgement wait after the send completes, not the send operation itself. The frontend echoes the matching `playback_id` and status upon completion, failure (`missing_vrm`, `decode_error`), or cancellation (`stopped`). Uncorrelated, stale, mismatched, or non-authoritative acknowledgements are ignored. Compatibility `broadcast_audio()` retains its live transaction after a successful send for the subsequent correlated `wait_for_audio_done()` call, then cleans it up when consumed; send failure/cancellation cleans up only that invocation's transaction. Compatibility wrappers do not fall back to a shared completion event.
+- **Audio & Presentation Serialization**: Avatar presentation in `Speaker.speak`, `_play_filler`, and `_play_worker` is serialized under `ws_server.playback_lock`, preventing interleaved emotional states across wake speech, timer alerts, filler, and streamed dialogue phrases. `_play_worker` emits each phrase's action animations, behavior, state, and configured audio presentation within the same critical section.
+- **Outcomes**: Returns explicit `PlaybackResult` with outcomes: `completed`, `interrupted`, `disconnected`, `failed`, `timeout`, or `no_client`.
 
 ---
 
@@ -336,7 +342,7 @@ Data actually flowing: `Processor` records `mayave.turn_completed` with **only**
 
 Runtime model production: `IntentEngine._load_or_train` loads saved artifacts when the fingerprint (intents config + seed + train rows) matches `training_hash.txt`, otherwise retrains both models from scratch (`MAYA_SEED`, default 1337; seeded torch/numpy/python/DataLoader/TF) and rewrites the hash. `python -m brain.train_intent [--eval-only]` is the explicit retrain + evaluation report.
 
-Tooling (`brain/dataset_tools.py`): LLM candidate generation (Ollama `llama3.1`) → automatic deterministic **audit** (malformed, duplicate, contradiction, generic, keyword/vocabulary confusability, restored-intent checks, boundary phrases, templates, diversity; optional capped LLM judgment) → human `verified` marking → `candidates promote` (80/10/10 per intent, cross-split dedup) ; failure-log review/promotion (`logs/intent_failures.jsonl`, never auto-trained); `migrate-legacy-intents` (retired ids → `note_write`, `note_view`, `open_target`, `set_timer`). `datasets/stage_data.py` stages hand-written rows/cases with leak/near-duplicate checks (dry run by default); `datasets/review_candidates.py` writes a read-only review report.
+Tooling (`brain/dataset_tools.py`): LLM candidate generation (Ollama `llama3.1`) → automatic deterministic **audit** (malformed, duplicate, contradiction, generic, keyword/vocabulary confusability, restored-intent checks, boundary phrases, templates, diversity; optional capped LLM judgment) → human `verified` marking → `candidates promote` (80/10/10 per intent, cross-split dedup) ; failure-log review/promotion (local `~/Maya/Classifier/intent_failures.jsonl` with historical `logs/intent_failures.jsonl` fallback, never auto-trained); `migrate-legacy-intents` (retired ids → `note_write`, `note_view`, `open_target`, `set_timer`). `datasets/stage_data.py` stages hand-written rows/cases with leak/near-duplicate checks (dry run by default); `datasets/review_candidates.py` writes a read-only review report.
 
 Router corpus: `python -m brain.router.eval_router --seed` embeds every seed into the command vector store; staleness is detected by a hash of `command_domains.json` and only warned about (never auto-reseeded).
 
@@ -346,25 +352,26 @@ Router corpus: `python -m brain.router.eval_router --seed` embeds every seed int
 
 | Layer | Files | Scope |
 |---|---|---|
-| Unit/contract tests (170 tests passing) | `brain/test_hybrid_router.py`, `brain/router/test_ir.py`, `brain/router/test_router_boundaries.py`, `brain/router/test_intent_margin.py`, `brain/test_failure_logging.py`, `services/llm/test_conversational_response.py`, `brain/conftest.py` | registry/taxonomy drift, confidence policy, validation, adapter, vector store, LLM failure modes, conversational expression parsing, `CommandUnderstander` stages, context rewrite, entity extraction, `SkillResult`/adapter, confirmation propagation, classifier margin (`IntentEngine.__new__` + fake model) |
+| Local-only unit/contract tests | `.maya/tests/` (ignored; not included in Git checkouts) | Local regression and integration coverage; contents vary by developer worktree |
 | Retrieval evaluation | `brain/router/eval_router.py` | per-split accuracy and (similarity, margin) threshold sweeps |
 | IR evaluation | `brain/router/eval_ir.py`, `datasets/router_eval/cases.jsonl` | false-execution rate (primary), wrong command/entity, OOS precision/recall, clarification recall, LLM fallback rate, latency, `per_case`, `model_digest` |
 | Cross-seed analysis | `brain/router/failure_matrix.py`, `diag.py` | failure frequency across seeds (60 benchmark cases), classifier misses |
 | Classifier evaluation | `brain/train_intent.py` | per-intent P/R/F1 and confusions on validation/test |
 
-`tests/` is gitignored; tests live beside the code. Test execution: `pytest brain services/llm -q` (**170 passed, 44 warnings**; warnings are external TensorFlow/Keras and conversational test logger messages). All Python SyntaxWarnings (literal identity checks) have been eliminated.
+No test source files are tracked, so a clean checkout does not contain a runnable test suite or the local test dependency manifest. The developer-local tests and their dependency configuration must remain under `.maya/tests/`; saved test reports are historical evidence, not a claim about the current checkout. With those local files present, prepare the environment and run the suite with:
 
-**Failure Matrix Benchmark** (`brain/router/failure_matrix.py` across 60 evaluation cases with semantic + LLM wired):
-- `seed1`: 0/60 failures
-- `seed2`: 1/60 failure (known ambiguous clarification variance on `"timer for a quarter of an hour"`)
-- `seed3`: 0/60 failures
-- `seed1_repeat`: 0/60 failures
-- Cross-seed consistency: 59/60 (98.3%) across tested seeds.
+```powershell
+python -m pip install -r config/requirements.txt
+python -m pip install -r .maya/tests/requirements-dev.txt
+python -m pytest .maya/tests -q
+```
 
-*Note: This failure matrix represents a targeted 60-case regression evaluation suite across deterministic seeds, not a generalized accuracy metric.*
+Some local integration tests may also require Ollama or trained models. A clean checkout cannot use this workflow unless the intentionally untracked local test files and dependency manifest are separately available.
+
+Historical failure-matrix outputs are retained under `logs/runs60/`. Their results describe the source and environment at the time of each run, not current router verification.
 
 Run (environment-dependent; needs the project dependencies and, for some tests, Ollama/trained models):
-- Test suite: `python -m pytest brain services/llm -q`
+- Test suite, only when local test files are present: `python -m pytest .maya/tests -q`
 - Seed command vector store: `python -m brain.router.eval_router --seed`
 - Single IR evaluation run: `python -m brain.router.eval_ir --semantic --llm`
 - Generate multi-seed benchmark runs (PowerShell):
@@ -389,7 +396,7 @@ Run (environment-dependent; needs the project dependencies and, for some tests, 
 | Env vars | `MAYA_SEED`, `MAYA_EMBEDDING_DEVICE`, `HF_HUB_OFFLINE`, `TF_CPP_MIN_LOG_LEVEL`, `VITE_DEV_SERVER_URL`, `OneDrive` |
 | `getattr`-only (not dataclass fields) | `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `60m`) |
 
-Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False` (client-side only, disabled by default), `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"`, `device="auto"` (CUDA auto-detect with CPU fallback); `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; dependencies are in `config/requirements.txt` (+ `frontend/package.json`).
+Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False` (client-side only, disabled by default), `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"`, `device="auto"` (CUDA auto-detect with CPU fallback); `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; application dependencies are in `config/requirements.txt`, optional local test tooling is in `.maya/tests/requirements-dev.txt`, and frontend dependencies are in `frontend/package.json`.
 
 ---
 
@@ -424,10 +431,9 @@ MayaVE/
 │   ├── intent_engine.py      legacy ML classifier + guards + keyword rules
 │   ├── router/               dispatch, understand (CommandUnderstander), ir, context, entities, validate,
 │   │                         registry, schemas, confidence, semantic_router, command_vector_store,
-│   │                         llm_fallback, guards, normalize, adapter, hybrid_engine, eval_* tools, tests
+│   │                         llm_fallback, guards, normalize, adapter, hybrid_engine, eval_* tools
 │   ├── conversation.py, memory.py, embeddings.py, vector_store.py
-│   ├── dataset_tools.py, train_intent.py
-│   └── test_hybrid_router.py, conftest.py
+│   └── dataset_tools.py, train_intent.py
 ├── services/
 │   ├── llm/                  llm_service.py, ollama_lifecycle.py
 │   ├── ws_server.py
@@ -436,7 +442,8 @@ MayaVE/
 ├── datasets/                 intents.json, training/, router_eval/, intent_model/ (generated), tooling scripts
 ├── frontend/                 electron/, js/, assets/ (VRM/VRMA via LFS), index.html, expression-lab.html
 ├── docs/                     architecture.md, CHANGELOG.md, CONTRIBUTING.md, PROTOCOL_CONTRACT.md
-├── logs/                     runtime logs, eval outputs, failure log (generated)
+├── logs/                     tracked logs and historical evaluation artifacts; preserve unless explicitly reviewed
+└── .maya/                    optional developer-local tests/, test config, and reports/ (ignored; absent from clean checkouts)
 └── .github/workflows/        changelog-issues.yml (syncs CHANGELOG Issues/Fixes to GitHub Issues)
 ```
 

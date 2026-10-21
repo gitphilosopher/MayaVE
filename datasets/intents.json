@@ -31,10 +31,12 @@
     "volume_up",
     "volume_down",
     "shutdown",
+    "clipboard_clear",
     "screenshot",
     "restart",
     "play_music",
     "mute",
+    "get_weather",
     "get_time",
     "get_date",
     "help",
@@ -283,7 +285,14 @@
       "category": "weather",
       "description": "User asks about current or forecast weather, optionally for a named location.",
       "min_examples": 80,
-      "keywords": [],
+      "keywords": [
+        "what's it like outside",
+        "how is it looking outside",
+        "what's the weather",
+        "current weather",
+        "weather forecast",
+        "how is the weather"
+      ],
       "response_mode": "skill"
     },
     {
@@ -307,7 +316,20 @@
       "category": "clipboard",
       "description": "User wants the clipboard cleared.",
       "min_examples": 50,
-      "keywords": [],
+      "keywords": [
+        "clear clipboard",
+        "wipe clipboard",
+        "empty clipboard",
+        "erase clipboard",
+        "clear my clipboard",
+        "wipe my clipboard",
+        "clear whatever i copied",
+        "wipe whatever i copied",
+        "clear what i copied",
+        "wipe what i copied",
+        "erase what i copied",
+        "delete what i copied"
+      ],
       "response_mode": "skill"
     },
     {

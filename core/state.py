@@ -93,11 +93,7 @@ class StateManager:
         if self._state == MayaState.SPEAKING:
             return True
         task = self._current_task
-        return (
-            self._state == MayaState.PROCESSING
-            and task is not None
-            and not task.done()
-        )
+        return task is not None and not task.done()
 
     async def set(self, new_state: MayaState) -> None:
         async with self._lock:

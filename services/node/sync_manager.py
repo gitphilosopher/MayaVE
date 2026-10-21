@@ -42,9 +42,12 @@ whole process lifetime — alongside main.py's listener/queue-worker —
 without a Node outage ever affecting Maya's voice pipeline. Recording
 events/memory (events.py / memory_producer.py) never depends on this
 manager running at all — see their own docstrings. Applying incoming
-changes is equally best-effort: a failure there is logged and swallowed,
-never allowed to affect the sync loop's own cursor/outbox bookkeeping,
-which has already completed successfully by the time changes are applied.
+changes is strictly cursor-safe: outbox reconciliation settles outgoing
+writes, but the incoming sync cursor only advances up to changes that
+have been successfully applied or classified as terminal. Any transient
+failure (such as temporary embedding unavailability) holds the cursor
+before the failing item, ensuring unapplied changes are retried on the
+subsequent sync round without skipping or duplicating data.
 """
 import asyncio
 import logging
@@ -174,18 +177,13 @@ class NodeSyncManager:
         """
         Pulls up to config.node.max_events_per_sync / max_memory_per_sync
         pending items from the local outbox, pushes them alongside the
-        cursor request, advances the cursor per the Step 2 contract (the
-        highest seq the server delivered, never moved backwards — see
-        SyncStateStore.advance()), and reconciles the outbox against the
-        response. A connection/version/shape failure (result is None)
-        touches neither the cursor nor the outbox — everything queued
-        stays queued for the next attempt.
+        cursor request, reconciles the outbox against settled items in the
+        response, applies incoming changes, and advances the cursor
+        only up to successfully applied or terminal changes.
 
-        Once the cursor/outbox bookkeeping has succeeded, whatever
-        MayaNode delivered in `changes` is handed off for best-effort
-        local application (Step 4) — this happens strictly AFTER the
-        sync round's own state is committed, so a failure while applying
-        changes can never roll back or duplicate the cursor advance.
+        A connection/version/shape failure (result is None) touches
+        neither the cursor nor the outbox — everything queued stays
+        queued for the next attempt.
         """
         max_events = getattr(self._cfg, "max_events_per_sync", _DEFAULT_MAX_EVENTS)
         max_memory = getattr(self._cfg, "max_memory_per_sync", _DEFAULT_MAX_MEMORY)
@@ -207,15 +205,24 @@ class NodeSyncManager:
         if result is None:
             return False
 
-        await self._state.advance(result.cursor)
+        # Reconcile local outbox against settled items in response
         self._reconcile_outbox(sent_events, sent_memory, result)
 
-        await self._apply_incoming_changes(result.changes)
+        # Apply incoming changes and safely advance cursor only up to settled changes
+        safe_cursor = await self._apply_incoming_changes(result.changes, result.cursor)
+        if safe_cursor > self._state.cursor:
+            await self._state.advance(safe_cursor)
 
-        logger.debug(
-            f"Node sync ok — cursor now {result.cursor} (has_more={result.has_more}) "
-            f"pushed events={len(sent_events)} memory={len(sent_memory)}"
-        )
+        if safe_cursor < result.cursor:
+            logger.info(
+                f"Node sync partial application: cursor advanced to {safe_cursor} "
+                f"(server target {result.cursor}); unapplied changes will retry next sync."
+            )
+        else:
+            logger.debug(
+                f"Node sync ok — cursor now {safe_cursor} (has_more={result.has_more}) "
+                f"pushed events={len(sent_events)} memory={len(sent_memory)}"
+            )
         return True
 
     def _reconcile_outbox(self, sent_events: list[dict], sent_memory: list[dict], result) -> None:
@@ -256,9 +263,9 @@ class NodeSyncManager:
         except Exception as e:
             logger.warning(f"Node sync outbox reconciliation failed (non-fatal): {e}")
 
-    async def _apply_incoming_changes(self, changes: dict) -> None:
+    async def _apply_incoming_changes(self, changes: dict, target_cursor: int | None = None) -> int:
         """
-        Step 4 — best-effort hand-off of MayaNode-originated changes into
+        Step 4 — safe hand-off of MayaNode-originated changes into
         MayaVE's own runtime state, through the EXISTING system that owns
         that state rather than a new parallel path:
 
@@ -266,37 +273,89 @@ class NodeSyncManager:
             brain.conversation.context_manager.apply_remote_memory_changes(),
             which recognizes only its own `semantic_memory:*` key shape
             (see brain/conversation.py's ContextManager) and merges
-            matching entries into the local SQLiteVectorStore — the same
-            store Maya's own memory policy writes to. Anything else is
-            ignored there, not here, so the recognition logic has exactly
-            one home.
+            matching entries into the local SQLiteVectorStore.
+            Returns per-item MemoryApplyResult outcomes.
 
-          - changes["events"]: deliberately NOT applied anywhere. A
-            `mayave.turn_completed` record from another device has no
-            MayaVE-side state to mutate — it's cross-device history that
-            lives on MayaNode, not application state this process needs
-            to react to. If a future event type needs local application,
-            it gets its own explicit handler here rather than a blanket
-            replay.
+          - changes["events"]: deliberately NOT applied anywhere (cross-device
+            history living on MayaNode). Treated as terminal.
 
-        `brain.conversation` is imported lazily (not at module load) so
-        this module — whose own docstring promises isolation from voice
-        I/O and a lightweight import footprint — never pays the cost of
-        importing the full context/embedding/vector-store stack unless a
-        sync round actually has memory changes to apply. Never raises:
-        any failure here is logged and swallowed, well after this round's
-        own cursor/outbox bookkeeping has already succeeded.
+        Calculates the safe cursor to advance to:
+          - If all incoming changes were applied or terminal, returns target_cursor.
+          - If a transient failure occurred at sequence S, returns the highest
+            settled sequence strictly less than S (or current cursor if none).
+          - Transient failures never advance the cursor past the failing item.
         """
+        if target_cursor is None:
+            target_cursor = self._state.cursor
+
+        events = (changes or {}).get("events") or []
         memory_changes = (changes or {}).get("memory") or []
+
         if not memory_changes:
-            return
+            return target_cursor
+
         try:
             from brain.conversation import context_manager
-            await context_manager.apply_remote_memory_changes(memory_changes)
+            memory_results = await context_manager.apply_remote_memory_changes(memory_changes)
         except Exception as e:
-            logger.debug(f"Applying incoming MayaNode changes failed (non-fatal): {e}")
+            logger.warning(f"Applying incoming MayaNode memory changes failed (non-fatal): {e}", exc_info=True)
+            return self._state.cursor
+
+        return calculate_safe_cursor(
+            current_cursor=self._state.cursor,
+            target_cursor=target_cursor,
+            events=events,
+            memory_results=memory_results,
+        )
 
 
-# Singleton — matches the existing project pattern (mood_manager,
-# queue_manager, ws_server, context_manager).
+def calculate_safe_cursor(
+    current_cursor: int,
+    target_cursor: int,
+    events: list[dict],
+    memory_results: list,
+) -> int:
+    """
+    Calculates the highest cursor sequence number that can be safely committed.
+
+    A cursor S is safe if and only if all incoming changes with seq <= S
+    have either been successfully applied or are terminal (terminal_ignored,
+    terminal_invalid, terminal_duplicate, or ignored events).
+
+    If no transient failures occurred, safe cursor is target_cursor.
+    If a transient failure occurred at sequence S_fail:
+      safe_cursor is the highest settled sequence strictly less than S_fail
+      (or current_cursor if no settled items precede S_fail).
+    """
+    transient_failures = [
+        r for r in memory_results
+        if getattr(r, "status", None) == "failed_transient"
+    ]
+    if not transient_failures:
+        return max(current_cursor, target_cursor)
+
+    failing_seqs = [r.seq for r in transient_failures if isinstance(getattr(r, "seq", None), int)]
+    if not failing_seqs or any(getattr(r, "seq", None) is None for r in transient_failures):
+        return current_cursor
+
+    earliest_fail_seq = min(failing_seqs)
+
+    settled_seqs: list[int] = []
+    for e in events:
+        if isinstance(e, dict) and isinstance(e.get("seq"), int):
+            if e["seq"] < earliest_fail_seq:
+                settled_seqs.append(e["seq"])
+
+    for m in memory_results:
+        m_seq = getattr(m, "seq", None)
+        m_status = getattr(m, "status", None)
+        if isinstance(m_seq, int) and m_status != "failed_transient":
+            if m_seq < earliest_fail_seq:
+                settled_seqs.append(m_seq)
+
+    if settled_seqs:
+        return max(current_cursor, max(settled_seqs))
+    return current_cursor
+
+
 node_sync_manager = NodeSyncManager()

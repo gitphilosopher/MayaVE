@@ -123,9 +123,20 @@ def extract_entities(spec, text: str, target: str = "", llm_entities: dict | Non
         fn = EXTRACTORS.get(name)
         val = fn(text, target) if fn else None
         if val in (None, ""):
-            val = (llm_entities or {}).get(name)
-            if name == "duration" and isinstance(val, str):
-                val = extract_duration(val)
+            raw_val = (llm_entities or {}).get(name)
+            if name == "duration":
+                # Duration must be validated by the deterministic duration parser
+                # against what the downstream skill can parse. The LLM must not invent
+                # or arbitrarily map unparseable/ambiguous duration phrases to integer seconds.
+                if isinstance(raw_val, str):
+                    val = extract_duration(raw_val)
+                elif isinstance(raw_val, (int, float)):
+                    # Only accept if text itself contains a deterministically valid duration
+                    val = extract_duration(text)
+                else:
+                    val = None
+            else:
+                val = raw_val
         if val not in (None, ""):
             ents[name] = val
         elif meta.get("required"):

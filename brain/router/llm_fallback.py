@@ -161,6 +161,8 @@ def _build_prompt(utterance: str, domains: list[str], operations_by_domain: dict
         "If the utterance is not an actionable command from the list above (e.g. smalltalk, conversation, "
         "past narrative, physical world task, or unsupported request), respond with domain='unknown', operation='unknown'.\n"
         "If it IS one of the listed commands but you cannot confidently determine the operation or a required entity, "
+        "set needs_clarification=true and confidence<=0.3. For timer.create, if the duration is missing, vague, "
+        "or colloquial (e.g. 'a quarter of an hour', 'a while', 'a few minutes'), do not guess numeric duration; "
         "set needs_clarification=true and confidence<=0.3. For weather.current, location is optional (defaults to local weather) "
         "and never requires clarification.\n"
         "confidence is REQUIRED: a JSON number from 0.0 to 1.0 reflecting how certain "

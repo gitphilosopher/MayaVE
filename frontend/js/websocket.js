@@ -36,9 +36,11 @@ let _statusEl = null;
 let _lastStatusText = null;
 
 // Report streamed-audio completion to the backend while the socket is open.
-setAudioDoneCallback(() => {
+setAudioDoneCallback((playbackId, status = "completed", reason = null) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "audio_done" }));
+        const msg = { type: "audio_done", playback_id: playbackId, status: status };
+        if (reason) msg.reason = reason;
+        ws.send(JSON.stringify(msg));
     }
 });
 
@@ -61,11 +63,12 @@ function connect() {
 
         switch (data.type) {
             case "audio":
+                const playbackId = data.playback_id || null;
                 if (traceId) recordTrace(traceId, "ws_receive", { payload_chars: data.data ? data.data.length : 0 });
                 if (traceId) recordTrace(traceId, "message_dispatch_start");
                 const audioBuf = base64ToArrayBuffer(data.data);
                 if (traceId) recordTrace(traceId, "message_dispatch_end", { byte_length: audioBuf.byteLength });
-                speakFromBytes(audioBuf, traceId);
+                speakFromBytes(audioBuf, traceId, playbackId);
                 break;
             case "state":
                 handleState(data.value);
@@ -75,7 +78,7 @@ function connect() {
                 break;
             case "stop_audio":
                 // Stop current playback immediately when the backend interrupts speech.
-                stopCurrentAudio();
+                stopCurrentAudio(data.playback_id || null);
                 break;
             case "transcript":
                 // No transcript UI is currently connected.

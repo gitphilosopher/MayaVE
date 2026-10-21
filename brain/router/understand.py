@@ -42,7 +42,8 @@ import time
 from brain.router import validate
 from brain.router.confidence import ConfidenceThresholds
 from brain.router.context import ContextResolver, ConversationContext
-from brain.router.entities import extract_entities
+from brain.router.entities import extract_entities, extract_duration
+from brain.router.registry import ALLOWED_LEGACY_INTENTS
 from brain.router.ir import CommandIR, Status
 from brain.router.normalize import normalize
 
@@ -128,6 +129,46 @@ _HISTORICAL_STATEMENT_RE = re.compile(
     r"was\s+listening"
     r")\b"
     r")",
+    re.I,
+)
+
+
+# Launch/open intent verbs for app_or_web.open validation
+_LAUNCH_VERB_RE = re.compile(
+    r"\b(?:"
+    r"open|launch|start|run|pull\s+up|bring\s+up|go\s+to|navigate\s+to|visit|take\s+me\s+to|show\s+me"
+    r")\b",
+    re.I,
+)
+
+_KNOWN_SITES = {
+    "youtube", "github", "reddit", "netflix", "spotify", "gmail",
+    "twitter", "google", "amazon", "linkedin", "stackoverflow", "wikipedia",
+    "facebook", "instagram", "twitch", "hulu", "disney", "disney+", "disneyplus",
+}
+
+_KNOWN_APPS = {
+    "notepad", "calculator", "calc", "file explorer", "explorer", "task manager",
+    "terminal", "cmd", "powershell", "paint", "settings", "control panel",
+    "chrome", "google chrome", "edge", "microsoft edge", "firefox", "mozilla firefox",
+    "word", "excel", "powerpoint", "vs code", "vscode", "visual studio code",
+    "discord", "whatsapp", "slack", "zoom", "teams", "microsoft teams", "obs",
+    "steam", "vlc",
+}
+
+_URL_PATTERN = re.compile(
+    r"(?:https?://|www\.)\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|edu|gov|dev|ai|app|co|tv|xyz|info)\b|\b\w+\s+dot\s+(?:com|org|net|io|edu|gov|dev|ai|app|co|tv|xyz|info)\b",
+    re.I,
+)
+
+_TARGET_CLEAN_RE = re.compile(r"[^\w\s\.-]", re.U)
+
+# Trigger verbs/phrases for timer/reminder requests
+_TIMER_TRIGGER_RE = re.compile(
+    r"\b(?:"
+    r"timer|countdown|alarm|remind(?:\s+me)?|wake\s+me\s+up|hit\s+me\s+up|"
+    r"ping\s+me|buzz\s+me|notify\s+me|alert\s+me|let\s+me\s+know"
+    r")\b",
     re.I,
 )
 
@@ -234,11 +275,66 @@ class CommandUnderstander:
         if spec:
             return self._from_spec(spec, conf, margin, src, target, **base)
         mode = getattr(self._legacy, "_response_modes", {}).get(intent, "llm")
-        if mode == "skill":   # canned/guarded skills outside the registry (greet, perform_action, ...)
+        if mode == "skill" and intent in ALLOWED_LEGACY_INTENTS:   # canned/guarded skills outside the registry (greet, perform_action, ...)
             return CommandIR(Status.READY, domain="legacy", operation=intent, confidence=conf,
                              margin=margin, source=src, legacy_intent=intent, target=target, **base)
+        if mode == "skill":
+            logger.warning(f"[router] unauthorized legacy skill intent rejected: {intent!r}")
+            return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
+                             reason="unauthorized_legacy_intent", legacy_intent="unknown", **base)
         return CommandIR(Status.UNKNOWN, confidence=conf, margin=margin, source=src,
                          reason="conversational", legacy_intent=intent, **base)
+
+    @classmethod
+    def _is_valid_open_request(cls, text: str, target: str) -> bool:
+        """Validate whether an app_or_web.open request has an explicit launch verb,
+        a recognized application/site target, or a valid URL/domain pattern."""
+        if _LAUNCH_VERB_RE.search(text):
+            return True
+        if _URL_PATTERN.search(text) or _URL_PATTERN.search(target):
+            return True
+        clean_target = _TARGET_CLEAN_RE.sub(" ", target.lower()).strip()
+        if clean_target in _KNOWN_SITES or clean_target in _KNOWN_APPS:
+            return True
+        clean_text = _TARGET_CLEAN_RE.sub(" ", text.lower()).strip()
+        words_target = set(clean_target.split())
+        words_text = set(clean_text.split())
+        if (words_target & _KNOWN_SITES) or (words_target & _KNOWN_APPS):
+            return True
+        if (words_text & _KNOWN_SITES) or (words_text & _KNOWN_APPS):
+            return True
+        for app in _KNOWN_APPS:
+            if " " in app and (app in clean_target or app in clean_text):
+                return True
+        return False
+
+    @classmethod
+    def _can_corroborate_timer(cls, text: str, parsed) -> tuple[bool, int | None]:
+        """Check whether a low-confidence LLM timer.create decision can be
+        deterministically corroborated from the utterance."""
+        if not _TIMER_TRIGGER_RE.search(text):
+            return False, None
+        act, _ = evaluate_actionability("timer", "create", text)
+        if not act:
+            return False, None
+        det_duration = extract_duration(text)
+        if det_duration is None or det_duration <= 0:
+            return False, None
+        if parsed and getattr(parsed, "entities", None):
+            parsed_dur = parsed.entities.get("duration")
+            if parsed_dur is not None:
+                if isinstance(parsed_dur, (int, float)):
+                    if int(parsed_dur) != det_duration:
+                        return False, None
+                elif isinstance(parsed_dur, str):
+                    try:
+                        p_val = int(parsed_dur)
+                        if p_val != det_duration and extract_duration(parsed_dur) != det_duration:
+                            return False, None
+                    except ValueError:
+                        if extract_duration(parsed_dur) != det_duration:
+                            return False, None
+        return True, det_duration
 
     def _target_for(self, spec, text, fallback):
         """The classifier's target was extracted for ITS predicted intent; re-derive
@@ -318,8 +414,22 @@ class CommandUnderstander:
         # Identity only; a missing required entity is turned into a clarification by _from_spec.
         v = validate.validate(parsed, reg, enforce_required=False)
         if v.ok:
+            if v.spec.key == "app_or_web.open":
+                raw_target = (parsed.entities.get("target") or target or "").strip()
+                if not self._is_valid_open_request(base["effective_text"], raw_target):
+                    logger.info(f"[router] app_or_web.open rejected without launch verb, URL, or known target: {base['effective_text']!r} target={raw_target!r}")
+                    return CommandIR(Status.UNKNOWN, source="llm", reason="unsupported_target",
+                                     legacy_intent="unknown", **base)
             eff_conf = min(parsed.confidence, 0.7)
             if eff_conf < LLM_MIN_CONF:
+                if eff_conf > 0.0 and v.spec.key == "timer.create":
+                    corroborated, det_dur = self._can_corroborate_timer(base["effective_text"], parsed)
+                    if corroborated and det_dur:
+                        entities = dict(parsed.entities or {})
+                        entities["duration"] = det_dur
+                        logger.info(f"[router] timer.create corroborated deterministically for {base['effective_text']!r} (duration={det_dur}s)")
+                        return self._from_spec(v.spec, 0.7, None, "llm", target,
+                                               llm_entities=entities, **base)
                 return CommandIR(Status.UNKNOWN, source="llm", confidence=eff_conf,
                                  reason="llm_low_confidence", legacy_intent="unknown", **base)
             return self._from_spec(v.spec, eff_conf, None, "llm", target,

@@ -318,3 +318,5 @@
 {"text": "she talked for ninety minutes without stopping", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "that workout was only twenty minutes but it felt endless", "intent": "smalltalk", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
 {"text": "turn the heating up a few degrees", "intent": "unknown", "source": "hand_written:hard_negative_r2", "verified": true, "variant": "hard_negative"}
+{"text": "erase what I just copied", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "please turn off the front porch light", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}

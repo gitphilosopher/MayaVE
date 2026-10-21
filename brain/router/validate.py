@@ -30,13 +30,18 @@ def validate_raw_llm_output(data: dict) -> Command | None:
     Structural-only validation of the LLM's raw JSON (before it's
     checked against the domain registry). Returns None on any structural
     problem rather than raising.
+
+    Confidence handling (fail-closed):
+      - Omitted, None, malformed, or non-numeric (e.g. invalid string, boolean):
+        clamped to 0.0 so missing or unstated confidence cannot bypass the
+        downstream LLM_MIN_CONF safety gate.
+      - Numeric values: clamped to [0.0, 1.0].
     """
     if not isinstance(data, dict):
         return None
     domain = data.get("domain")
     operation = data.get("operation")
     entities = data.get("entities", {})
-    confidence = data.get("confidence", 0.0)
     needs_clarification = data.get("needs_clarification", False)
 
     if not isinstance(domain, str) or not domain:
@@ -46,10 +51,16 @@ def validate_raw_llm_output(data: dict) -> Command | None:
     if not isinstance(entities, dict):
         entities = {}
     entities = {k: v for k, v in entities.items() if v is not None and v != ""}
-    try:
-        confidence = float(confidence)
-    except (TypeError, ValueError):
+
+    raw_conf = data.get("confidence")
+    if raw_conf is None or isinstance(raw_conf, bool):
         confidence = 0.0
+    else:
+        try:
+            confidence = float(raw_conf)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
     if not isinstance(needs_clarification, bool):
         needs_clarification = False
 

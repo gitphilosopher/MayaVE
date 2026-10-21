@@ -8,7 +8,7 @@ Usage:
     python -m brain.train_intent --eval-only     # skip retrain, just evaluate saved models
     python brain/train_intent.py
 
-Reads datasets/intents.json + config/{train,validation,test}_data.jsonl
+Reads datasets/intents.json + datasets/training/{train,validation,test}_data.jsonl
 (see brain/intent_engine.py's module docstring for the full data-source
 contract). Deletes existing saved models and retrains from scratch by
 default — use --eval-only to just score the currently-saved models.

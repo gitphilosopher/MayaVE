@@ -148,7 +148,8 @@ class Speaker:
         # already speaking for the full duration of the turn.
         was_sleeping = state.is_sleeping()
 
-        await state.set(MayaState.SPEAKING)
+        if not was_sleeping:
+            await state.set(MayaState.SPEAKING)
         logger.info(f"Speaking [{expression}]: '{clean}'")
 
         from services.ws_server import ws_server
@@ -163,16 +164,16 @@ class Speaker:
 
             t_play_0 = time.perf_counter()
             if self._output in ("avatar", "both"):
-                await ws_server.broadcast_behavior(behavior_engine.compose(expression, source="skill"))
-                await ws_server.broadcast_state("speaking")
-                wav_bytes = await loop.run_in_executor(None, _numpy_to_wav, audio)
+                async with ws_server.playback_lock:
+                    await ws_server.broadcast_behavior(behavior_engine.compose(expression, source="skill"))
+                    await ws_server.broadcast_state("speaking")
+                    wav_bytes = await loop.run_in_executor(None, _numpy_to_wav, audio)
 
-                # Fire the callback (e.g. wave animation) right as audio lands
-                if on_audio_start:
-                    await on_audio_start()
+                    # Fire the callback (e.g. wave animation) right as audio lands
+                    if on_audio_start:
+                        await on_audio_start()
 
-                await ws_server.broadcast_audio(wav_bytes)
-                await ws_server.wait_for_audio_done()
+                    res = await ws_server.play_audio_and_wait(wav_bytes)
 
             if self._output in ("local", "both"):
                 if on_audio_start:

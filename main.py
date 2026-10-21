@@ -109,6 +109,7 @@ def _on_state_change(old: MayaState, new: MayaState) -> None:
 def _handle_state_change(new: MayaState) -> None:
     """Restart the watchdog whenever the state enters or leaves LISTENING."""
     global _listening_watchdog_task
+    ws_server._last_state = ws_server.get_current_state()
     if _listening_watchdog_task is not None:
         _listening_watchdog_task.cancel()
         _listening_watchdog_task = None
@@ -319,7 +320,13 @@ async def main() -> None:
             await state.set(MayaState.LISTENING)
             await ws_server.broadcast_state("listening")
 
-        text = await transcriber.transcribe(audio)
+        try:
+            text = await transcriber.transcribe(audio)
+        except Exception as e:
+            logger.error(f"STT transcription error: {e}", exc_info=True)
+            if began_listening:
+                await _end_listening()
+            return
 
         if not text:
             if began_listening:

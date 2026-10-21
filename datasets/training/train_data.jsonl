@@ -2412,3 +2412,19 @@
 {"text": "jot a quick memo to buy printer paper", "intent": "note_write", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
 {"text": "could you jot down a quick note for me", "intent": "note_write", "source": "hand_written:targeted_fix", "verified": true, "variant": "natural"}
 
+{"text": "wipe what I just copied", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "clear whatever was copied", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "clear whatever I copied earlier", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "delete whatever I copied", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "clear what I copied to the clipboard", "intent": "clipboard_clear", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "timer for twenty five minutes", "intent": "set_timer", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "positive_control"}
+{"text": "can you turn off the hallway lights", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "switch off the porch light", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "lock the front porch door", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "shut off the kitchen lights", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the ceiling fan", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the kitchen lights please", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the backyard light", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the porch lights", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the desk lamp please", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}
+{"text": "turn off the bedroom lamp", "intent": "unknown", "source": "hand_written:hard_negative_r3", "verified": true, "variant": "hard_negative"}

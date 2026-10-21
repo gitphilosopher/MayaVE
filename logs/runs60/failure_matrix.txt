@@ -1,43 +1,61 @@
 === Run identity ===
-seed1          combined=20e2c14d7ff0 seed=1 training_hash=c98be1f82710
-seed2          combined=2ac8ea059a59 seed=2 training_hash=07926ff5ecae
-seed3          combined=21b241b8066b seed=3 training_hash=9bee4eb24fac
-seed1_repeat   combined=20e2c14d7ff0 seed=1 training_hash=c98be1f82710
+seed1          combined=438e70546f30 seed=1337 training_hash=de3b44869405
+seed2          combined=438e70546f30 seed=1337 training_hash=de3b44869405
+seed3          combined=438e70546f30 seed=1337 training_hash=de3b44869405
+seed1_repeat   combined=438e70546f30 seed=1337 training_hash=de3b44869405
 
 seed1 vs seed1_repeat: same model=True, differing case outcomes=0
 
-=== seed1: 0 failure(s) of 60 ===
+=== seed1: 2 failure(s) of 60 ===
+X [context] "no 5 apples please"
+     want=unknown/None  got=ready/app_or_web.open  src=llm  reason=''
+X [paraphrase] "hit me up in twelve minutes"
+     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
 
-=== seed2: 1 failure(s) of 60 ===
-X [ambiguous_valid] "timer for a quarter of an hour"
-     want=needs_clarification/timer.create  got=ready/timer.create  src=llm  reason=''
+=== seed2: 2 failure(s) of 60 ===
+X [context] "no 5 apples please"
+     want=unknown/None  got=ready/app_or_web.open  src=llm  reason=''
+X [paraphrase] "hit me up in twelve minutes"
+     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
 
-=== seed3: 0 failure(s) of 60 ===
+=== seed3: 2 failure(s) of 60 ===
+X [context] "no 5 apples please"
+     want=unknown/None  got=ready/app_or_web.open  src=llm  reason=''
+X [paraphrase] "hit me up in twelve minutes"
+     want=ready/timer.create  got=unknown/None  src=llm  reason='llm_low_confidence'
 
 === Cross-seed matrix (rows with at least one X or ~) ===
 case                                                           seed1        seed2        seed3        seed1_repeat fails
-timer for a quarter of an hour                                 OK           X            OK           OK           1/3
+no 5 apples please                                             X            X            X            X            3/3
+hit me up in twelve minutes                                    X            X            X            X            3/3
 
 === Failure frequency across seed1/seed2/seed3 ===
 
-3/3  consistent: likely a real routing/data problem  (0)
+3/3  consistent: likely a real routing/data problem  (2)
+   [context] "no 5 apples please"  expected unknown/None
+        seed1: got ready/app_or_web.open via llm
+        seed2: got ready/app_or_web.open via llm
+        seed3: got ready/app_or_web.open via llm
+   [paraphrase] "hit me up in twelve minutes"  expected ready/timer.create
+        seed1: got unknown/None via llm
+        seed2: got unknown/None via llm
+        seed3: got unknown/None via llm
 
 2/3  seed-sensitive boundary  (0)
 
-1/3  likely training variance  (1)
-   [ambiguous_valid] "timer for a quarter of an hour"  expected needs_clarification/timer.create
-        seed2: got ready/timer.create via llm
+1/3  likely training variance  (0)
 
 === Failures by category (summed over the 3 seeds) ===
-ambiguous_valid      1/12  failing case-runs
+context              3/21  failing case-runs
+paraphrase           3/30  failing case-runs
 in_distribution      0/6   failing case-runs
 clarification        0/15  failing case-runs
 entity               0/27  failing case-runs
-context              0/21  failing case-runs
 oos                  0/12  failing case-runs
 adversarial          0/48  failing case-runs
-paraphrase           0/30  failing case-runs
+ambiguous_valid      0/12  failing case-runs
 llm                  0/9   failing case-runs
 
 === Failure modes (all seeds) ===
-  1  expected needs_clarification, got ready
+  3  false execution (OOS -> ready)
+  3  missed command (-> unknown)

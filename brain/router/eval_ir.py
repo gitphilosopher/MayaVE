@@ -94,6 +94,8 @@ def _model_digest(engine) -> dict:
     return out
 
 async def run_eval(make_understander, cases: list[dict], wired: dict | None = None, verbose=False) -> dict:
+    global confirm_errors
+    confirm_errors = 0
     overreach = 0
     n = correct = 0
     wrong_exec = oos_false_exec = wrong_entity_exec = 0
@@ -209,6 +211,7 @@ async def run_eval(make_understander, cases: list[dict], wired: dict | None = No
         "latency_p95_s": lat[min(n - 1, int(.95 * n))] if lat else None,
         "by_category": {k: {"accuracy": v[0] / v[1], "n": v[1]} for k, v in by_cat.items()},
         "llm_overreach_on_oos": overreach,
+        "confirm_errors": confirm_errors,
         "per_case": per_case,   
     }
 

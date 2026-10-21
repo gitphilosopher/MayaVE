@@ -28,6 +28,7 @@ from config.settings import config
 from core.speaker import Speaker
 
 from brain.router.ir import Status
+from brain.router.registry import CommandRegistry, get_default_registry, ALLOWED_LEGACY_INTENTS
 from services.llm.llm_service import query as llm_query
 from skills.media.play_music import execute as play_music
 from skills.system.clipboard import execute as clipboard
@@ -57,9 +58,10 @@ _U = config.user_name
 class Router:
     """Route a parsed intent to the correct skill, built-in response, or LLM fallback."""
 
-    def __init__(self, speaker: Speaker):
+    def __init__(self, speaker: Speaker, registry: CommandRegistry | None = None):
         """Register the route map and set the shared speaker used by timer-derived skills."""
         self._speaker = speaker
+        self._registry = registry or get_default_registry()
         set_timer_speaker(speaker)
         # Handlers that enforce their own spoken confirmation (declared via
         # CommandSpec.requires_confirmation, enforced HERE by the skill):
@@ -129,23 +131,59 @@ class Router:
 
         ir = intent.get("_ir")
         if ir is not None:
+            # Check for confirmation downgrade attempt on operations requiring confirmation
+            spec = self._registry.get_by_legacy(ir.legacy_intent)
+            if spec and spec.requires_confirmation and not ir.requires_confirmation:
+                logger.error(
+                    f"Confirmation downgrade attempted for '{intent_name}' (spec requires confirmation) — refusing execution."
+                )
+                intent["_no_history"] = True
+                return f"[sad] Sorry {_U}, I can't run that safely without a confirmation step."
+
             if ir.status is Status.NEEDS_CLARIFICATION:
                 handler = self._clarify
             elif not ir.executable and handler is not llm_query:
-                # UNKNOWN / REJECTED / READY-with-missing-entities: never a skill.
+                # UNKNOWN / REJECTED / READY-with-missing-entities / unauthorized: never a skill.
                 logger.warning(
                     f"Non-executable IR ({ir.status.value}) carried intent "
                     f"'{intent_name}' — routing to LLM, not a skill."
                 )
                 handler = llm_query
-            elif ir.executable and ir.requires_confirmation and handler not in self._self_confirming:
-                # Declaration without enforcement: fail closed.
-                logger.error(
-                    f"IR for '{intent_name}' requires confirmation but its handler does "
-                    f"not enforce one — refusing to run it."
-                )
-                intent["_no_history"] = True
-                return f"[sad] Sorry {_U}, I can't run that safely without a confirmation step."
+            elif ir.executable:
+                # Check for intent mismatch or lack of registry authorization
+                if intent_name != ir.legacy_intent or not self._registry.is_authorized(
+                    ir.domain, ir.operation, ir.legacy_intent, ir.requires_confirmation
+                ):
+                    logger.warning(
+                        f"Unauthorized or mismatched IR intent '{intent_name}' "
+                        f"(domain={ir.domain}, op={ir.operation}, legacy={ir.legacy_intent}) — routing to LLM."
+                    )
+                    handler = llm_query
+                elif ir.requires_confirmation and handler not in self._self_confirming:
+                    # Declaration without enforcement: fail closed.
+                    logger.error(
+                        f"IR for '{intent_name}' requires confirmation but its handler does "
+                        f"not enforce one — refusing to run it."
+                    )
+                    intent["_no_history"] = True
+                    return f"[sad] Sorry {_U}, I can't run that safely without a confirmation step."
+        else:
+            # Direct intent dict without IR: enforce registry authorization and confirmation policy
+            if handler is not None and handler is not llm_query and handler is not self._clarify:
+                if intent_name not in self._registry.by_legacy and intent_name not in ALLOWED_LEGACY_INTENTS:
+                    logger.warning(
+                        f"Unregistered route '{intent_name}' is not authorized — falling back to LLM."
+                    )
+                    handler = llm_query
+                else:
+                    spec = self._registry.get_by_legacy(intent_name)
+                    if spec and spec.requires_confirmation and handler not in self._self_confirming:
+                        logger.error(
+                            f"Intent '{intent_name}' requires confirmation but its handler does "
+                            f"not enforce one — refusing to run it."
+                        )
+                        intent["_no_history"] = True
+                        return f"[sad] Sorry {_U}, I can't run that safely without a confirmation step."
 
         if handler is None:
             logger.warning(f"No route for intent '{intent_name}' — falling back to LLM.")

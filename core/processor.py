@@ -167,10 +167,24 @@ class Processor:
             context_manager.observe_user_turn(text, ctx_intent)
             t_ctx = time.perf_counter() - t_ctx_start
 
+            if state.is_sleeping():
+                logger.info(f"Dropping command — Maya was put to sleep: '{text[:40]}'")
+                await turn_rest()
+                return
+
             t_dispatch_start = time.perf_counter()
             response = await self._router.dispatch(intent, text)
             t_dispatch = time.perf_counter() - t_dispatch_start
             logger.info(f"[TIMING] router.dispatch total: {t_dispatch:.3f}s")
+
+            if state.is_sleeping():
+                logger.info(
+                    f"Dropping skill reply — Maya was put to sleep during processing: '{text[:40]}'"
+                )
+                if not intent.get("_no_history"):
+                    self._conversation.add_assistant("(Maya was put to sleep before responding.)")
+                await turn_rest()
+                return
 
             t_speak_start = time.perf_counter()
             if response and response != ALREADY_SPOKEN:
