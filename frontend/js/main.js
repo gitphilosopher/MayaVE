@@ -11,7 +11,7 @@
  */
 
 import * as THREE from "three";
-import { loadAvatar, vrm, updateVrmaAnimations, updateGaze, warmUpAudioContext, isSpeaking } from "./avatar.js";
+import { loadAvatar, vrm, updateVrmaAnimations, updateGaze, warmUpAudioContext, isSpeaking, isAvatarDormant } from "./avatar.js";
 import "./websocket.js";
 import { recordFrameGap, recordTrace, recordRafHeartbeat } from "./tracer_stub.js";
 
@@ -65,6 +65,7 @@ window.addEventListener("resize", () => {
 });
 
 export let AVATAR_FPS = 60;
+export const SLEEP_FPS = 10;
 window.setAvatarFps = function(fps) {
     AVATAR_FPS = Number(fps) || 0;
 };
@@ -122,8 +123,9 @@ function animate(timestamp) {
 
     const now = (typeof timestamp === "number" && timestamp > 0) ? timestamp : performance.now();
 
-    if (AVATAR_FPS > 0) {
-        const targetInterval = 1000 / AVATAR_FPS;
+    const fps = isAvatarDormant() ? SLEEP_FPS : AVATAR_FPS;
+    if (fps > 0) {
+        const targetInterval = 1000 / fps;
         const elapsed = now - _lastRenderTime;
         if (elapsed < targetInterval) {
             return;
