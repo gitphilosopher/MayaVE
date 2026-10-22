@@ -255,7 +255,7 @@ Convention: `async execute(intent, text) -> str` returning tagged text (`"[happy
 
 **The LLM does NOT:** run skills, make execution decisions on its own output, extract entities that deterministic extractors can find, decide confirmations, or write memory (memory writes are regex-gated, §9). It has no tool-calling layer.
 
-Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/chat` stream → phrase-boundary splitter (`_next_boundary`, vocative-aware, decimals-safe) → `_parse_expression` → `synth_q` → Kokoro (`_run_kokoro`, daemon thread, 15 s timeout) → `play_q` → per phrase: actions → behavior → `speaking` → audio → browser `audio_done` → baseline behavior. Optional "thinking filler" only for `general_query`/`unknown` with ≥ 3 words from non-low-confidence sources. A barge-in cancels the whole pipeline; history records only phrases whose playback began (or a short interruption marker if none).
+Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/chat` stream → phrase-boundary splitter (`_next_boundary`, vocative-aware, decimals-safe) → `_parse_expression` → `synth_q` → Kokoro (`_run_kokoro`, daemon thread, 3 s watchdog timeout with non-blocking deferred recovery and serialized CPU fallback) → `play_q` → per phrase: actions → behavior → `speaking` → audio → browser `audio_done` → baseline behavior. Optional "thinking filler" only for `general_query`/`unknown` with ≥ 3 words from non-low-confidence sources. A barge-in cancels the whole pipeline; history records only phrases whose playback began (or a short interruption marker if none).
 
 **Expression parsing & action validation (`_parse_expression`):** Valid physical actions (`nod`, `giggle`, `sigh`, `shrug`, `wink`) are extracted strictly against `_ACTION_VOCABULARY`. Non-action asterisks (such as markdown emphasis `*really*` or `**excited**`) are preserved verbatim as spoken prose rather than destructively removed.
 
@@ -275,12 +275,12 @@ Streaming pipeline (`llm_service.py`): `build_context_package` → Ollama `/api/
 |---|---|---|
 | Recent window | `brain/memory.py` (`max_entries=50`, evict callback) | process only |
 | Conversation state & open loops | `ContextManager` (topic/phase/goal/constraints/entities, open loops) | process only |
-| Semantic long-term | `SQLiteVectorStore` (`~/Maya/Memory/semantic_memory.sqlite3`, NumPy brute-force cosine), embeddings via `OllamaEmbedder` (`nomic-embed-text`) | SQLite |
-| Command vectors (router) | `CommandVectorStore` — **separate** SQLite file (`~/Maya/Router/command_vectors.sqlite3`) + `.fingerprint.json` sidecar | SQLite |
+| Semantic long-term | `SQLiteVectorStore` (`~/Maya/Memory/semantic_memory.sqlite3`, NumPy brute-force cosine), embeddings via in-process `LocalEmbeddingProvider` using BGE / FastEmbed (`BAAI/bge-small-en-v1.5`, 384 dimensions; `OllamaEmbedder` fallback) | SQLite |
+| Command vectors (router) | `CommandVectorStore` — **separate** SQLite file (`~/Maya/Router/command_vectors_bge.sqlite3` for local BGE default, or `command_vectors.sqlite3` for legacy Ollama fallback) + `.fingerprint.json` sidecar | SQLite |
 | Notes | `~/Maya/Notes/*.txt` | files |
 | MayaNode outbox / cursor / device id | `~/Maya/Node/{outbox,sync_state}.json`, `device_id.txt` | JSON |
 
-Write policy: only explicit cue phrases ("remember that", "my favorite", "I prefer", …) from non-noise intents become `user_stated` memories, deduped by similarity (0.92) and updated in place. Auto-compaction of evicted turns writes a keyword gist (`conversation_summary`, never synced). Retrieval is skipped for short followup/confirm/dismissal turns and for memories newer than 120 s. Any embedding/store failure degrades to recent-context only.
+Write policy: only explicit cue phrases ("remember that", "my favorite", "I prefer", …) from non-noise intents become `user_stated` memories, deduped by similarity (0.92) and updated in place. Auto-compaction of evicted turns writes a keyword gist (`conversation_summary`, never synced). Retrieval is skipped for short followup/confirm/dismissal turns and for memories newer than 120 s. Embeddings default to in-process local BGE (`BAAI/bge-small-en-v1.5`, FastEmbed / Hugging Face Transformers on CPU, `ContextConfig.embedding_provider = "local"`, `RouterConfig.embedding_provider = "local"`), avoiding VRAM consumption and GPU contention with Ollama and Kokoro. Any embedding/store failure degrades to recent-context only.
 
 ---
 
@@ -300,7 +300,24 @@ Arbitration: `expression-controller.js` (`BASE<EMOTION<ACTION<LIPSYNC<BLINK` per
 
 ## 12. WebSocket protocol (`services/ws_server.py` ⇄ `frontend/js/websocket.js`)
 
-Server → client: `audio` (base64 WAV, `playback_id`), `stop_audio` (`playback_id`), `state` (`listening|processing|speaking|idle|sleeping`; last state replayed atomically on connect), `behavior` (sent before phrase audio under `playback_lock`), `transcript` (ignored by UI), `animation` (`wave|nod|giggle|sigh|shrug|wink`), `expression` (legacy, unused). Client → server: `audio_done` (`playback_id`, `status: completed|failed|interrupted`), `interrupt` (handler exists; no frontend sender). Origins are restricted by `config.ws_allowed_origins`.
+WebSocket message inventory:
+- **Server → client:**
+  - `audio`: base64 WAV payload, correlated `playback_id`, optional `trace_id`.
+  - `stop_audio`: aborts in-flight browser playback, optional `playback_id`.
+  - `state`: avatar state (`listening|processing|speaking|idle|sleeping`); last state is replayed atomically on client connect.
+  - `behavior`: composed emotional/behavior packet `{primary, secondary, intensity, attitude, gaze, actions, recipe}`, sent before phrase audio under `playback_lock`.
+  - `transcript`: speech transcription event (`text`, `role`; currently ignored by UI).
+  - `animation`: action gesture animation (`wave|nod|giggle|sigh|shrug|wink`).
+  - `expression`: legacy flat expression payload (`name`; unused by current composer).
+  - `query_perf`: diagnostic performance inquiry (`id`, optional `reset`).
+  - `query_trace`: diagnostic tracing inquiry (`id`, optional `reset`).
+- **Client → server:**
+  - `audio_done`: playback completion notification (`playback_id`, `status: completed|failed|interrupted`, optional `reason`).
+  - `interrupt`: user/avatar barge-in interrupt signal, invokes registered `core.state.interrupt()`.
+  - `perf_response`: diagnostic performance metrics response (`id`, `metrics`).
+  - `trace_response`: diagnostic tracing metrics response (`id`, `data`).
+
+Origins are restricted by `config.ws_allowed_origins` (default `http://localhost:5173`, `http://127.0.0.1:5173`, and `None` for client tools without Origin headers).
 
 **Playback Transactions & Authority**:
 - **Authoritative Renderer**: The first connected WebSocket client is designated as the authoritative playback renderer. Audio is dispatched strictly to the authority, while UI state/animations/transcripts are broadcast to all clients. On authority disconnect, pending playback is settled as `disconnected`, and the next connected client is promoted for future playbacks (in-flight audio is not replayed).
@@ -396,7 +413,7 @@ Run (environment-dependent; needs the project dependencies and, for some tests, 
 | Env vars | `MAYA_SEED`, `MAYA_EMBEDDING_DEVICE`, `HF_HUB_OFFLINE`, `TF_CPP_MIN_LOG_LEVEL`, `VITE_DEV_SERVER_URL`, `OneDrive` |
 | `getattr`-only (not dataclass fields) | `config.context.embedding_device`, `config.notes_dir`, `config.llm.keep_alive` (default `60m`) |
 
-Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=[]`, `shadow_mode=False`; `NodeConfig.enabled=False` (client-side only, disabled by default), `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"`, `device="auto"` (CUDA auto-detect with CPU fallback); `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; application dependencies are in `config/requirements.txt`, optional local test tooling is in `.maya/tests/requirements-dev.txt`, and frontend dependencies are in `frontend/package.json`.
+Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=[]`, `shadow_mode=False`, `RouterConfig.embedding_provider="local"`, `RouterConfig.local_embedding_model="BAAI/bge-small-en-v1.5"`; `ContextConfig.embedding_provider="local"`, `ContextConfig.embedding_model="BAAI/bge-small-en-v1.5"`; `ws_host="localhost"`, `ws_port=8765`; `NodeConfig.enabled=False` (client-side only, disabled by default), `sync_interval_s=60`, caps 200/200; `TTSConfig.output="avatar"`, `device="auto"` (CUDA auto-detect with CPU fallback); `LLMConfig.model="llama3.2"`, `max_tokens=150`. Name/wake-word-derived regexes are compiled once at import. No `pyproject.toml`, `.env.example` or `CLAUDE.md` exists in the inspected snapshot; application dependencies are in `config/requirements.txt`, optional local test tooling is in `.maya/tests/requirements-dev.txt`, and frontend dependencies are in `frontend/package.json`.
 
 ---
 
@@ -409,7 +426,7 @@ Key defaults: `RouterConfig.backend="hybrid"` (active default), `hybrid_domains=
 | LLM fallback timeout/invalid JSON | `None` → `UNKNOWN`; invalid registry match → `REJECTED` (routes like unknown) |
 | Stage exception in `understand` | `UNKNOWN` (`internal_error`); `_classify` failure → legacy classifier |
 | Skill exception | spoken apology, `_no_history` |
-| Kokoro hang | 15 s timeout, pipeline rebuild (own pipeline only) |
+| Kokoro hang | 3 s watchdog timeout, deferred pipeline reset and serialized CPU fallback |
 | Missing frontend / no `audio_done` | no-client returns immediately; 30 s timeout then continue |
 | MayaNode down/malformed | every call returns a failure value; backoff + rediscovery; outbox retains items |
 | Corrupt `expressions.json`, outbox, sync state | not overwritten / start fresh respectively |

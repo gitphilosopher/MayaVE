@@ -139,7 +139,8 @@ For the complete architecture and internal component breakdown, see **[`docs/arc
 
 * Python 3.11+
 * asyncio
-* Ollama (`llama3.2`, `nomic-embed-text`)
+* Ollama (`llama3.2`)
+* FastEmbed / Hugging Face Transformers (`BAAI/bge-small-en-v1.5`)
 * Kokoro TTS (GPU-accelerated via PyTorch CUDA)
 * Silero VAD
 * Google Speech Recognition
@@ -147,7 +148,6 @@ For the complete architecture and internal component breakdown, see **[`docs/arc
 * TensorFlow / Keras
 * SQLite
 * NumPy
-* WebSockets
 * WebSockets
 
 ### Frontend
@@ -227,10 +227,9 @@ The default setup requires:
 
 ```bash
 ollama pull llama3.2
-ollama pull nomic-embed-text
 ```
 
-The configured LLM can be changed through MayaVE's settings.
+The configured LLM can be changed through MayaVE's settings. Semantic memory and command routing embeddings use in-process BGE (`BAAI/bge-small-en-v1.5`) on CPU and do not require pulling Ollama embedding models.
 
 ---
 
@@ -261,7 +260,6 @@ cd ..
 
 ```bash
 ollama pull llama3.2
-ollama pull nomic-embed-text
 ```
 
 If the VRM/VRMA assets are tracked with Git LFS, fetch them:
