@@ -90,6 +90,7 @@ _U = config.user_name
 _LISTENING_WATCHDOG_S = 15.0
 _listening_watchdog_task: asyncio.Task | None = None
 _main_loop: asyncio.AbstractEventLoop | None = None
+_main_task: asyncio.Task | None = None
 
 
 def _on_state_change(old: MayaState, new: MayaState) -> None:
@@ -225,6 +226,8 @@ def _on_ws_done(task: asyncio.Task) -> None:
     """Surface a WebSocket server failure (e.g. port already in use)."""
     if not task.cancelled() and task.exception() is not None:
         logger.error(f"WebSocket server stopped: {task.exception()!r}")
+        if _main_task is not None and not _main_task.done():
+            _main_task.cancel()
 
 
 def _on_node_task_done(task: asyncio.Task) -> None:
@@ -243,8 +246,9 @@ def _on_node_task_done(task: asyncio.Task) -> None:
 
 async def main() -> None:
     """Initialize Maya's services and run the listener and command worker."""
-    global _main_loop
+    global _main_loop, _main_task
     _main_loop = asyncio.get_running_loop()
+    _main_task = asyncio.current_task()
 
     # Register before starting runtime tasks; the observer only schedules work
     # on the event loop and is harmless before user-facing states are possible.
@@ -257,174 +261,187 @@ async def main() -> None:
     node_task = asyncio.create_task(node_sync_manager.run(), name="node-sync")   # kept so it can't be GC'd
     node_task.add_done_callback(_on_node_task_done)
 
-    logger.info(f"Starting {config.name}…")
-
-    speaker     = Speaker()
-    transcriber = Transcriber()
-    processor   = Processor(speaker)
-
-    # Wire the interrupt stop callback before anything can possibly speak.
-    state.register_stop_callback(_hard_stop_audio)
-
-    # Pre-warm Ollama in background while greeting plays
-    warmup_task = asyncio.create_task(_warmup_ollama())
-    embed_warmup_task = asyncio.create_task(_warmup_embeddings())
-
-    # Pre-warm Kokoro TTS — loads model, voices, and executes minimal CUDA forward pass.
-    # Opt 3 unified the pipeline; Opt 14 eagerly absorbs the one-time CUDA kernel
-    # compilation and workspace allocation so the first user turn has no ~2.5s delay.
-    loop = asyncio.get_running_loop()
-    kokoro_warmup_task = loop.run_in_executor(None, speaker.warmup)
-
-    # ── Wake callback ──────────────────────────────────────────────────
-    async def on_wake() -> None:
-        """Wake Maya and deliver an interruptible greeting."""
-        if not state.is_sleeping():
-            return
-        await state.set(MayaState.IDLE)
-        logger.info("✅ Maya is awake.")
-        print(f"\n✅  {config.name} is awake — listening for commands {_U}.")
-        # Cancellation must stop the greeting task as well as its audio.
-        await state.run_interruptible(speaker.speak(f"I'm here {_U}. How can I help?"))
-
-    # ── Interrupt callback (barge-in) ───────────────────────────────────
-    async def on_interrupt() -> None:
-        """
-        Cancels Maya's current speech task. Called from three places:
-          1. on_speech() below, only when the just-transcribed utterance
-             contains a wake phrase ("hey maya", "maya", ...) AND she
-             was speaking when it started — i.e. she was deliberately
-             called by name mid-sentence.
-          2. on_speech()'s sleep-trigger branch, unconditionally when
-             something is currently speaking/processing — a "go to
-             sleep" always takes precedence, wake word or not (see
-             "Sleep race").
-          3. ws_server's interrupt handler, for a future browser-side
-             manual "stop talking" button — that's an explicit user
-             action already, so it doesn't need a wake-word check.
-        """
-        interrupted = await state.interrupt()
-        if interrupted:
-            logger.info("🛑 Barge-in — Maya stopped talking.")
-            print(f"\n🛑  {config.name} was interrupted — listening {_U}.")
-
-    # Let the browser's own interrupt message (future manual "stop
-    # talking" button) drive the exact same path as a mic barge-in.
-    ws_server.set_interrupt_handler(on_interrupt)
-
-    # ── on_speech ─────────────────────────────────────────────────────
-    async def on_speech(audio) -> None:
-        """Transcribe one audio segment and route it through state and the command queue."""
-        if state.is_sleeping():
-            return
-
-        # Snapshot BEFORE transcribing — speak()'s own finally block can
-        # legitimately flip SPEAKING -> IDLE while the STT round-trip
-        # below is in flight, so we need to know what was true when
-        # this utterance STARTED, not whatever happens to be true by
-        # the time we're done deciding whether it's a barge-in.
-        was_speaking = state.can_interrupt()
-
-        # LISTENING is only taken from a quiet state, never over an
-        # in-flight PROCESSING/SPEAKING turn.
-        began_listening = not state.is_busy()
-        if began_listening:
-            await state.set(MayaState.LISTENING)
-            await ws_server.broadcast_state("listening")
-
-        try:
-            text = await transcriber.transcribe(audio)
-        except Exception as e:
-            logger.error(f"STT transcription error: {e}", exc_info=True)
-            if began_listening:
-                await _end_listening()
-            return
-
-        if not text:
-            if began_listening:
-                await _end_listening()
-            return
-
-        print(f"\n👂 {_U}: {text}")
-        text_lower = text.lower().strip()
-
-        if was_speaking:
-            # Barge-in only fires when Maya is explicitly called by
-            # name — talking over her about something else no longer
-            # cuts her off. This still gets transcribed and queued
-            # below exactly like any other command; it just doesn't
-            # interrupt her current sentence to do it.
-            if contains_wake_word(text_lower):
-                await on_interrupt()
-            else:
-                logger.debug(
-                    f"Speech during SPEAKING didn't include the wake "
-                    f"word — not a barge-in, queuing normally: '{text}'"
-                )
-
-        if is_sleep_command(text_lower):
-            # Sleep takes precedence over active work so the goodbye line
-            # cannot race another response on the shared audio pipeline.
-            if state.can_interrupt():
-                await state.interrupt()
-            await state.set(MayaState.SLEEPING)
-            logger.info("💤 Maya going to sleep.")
-            print(f"💤  {config.name} is sleeping — say '{config.wake_word}' to wake.")
-            await state.run_interruptible(speaker.speak(
-                f"Going to sleep {_U}. Say {config.wake_word} when you need me."
-            ))
-            return
-
-        queued = await queue_manager.put(text)
-        if not queued:
-            # A full queue leaves no worker transition for this utterance.
-            await _end_listening()
-        # Processor.handle() moves a queued utterance to PROCESSING.
-
-    queue_manager.set_handler(processor.handle)
-
-    # Wait for warm-ups to finish before going live
-    await asyncio.gather(warmup_task, kokoro_warmup_task, embed_warmup_task)
-    print("🧠  Ollama ready.")
-    print("🎙️  Kokoro TTS ready.\n")
-
-    # Record model residency after warm-up so configured device placement is
-    # visible before the first user turn.
-    await describe_ollama_models()
-
-    # ── Startup banner + greeting ──────────────────────────────────────
-    hour = datetime.datetime.now().hour
-    tod  = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
-    print(f"\n{'─'*55}")
-    print(f"  {config.name} – Voice Assistant")
-    print(f"  Wake word : '{config.wake_word}'")
-    print(f"  Sleep     : say 'goodbye' or 'go to sleep'")
-    print(f"  Interrupt : say her name while she's talking, e.g. 'hey maya'")
-    print(f"  Stop      : Ctrl+C")
-    print(f"{'─'*55}\n")
-
-    # Start awake — speak() now restores the prior state, so this must be set first.
-    await state.set(MayaState.IDLE)
-    await ws_server.broadcast_animation("wave")
-    # Keep startup speech on the same cancellation path as later responses.
-    await state.run_interruptible(speaker.speak(
-        f"GOOD {tod} {_U}! I'm {config.name}. "
-    ))
-
-    # ── Launch concurrent tasks ────────────────────────────────────────
-    listener = Listener(on_speech=on_speech, on_wake=on_wake)
-
     try:
+        logger.info(f"Starting {config.name}…")
+
+        speaker     = Speaker()
+        transcriber = Transcriber()
+        processor   = Processor(speaker)
+
+        # Wire the interrupt stop callback before anything can possibly speak.
+        state.register_stop_callback(_hard_stop_audio)
+
+        # Pre-warm Ollama in background while greeting plays
+        warmup_task = asyncio.create_task(_warmup_ollama())
+        embed_warmup_task = asyncio.create_task(_warmup_embeddings())
+
+        # Pre-warm Kokoro TTS — loads model, voices, and executes minimal CUDA forward pass.
+        # Opt 3 unified the pipeline; Opt 14 eagerly absorbs the one-time CUDA kernel
+        # compilation and workspace allocation so the first user turn has no ~2.5s delay.
+        loop = asyncio.get_running_loop()
+        kokoro_warmup_task = loop.run_in_executor(None, speaker.warmup)
+
+        # ── Wake callback ──────────────────────────────────────────────────
+        async def on_wake() -> None:
+            """Wake Maya and deliver an interruptible greeting."""
+            if not state.is_sleeping():
+                return
+            await state.set(MayaState.IDLE)
+            logger.info("✅ Maya is awake.")
+            print(f"\n✅  {config.name} is awake — listening for commands {_U}.")
+            # Cancellation must stop the greeting task as well as its audio.
+            await state.run_interruptible(speaker.speak(f"I'm here {_U}. How can I help?"))
+
+        # ── Interrupt callback (barge-in) ───────────────────────────────────
+        async def on_interrupt() -> None:
+            """
+            Cancels Maya's current speech task. Called from three places:
+              1. on_speech() below, only when the just-transcribed utterance
+                 contains a wake phrase ("hey maya", "maya", ...) AND she
+                 was speaking when it started — i.e. she was deliberately
+                 called by name mid-sentence.
+              2. on_speech()'s sleep-trigger branch, unconditionally when
+                 something is currently speaking/processing — a "go to
+                 sleep" always takes precedence, wake word or not (see
+                 "Sleep race").
+              3. ws_server's interrupt handler, for a future browser-side
+                 manual "stop talking" button — that's an explicit user
+                 action already, so it doesn't need a wake-word check.
+            """
+            interrupted = await state.interrupt()
+            if interrupted:
+                logger.info("🛑 Barge-in — Maya stopped talking.")
+                print(f"\n🛑  {config.name} was interrupted — listening {_U}.")
+
+        # Let the browser's own interrupt message (future manual "stop
+        # talking" button) drive the exact same path as a mic barge-in.
+        ws_server.set_interrupt_handler(on_interrupt)
+
+        # ── on_speech ─────────────────────────────────────────────────────
+        async def on_speech(audio) -> None:
+            """Transcribe one audio segment and route it through state and the command queue."""
+            if state.is_sleeping():
+                return
+
+            # Snapshot BEFORE transcribing — speak()'s own finally block can
+            # legitimately flip SPEAKING -> IDLE while the STT round-trip
+            # below is in flight, so we need to know what was true when
+            # this utterance STARTED, not whatever happens to be true by
+            # the time we're done deciding whether it's a barge-in.
+            was_speaking = state.can_interrupt()
+
+            # LISTENING is only taken from a quiet state, never over an
+            # in-flight PROCESSING/SPEAKING turn.
+            began_listening = not state.is_busy()
+            if began_listening:
+                await state.set(MayaState.LISTENING)
+                await ws_server.broadcast_state("listening")
+
+            try:
+                text = await transcriber.transcribe(audio)
+            except Exception as e:
+                logger.error(f"STT transcription error: {e}", exc_info=True)
+                if began_listening:
+                    await _end_listening()
+                return
+
+            if not text:
+                if began_listening:
+                    await _end_listening()
+                return
+
+            print(f"\n👂 {_U}: {text}")
+            text_lower = text.lower().strip()
+
+            if was_speaking:
+                # Barge-in only fires when Maya is explicitly called by
+                # name — talking over her about something else no longer
+                # cuts her off. This still gets transcribed and queued
+                # below exactly like any other command; it just doesn't
+                # interrupt her current sentence to do it.
+                if contains_wake_word(text_lower):
+                    await on_interrupt()
+                else:
+                    logger.debug(
+                        f"Speech during SPEAKING didn't include the wake "
+                        f"word — not a barge-in, queuing normally: '{text}'"
+                    )
+
+            if is_sleep_command(text_lower):
+                # Sleep takes precedence over active work so the goodbye line
+                # cannot race another response on the shared audio pipeline.
+                if state.can_interrupt():
+                    await state.interrupt()
+                await state.set(MayaState.SLEEPING)
+                logger.info("💤 Maya going to sleep.")
+                print(f"💤  {config.name} is sleeping — say '{config.wake_word}' to wake.")
+                await state.run_interruptible(speaker.speak(
+                    f"Going to sleep {_U}. Say {config.wake_word} when you need me."
+                ))
+                return
+
+            queued = await queue_manager.put(text)
+            if not queued:
+                # A full queue leaves no worker transition for this utterance.
+                await _end_listening()
+            # Processor.handle() moves a queued utterance to PROCESSING.
+
+        queue_manager.set_handler(processor.handle)
+
+        # Wait for warm-ups to finish before going live
+        await asyncio.gather(warmup_task, kokoro_warmup_task, embed_warmup_task)
+        print("🧠  Ollama ready.")
+        print("🎙️  Kokoro TTS ready.\n")
+
+        # Record model residency after warm-up so configured device placement is
+        # visible before the first user turn.
+        await describe_ollama_models()
+
+        # ── Startup banner + greeting ──────────────────────────────────────
+        hour = datetime.datetime.now().hour
+        tod  = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
+        print(f"\n{'─'*55}")
+        print(f"  {config.name} – Voice Assistant")
+        print(f"  Wake word : '{config.wake_word}'")
+        print(f"  Sleep     : say 'goodbye' or 'go to sleep'")
+        print(f"  Interrupt : say her name while she's talking, e.g. 'hey maya'")
+        print(f"  Stop      : Ctrl+C")
+        print(f"{'─'*55}\n")
+
+        # Start awake — speak() now restores the prior state, so this must be set first.
+        await state.set(MayaState.IDLE)
+        await ws_server.broadcast_animation("wave")
+        # Keep startup speech on the same cancellation path as later responses.
+        await state.run_interruptible(speaker.speak(
+            f"GOOD {tod} {_U}! I'm {config.name}. "
+        ))
+
+        # ── Launch concurrent tasks ────────────────────────────────────────
+        listener = Listener(on_speech=on_speech, on_wake=on_wake)
+
         async with asyncio.TaskGroup() as tg:
             tg.create_task(listener.start(),    name="listener")
             tg.create_task(queue_manager.run(), name="queue-worker")
     finally:
-        await close_ollama_client()
+        for t in (ws_task, node_task):
+            if not t.done():
+                t.cancel()
+        try:
+            await asyncio.gather(ws_task, node_task, return_exceptions=True)
+        except asyncio.CancelledError:
+            pass
+        if _listening_watchdog_task is not None and not _listening_watchdog_task.done():
+            _listening_watchdog_task.cancel()
+        try:
+            await close_ollama_client()
+        except (asyncio.CancelledError, Exception):
+            pass
         _main_loop = None
+        _main_task = None
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
         print(f"\n👋  {config.name} stopped.")
