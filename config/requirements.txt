@@ -1,10 +1,31 @@
 # Maya – Audio Operating System
 # Install: pip install -r config/requirements.txt
+#
+# ── PyTorch & CUDA Acceleration (Windows) ────────────────────────────────────
+# IMPORTANT: On Windows, standard `pip install torch` resolves to CPU-only wheels.
+# For CUDA GPU acceleration (required for GPU Kokoro neural TTS and fast Silero VAD),
+# install PyTorch with the explicit CUDA wheel index matching your CUDA version:
+#
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+#
+# Alternatively, install all requirements with the CUDA wheel index via --extra-index-url:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cu126 -r config/requirements.txt
+#
+# Supported PyTorch CUDA wheel repository URLs:
+#   CUDA 12.6: https://download.pytorch.org/whl/cu126
+#   CUDA 12.4: https://download.pytorch.org/whl/cu124
+#   CUDA 12.1: https://download.pytorch.org/whl/cu121
+#   CUDA 11.8: https://download.pytorch.org/whl/cu118
+#
+# ── Model Prefetch & Offline Inference ────────────────────────────────────────
+# After package installation, prefetch BGE and Kokoro weights before offline execution:
+#   python scripts/fetch_models.py
+# (Or verify offline readiness with `python scripts/fetch_models.py --verify-only`)
 
 # ── Audio capture & VAD ───────────────────────────────────────────────────────
 sounddevice>=0.4.6          # cross-platform mic/speaker via PortAudio
-torch>=2.0.0                # Silero VAD + PyTorch intent model
-torchaudio>=2.0.0
+torch>=2.14.0,<3.0.0        # Silero VAD + PyTorch intent model + Kokoro TTS
+torchaudio>=2.11.0,<3.0.0
 
 # ── Speech-to-Text ────────────────────────────────────────────────────────────
 SpeechRecognition>=3.10.0   # Google Speech API (free, no key, needs internet)
@@ -13,10 +34,14 @@ SpeechRecognition>=3.10.0   # Google Speech API (free, no key, needs internet)
 kokoro>=0.9.0               # offline neural TTS, Apache 2.0
 # soundfile no longer needed for TTS (Kokoro outputs numpy directly)
 
+# ── Local Embeddings & Model Management ───────────────────────────────────────
+transformers>=4.36.0,<6.0.0 # local BGE embedding model (BAAI/bge-small-en-v1.5)
+huggingface-hub>=0.20.0     # model weights prefetch & offline cache management
+
 # ── ML Intent Classification ─────────────────────────────────────────────────
 # torch already listed above (PyTorch BiLSTM model)
 tensorflow>=2.13.0          # TensorFlow/Keras 1-D CNN model
-numpy>=1.24.0
+numpy>=1.24.0,<3.0.0        # compatible with PyTorch 2.14 / TensorFlow
 
 # ── Avatar WebSocket bridge ──────────────────────────────────────────────────
 # services/ws_server.py — written to work with both the legacy and the newer
@@ -32,7 +57,7 @@ pyperclip>=1.8.2            # skills/system/clipboard.py (optional — without i
 
 # ── LLM backends (uncomment whichever you use) ────────────────────────────────
 # openai>=1.0.0             # set LLMConfig.provider = "openai" + OPENAI_API_KEY
-httpx>=0.27.0             # for Ollama; set LLMConfig.provider = "ollama"
+httpx>=0.27.0               # for Ollama; set LLMConfig.provider = "ollama"
 
 # ── PortAudio (sounddevice dependency) ────────────────────────────────────────
 # Windows:  pip install sounddevice  (wheels bundle PortAudio)
