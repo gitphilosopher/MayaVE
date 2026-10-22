@@ -36,7 +36,7 @@ import logging
 import random
 
 from core.mood import mood_manager
-from core.expression_library import compose_default, get_recipe, save_recipe
+from core.expression_library import compose_default, get_recipe, save_recipe, semantic_key
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,9 @@ def _intensity_word(value: float) -> str:
 
 class BehaviorEngine:
     """Compose a semantic expression into the structured behavior packet sent to the frontend."""
+
+    def __init__(self) -> None:
+        self._memory_cache: dict[str, dict] = {}
 
     def compose(self, expression: str, actions: list[str] | None = None,
                 source: str = "dialogue", attitude: str | None = None,
@@ -144,18 +147,28 @@ class BehaviorEngine:
 
     def _resolve_recipe(self, emotion: str, attitude: str, intensity_word: str) -> tuple[dict, str]:
         """Resolve a recipe from cache or default generation, then apply bounded jitter for this render only."""
+        if not hasattr(self, "_memory_cache"):
+            self._memory_cache = {}
+
+        cache_key = semantic_key(emotion, attitude, intensity_word)
         try:
             cached = get_recipe(emotion, attitude, intensity_word)
             if cached is not None:
                 base, source = cached, "cached"
+            elif cache_key in self._memory_cache:
+                base, source = self._memory_cache[cache_key], "cached"
             else:
                 base = compose_default(emotion, attitude, intensity_word)
-                save_recipe(emotion, attitude, intensity_word, base)
+                self._memory_cache[cache_key] = base
                 source = "generated"
         except Exception as e:
             logger.debug(f"Expression library unavailable, using bare default: {e}")
-            base = compose_default(emotion, attitude, intensity_word)
-            source = "fallback"
+            if cache_key in self._memory_cache:
+                base, source = self._memory_cache[cache_key], "cached"
+            else:
+                base = compose_default(emotion, attitude, intensity_word)
+                self._memory_cache[cache_key] = base
+                source = "fallback"
 
         chaos = PERSONALITY["chaos"]
         jittered = {}
