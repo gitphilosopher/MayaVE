@@ -30,7 +30,7 @@ import { animationController, PRIORITY } from "./animation-controller.js";
 import { gazeController, ATTENTION_STATE } from "./gaze-controller.js";
 import { lifeMotionController } from "./life-motion-controller.js";
 import { expressionController, EXPRESSION_LAYER } from "./expression-controller.js";
-import { recordTrace } from "./tracer.js";
+import { recordTrace } from "./tracer_stub.js";
 
 export let vrm;
 export let isSpeaking = false;

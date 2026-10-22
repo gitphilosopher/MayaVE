@@ -13,7 +13,7 @@
 import * as THREE from "three";
 import { loadAvatar, vrm, updateVrmaAnimations, updateGaze, warmUpAudioContext, isSpeaking } from "./avatar.js";
 import "./websocket.js";
-import { recordFrameGap, recordTrace, recordRafHeartbeat } from "./tracer.js";
+import { recordFrameGap, recordTrace, recordRafHeartbeat } from "./tracer_stub.js";
 
 export const scene = new THREE.Scene();
 // Transparent background for the overlay window.

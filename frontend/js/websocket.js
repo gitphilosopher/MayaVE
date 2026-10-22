@@ -25,7 +25,7 @@ import {
     playShrugAnimation, playWinkAnimation,
 } from "./avatar.js";
 import { applyBehavior } from "./expression-composer.js";
-import { recordTrace, setCurrentTraceId, getTraceData } from "./tracer.js";
+import { recordTrace, setCurrentTraceId, getTraceData } from "./tracer_stub.js";
 
 const WS_URL       = "ws://localhost:8765";
 const RECONNECT_MS = 2000;
