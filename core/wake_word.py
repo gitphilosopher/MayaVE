@@ -11,7 +11,8 @@ state.
 The logic is intentionally lightweight and low-overhead:
 - it does nothing while Maya is already awake
 - it accumulates a short rolling buffer while sleeping
-- it transcribes the full window only when the buffer fills
+- it discards silent/ambient buffers using RMS energy gating
+- it transcribes the full window only when vocal audio fills the buffer
 - it matches a shared set of wake phrases derived from `config.wake_word`
 
 The trigger helpers here are shared with the barge-in logic so the same naming
@@ -39,6 +40,7 @@ _SAMPLE_RATE = config.audio.sample_rate
 _FRAME_SAMPLES = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
 _WINDOW_SECONDS = 2
 _WINDOW_FRAMES = int(_WINDOW_SECONDS * _SAMPLE_RATE / _FRAME_SAMPLES)
+_RMS_THRESHOLD = getattr(config.audio, "rms_threshold", 0.01)
 
 WakeCallback = Callable[[], Awaitable[None]]
 
@@ -95,10 +97,16 @@ def is_sleep_command(text: str) -> bool:
 class WakeWordDetector:
     """Listen for the configured wake phrase while Maya is asleep and fire the wake callback."""
 
-    def __init__(self, on_wake: WakeCallback, loop: asyncio.AbstractEventLoop):
-        """Initialize the rolling audio buffer and the recognizer used during sleep detection."""
+    def __init__(
+        self,
+        on_wake: WakeCallback,
+        loop: asyncio.AbstractEventLoop,
+        energy_threshold: float = _RMS_THRESHOLD,
+    ):
+        """Initialize the rolling audio buffer, recognizer, and energy gate used during sleep detection."""
         self._on_wake = on_wake
         self._loop = loop
+        self._energy_threshold = energy_threshold
         self._recogniser = sr.Recognizer()
         self._window: deque[np.ndarray] = deque(maxlen=_WINDOW_FRAMES)
         self._pending = False
@@ -108,7 +116,8 @@ class WakeWordDetector:
 
         logger.info(
             f"WakeWordDetector ready — triggers: {self._triggers}  "
-            f"window: {_WINDOW_SECONDS}s ({_WINDOW_FRAMES} frames)"
+            f"window: {_WINDOW_SECONDS}s ({_WINDOW_FRAMES} frames)  "
+            f"threshold: {self._energy_threshold}"
         )
 
     def feed_frame(self, frame: np.ndarray) -> None:
@@ -123,6 +132,15 @@ class WakeWordDetector:
         if len(self._window) == _WINDOW_FRAMES and not self._pending:
             audio = np.concatenate(list(self._window))
             self._window.clear()
+
+            # Discard silent/ambient buffers before STT transmission (ARCH-06 / F3)
+            rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size > 0 else 0.0
+            if rms < self._energy_threshold:
+                logger.debug(
+                    f"Wake-word window below energy threshold (RMS {rms:.4f} < {self._energy_threshold}), discarding"
+                )
+                return
+
             self._pending = True
             try:
                 future = asyncio.run_coroutine_threadsafe(
