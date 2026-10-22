@@ -20,6 +20,7 @@ policy.
 """
 
 import asyncio
+import concurrent.futures
 import logging
 from collections import deque
 from typing import Callable, Awaitable, Optional
@@ -42,6 +43,19 @@ _WINDOW_FRAMES = int(_WINDOW_SECONDS * _SAMPLE_RATE / _FRAME_SAMPLES)
 WakeCallback = Callable[[], Awaitable[None]]
 
 _GREETING_PREFIXES = ("hey", "hello", "hi", "yo")
+
+
+def _log_future_exception(fut: concurrent.futures.Future) -> None:
+    """Log any unhandled exception from coroutines submitted across threads."""
+    try:
+        if not fut.cancelled():
+            exc = fut.exception()
+            if exc is not None and not isinstance(exc, (concurrent.futures.CancelledError, asyncio.CancelledError)):
+                logger.error(f"Cross-thread wake-word coroutine raised exception: {exc}", exc_info=exc)
+    except (concurrent.futures.CancelledError, asyncio.CancelledError):
+        pass
+    except Exception as exc:
+        logger.error(f"Unexpected error inspecting wake-word future: {exc}", exc_info=True)
 
 
 def compute_wake_triggers(wake_word: Optional[str] = None) -> set[str]:
@@ -110,9 +124,14 @@ class WakeWordDetector:
             audio = np.concatenate(list(self._window))
             self._window.clear()
             self._pending = True
-            asyncio.run_coroutine_threadsafe(
-                self._check(audio), self._loop
-            )
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    self._check(audio), self._loop
+                )
+                future.add_done_callback(_log_future_exception)
+            except Exception:
+                self._pending = False
+                raise
 
     async def _check(self, audio: np.ndarray) -> None:
         """Transcribe the buffered audio and trigger wake-up when the wake phrase is heard."""

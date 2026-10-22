@@ -89,6 +89,7 @@ _U = config.user_name
 # queue immediately.
 _LISTENING_WATCHDOG_S = 15.0
 _listening_watchdog_task: asyncio.Task | None = None
+_main_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _on_state_change(old: MayaState, new: MayaState) -> None:
@@ -99,11 +100,19 @@ def _on_state_change(old: MayaState, new: MayaState) -> None:
     than touched here directly (safe to call even when already on the
     loop thread).
     """
-    loop = asyncio.get_event_loop_policy().get_event_loop()
+    global _main_loop
     try:
-        loop.call_soon_threadsafe(_handle_state_change, new)
+        loop = _main_loop
+        if loop is None or loop.is_closed():
+            try:
+                loop = asyncio.get_running_loop()
+                _main_loop = loop
+            except RuntimeError:
+                loop = None
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(_handle_state_change, new)
     except RuntimeError:
-        pass   # loop not running (e.g. during shutdown) — nothing to schedule
+        pass   # loop not running (e.g. during shutdown or in worker threads) — nothing to schedule
 
 
 def _handle_state_change(new: MayaState) -> None:
@@ -234,6 +243,9 @@ def _on_node_task_done(task: asyncio.Task) -> None:
 
 async def main() -> None:
     """Initialize Maya's services and run the listener and command worker."""
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
+
     # Register before starting runtime tasks; the observer only schedules work
     # on the event loop and is harmless before user-facing states are possible.
     state.add_observer(_on_state_change)
@@ -408,6 +420,7 @@ async def main() -> None:
             tg.create_task(queue_manager.run(), name="queue-worker")
     finally:
         await close_ollama_client()
+        _main_loop = None
 
 
 if __name__ == "__main__":

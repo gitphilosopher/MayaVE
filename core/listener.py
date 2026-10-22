@@ -27,6 +27,7 @@ Important implementation details:
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import numpy as np
 from collections import deque
@@ -42,6 +43,19 @@ from core.wake_word import WakeWordDetector
 logger = logging.getLogger(__name__)
 
 AudioCallback = Callable[[np.ndarray], Awaitable[None]]
+
+
+def _log_future_exception(fut: concurrent.futures.Future) -> None:
+    """Log any unhandled exception from coroutines submitted across threads."""
+    try:
+        if not fut.cancelled():
+            exc = fut.exception()
+            if exc is not None and not isinstance(exc, (concurrent.futures.CancelledError, asyncio.CancelledError)):
+                logger.error(f"Cross-thread coroutine raised exception: {exc}", exc_info=exc)
+    except (concurrent.futures.CancelledError, asyncio.CancelledError):
+        pass
+    except Exception as exc:
+        logger.error(f"Unexpected error inspecting future: {exc}", exc_info=True)
 
 _SAMPLE_RATE = config.audio.sample_rate
 _FRAME_SAMPLES = max(512, int(_SAMPLE_RATE * config.audio.chunk_ms / 1000))
@@ -164,9 +178,10 @@ class Listener:
                 audio = np.concatenate(self._speech_buffer)
                 self._speech_buffer = []
                 logger.debug(f"VAD: utterance end ({len(audio)/_SAMPLE_RATE:.2f}s)")
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     self._on_speech(audio), self._loop
                 )
+                future.add_done_callback(_log_future_exception)
 
     def _vad_frame(self, frame: np.ndarray) -> bool:
         tensor = torch.from_numpy(frame).unsqueeze(0)
