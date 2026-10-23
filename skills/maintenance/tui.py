@@ -367,8 +367,8 @@ def render_header(state: DashboardState) -> Panel:
 
 
 def render_operations(state: DashboardState) -> Panel:
-    tasks_table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold underline")
-    tasks_table.add_column("Task ID", style="bold", width=9)
+    tasks_table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
+    tasks_table.add_column("Task ID", style="dim", width=9)
     tasks_table.add_column("Prio", width=5)
     tasks_table.add_column("Risk", width=6)
     tasks_table.add_column("Status", width=18)
@@ -457,10 +457,10 @@ def render_approvals(state: DashboardState) -> Panel:
         )
         return Panel(content, title="[bold]PENDING APPROVAL REQUESTS (0)[/bold]", border_style="dim", height=11)
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold underline")
+    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
     table.add_column("Sel", width=3, style="bold cyan")
-    table.add_column("Request ID", width=22)
-    table.add_column("Task", width=8)
+    table.add_column("Request ID", width=22, style="dim")
+    table.add_column("Task", width=8, style="dim")
     table.add_column("Risk", width=6)
     table.add_column("Operation", width=18)
     table.add_column("Patch SHA", width=10, style="dim")
@@ -503,9 +503,9 @@ def render_merges(state: DashboardState) -> Panel:
     merges_info = state.cached_merges.get("merges", [])
     cleanup_info = state.cached_merges.get("cleanup", [])
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold underline")
+    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
     table.add_column("Integration Branch", width=26, style="bold")
-    table.add_column("Task", width=8)
+    table.add_column("Task", width=8, style="dim")
     table.add_column("Base..Head", width=16, style="dim")
     table.add_column("Ahead", width=6)
     table.add_column("Merge Status", width=13)
@@ -542,8 +542,8 @@ def render_merges(state: DashboardState) -> Panel:
 def render_recovery(state: DashboardState) -> Panel:
     recovery_tasks = state.cached_recovery
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold underline")
-    table.add_column("Task ID", width=9, style="bold red")
+    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
+    table.add_column("Task ID", width=9, style="dim")
     table.add_column("Stage / Interruption", width=22)
     table.add_column("Worktree", width=9)
     table.add_column("Actionable Blocker", width=34, style="yellow")
@@ -574,7 +574,7 @@ def render_recovery(state: DashboardState) -> Panel:
 
 def render_trace(state: DashboardState, max_rows: int = 14) -> Panel:
     filtered = state.get_filtered_events()
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold underline")
+    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
     table.add_column("Time", width=12, style="dim")
     table.add_column("Sev", width=5)
     table.add_column("Provenance", width=11)
