@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 try:
     from .adapter import AgentAdapter, FakeAgentAdapter
@@ -226,6 +226,7 @@ class AdaptiveWorkerScheduler:
         router: Optional[ComplexityRouter] = None,
         concurrency_guard: Optional[WorkerConcurrencyGuard] = None,
         local_adapter: Optional[AgentAdapter] = None,
+        risk_policy: str = "manual",
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.store = store
@@ -241,6 +242,7 @@ class AdaptiveWorkerScheduler:
         self.router = router
         self.concurrency_guard = concurrency_guard
         self.local_adapter = local_adapter
+        self.risk_policy = risk_policy
 
         self._lock = threading.RLock()
         self.reviewer_lock = threading.Lock()
@@ -525,6 +527,7 @@ class AdaptiveWorkerScheduler:
             router=self.router,
             concurrency_guard=self.concurrency_guard,
             local_adapter=self.local_adapter,
+            risk_policy=self.risk_policy,
         )
 
         try:

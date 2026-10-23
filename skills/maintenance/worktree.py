@@ -712,7 +712,12 @@ class WorktreeManager:
                 # Ensure a durable PermissionRequest is registered in approvals.json
                 if TerminalApprovalManager and self.approvals_path:
                     try:
-                        mgr = TerminalApprovalManager(self.approvals_path, repo_root=self.repo_root)
+                        store_to_use = coordinator_api.store if coordinator_api else None
+                        mgr = TerminalApprovalManager(
+                            self.approvals_path,
+                            repo_root=self.repo_root,
+                            store=store_to_use,
+                        )
                         req_id = f"req-{task.task_id}-workspace-adoption"
                         if req_id not in mgr._requests:
                             mgr.create_request(
@@ -723,6 +728,7 @@ class WorktreeManager:
                                 scope=f"adoption of pre-existing clean worktree on branch {self.get_branch_name(task.task_id)} synchronized to main",
                                 reason=f"Unexpected pre-existing worktree detected at {ws_status.path}",
                                 request_id=req_id,
+                                lock_held=lock_held,
                             )
                     except Exception as req_err:
                         logger.warning("Failed to auto-register approval request for %s: %s", task.task_id, req_err)
@@ -732,7 +738,12 @@ class WorktreeManager:
                 created_req = False
                 if TerminalApprovalManager and self.approvals_path:
                     try:
-                        mgr = TerminalApprovalManager(self.approvals_path, repo_root=self.repo_root)
+                        store_to_use = coordinator_api.store if coordinator_api else None
+                        mgr = TerminalApprovalManager(
+                            self.approvals_path,
+                            repo_root=self.repo_root,
+                            store=store_to_use,
+                        )
                         req_id = f"req-{task.task_id}-recovery"
                         if req_id not in mgr._requests:
                             mgr.create_request(
@@ -743,6 +754,7 @@ class WorktreeManager:
                                 scope=f"recovery review for preserved worktree on branch {self.get_branch_name(task.task_id)}",
                                 reason=f"Worktree requires recovery: {task.blocking_reason or task.failure_reason or 'Interrupted execution'}",
                                 request_id=req_id,
+                                lock_held=lock_held,
                             )
                             created_req = True
                     except Exception as req_err:
@@ -750,6 +762,10 @@ class WorktreeManager:
 
                 # First-pass reconciliation for this worktree in RECOVERY_REQUIRED
                 if created_req or not task.checkpoint or task.checkpoint.stage != "RECOVERY_RECONCILED":
+                    if coordinator_api and coordinator_api.store and lock_held and coordinator_api.store.exists():
+                        persisted = coordinator_api.store.load_ledger()
+                        CoordinatorAPI._copy_ledger_into(ledger, persisted)
+
                     task.blocking_reason = (
                         f"Preserved worktree at {ws_status.path} (dirty={ws_status.is_dirty}, "
                         f"head={ws_status.head_commit[:7] if ws_status.head_commit else 'None'}). "
@@ -776,6 +792,35 @@ class WorktreeManager:
                             reason=f"Worktree preserved at {ws_status.path}; recovery approval request registered.",
                         )
                     )
+
+            # Rule 5: Task in NEEDS_APPROVAL lacking an active PermissionRequest
+            elif task.status == TaskStatus.NEEDS_APPROVAL:
+                if TerminalApprovalManager and self.approvals_path:
+                    try:
+                        store_to_use = coordinator_api.store if coordinator_api else None
+                        mgr = TerminalApprovalManager(
+                            self.approvals_path,
+                            repo_root=self.repo_root,
+                            store=store_to_use,
+                        )
+                        existing_req = mgr.get_pending_request_for_task(task.task_id)
+                        if not existing_req:
+                            is_baseline = "test doesn't prove the defect" in (task.blocking_reason or "")
+                            op = "baseline_verification" if is_baseline else "operator_review"
+                            req_id = f"req-{task.task_id}-baseline-review" if is_baseline else f"req-{task.task_id}-hold-review"
+                            if req_id not in mgr._requests:
+                                mgr.create_request(
+                                    task_id=task.task_id,
+                                    risk=task.risk.value if hasattr(task.risk, "value") else str(task.risk),
+                                    operation=op,
+                                    target=str(ws_status.path) if ws_status.exists_on_disk else ", ".join(task.target_files or []),
+                                    scope=f"review for task in {task.status.value}: {task.blocking_reason or 'Pending review'}",
+                                    reason=task.blocking_reason or task.failure_reason or "Task held in NEEDS_APPROVAL",
+                                    request_id=req_id,
+                                    lock_held=lock_held,
+                                )
+                    except Exception as req_err:
+                        logger.warning("Failed to auto-register hold review request for %s: %s", task.task_id, req_err)
 
         return reconciliations
 

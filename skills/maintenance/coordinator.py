@@ -337,13 +337,27 @@ def cmd_prepare_workspace(repo_root: Path, store: StateStore, task_id: str) -> i
         return 1
 
     task = ledger.get_task(task_id)
+
+    # 1. Status constraint: Only PENDING tasks can have workspaces prepared/reconfirmed
+    if task.status != TaskStatus.PENDING:
+        print(
+            f"[FAIL] Task '{task_id}' has status '{task.status.value}'. "
+            f"Workspace preparation is only permitted for PENDING tasks. "
+            f"Held, recovery, or failed tasks must be resolved via --recover-task or --approve-request."
+        )
+        return 1
+
+    # 2. Eligibility evaluation: Must be eligible under scheduler invariants
     scheduler = DependencyScheduler(ledger)
     eligible, reason = scheduler.check_task_eligibility(task_id)
+    if not eligible:
+        print(f"[FAIL] Task '{task_id}' is ineligible for workspace preparation: {reason}")
+        return 1
 
     print(f"\n=== Preparing Isolated Workspace for Task [{task_id}] ===")
     print(f"Title       : {task.title}")
     print(f"Priority    : {task.priority.value}")
-    print(f"Eligibility : {'Eligible' if eligible else 'Ineligible'} ({reason})")
+    print(f"Eligibility : Eligible")
 
     wt_manager = WorktreeManager(repo_root)
     ws_path = wt_manager.get_workspace_path(task_id)
@@ -383,6 +397,109 @@ def cmd_prepare_workspace(repo_root: Path, store: StateStore, task_id: str) -> i
         return 1
     except LockAcquisitionError as e:
         print(f"[FAIL] Cannot acquire lock: {e}")
+        return 1
+
+
+def cmd_recover_task(
+    repo_root: Path,
+    store: StateStore,
+    task_id: str,
+    authorized: bool = False,
+    reason: Optional[str] = None,
+) -> int:
+    """Explicitly authorize recovery/retry of a held or failed task, transitioning it to PENDING."""
+    if not authorized:
+        print("[FAIL] Task recovery requires explicit operator authorization (--authorize).")
+        return 1
+
+    try:
+        ledger, is_persisted = _load_or_mock_ledger(store)
+    except CorruptStateError as e:
+        print(f"[FAIL] State file is corrupt: {e}")
+        return 2
+
+    if task_id not in ledger:
+        print(f"[FAIL] Task '{task_id}' not found in ledger.")
+        return 1
+
+    task = ledger.get_task(task_id)
+
+    # 1. State check: Must be in a held/recoverable state
+    if task.status not in (TaskStatus.NEEDS_APPROVAL, TaskStatus.RECOVERY_REQUIRED, TaskStatus.BLOCKED):
+        print(
+            f"[FAIL] Task '{task_id}' has status '{task.status.value}'; "
+            f"only held tasks (NEEDS_APPROVAL, RECOVERY_REQUIRED, BLOCKED) can be recovered."
+        )
+        return 1
+
+    # 2. Dependency check: Prerequisites must be VERIFIED
+    for dep_id in task.dependencies:
+        dep = ledger.get(dep_id)
+        if not dep or dep.status != TaskStatus.VERIFIED:
+            dep_status = dep.status.value if dep else "MISSING"
+            print(f"[FAIL] Cannot recover task '{task_id}': prerequisite '{dep_id}' is not VERIFIED (status={dep_status}).")
+            return 1
+
+    # 3. Attempt limit check
+    if task.attempts >= task.max_attempts:
+        try:
+            from .routing import is_escalation_eligible
+        except ImportError:
+            from routing import is_escalation_eligible
+        if not is_escalation_eligible(task):
+            print(f"[FAIL] Cannot recover task '{task_id}': maximum attempts ({task.attempts}/{task.max_attempts}) reached.")
+            return 1
+
+    recovery_reason = reason or "Operator authorized task recovery and retry."
+
+    try:
+        with store.acquire_lock():
+            # If an open permission request exists in approvals.json, close it out as APPROVED
+            approvals_path = repo_root / ".maya" / "maintenance" / "approvals.json"
+            if approvals_path.is_file():
+                try:
+                    try:
+                        from .terminal_approval import TerminalApprovalManager
+                    except ImportError:
+                        from terminal_approval import TerminalApprovalManager
+                    mgr = TerminalApprovalManager(approvals_path, repo_root=repo_root, store=store)
+                    for req in mgr.list_requests():
+                        if req.task_id == task_id and req.status.value == "PENDING":
+                            mgr.approve(req.request_id, reason=recovery_reason, sync_store=False)
+                except Exception:
+                    pass
+
+            prior_status = task.status.value
+            task.blocking_reason = None
+            task.failure_reason = None
+            if task.workspace:
+                task.workspace.lifecycle_state = "PENDING"
+
+            result = CoordinatorAPI(store).transition_task(
+                ledger,
+                task_id,
+                TaskStatus.PENDING,
+                actor="coordinator",
+                checkpoint_stage="RECOVERY_AUTHORIZED",
+                checkpoint_details={
+                    "prior_status": prior_status,
+                    "recovery_reason": recovery_reason,
+                    "authorized_by": "operator",
+                },
+                event_type="TASK_RECOVERY_AUTHORIZED",
+                idempotency_key=f"task-recovery-authorized:{task_id}:{task.attempts}:{int(time.time())}",
+                lock_held=True,
+            )
+            if not result.accepted:
+                print(f"[FAIL] Recovery transition rejected: {result.message}")
+                return 1
+
+        print(f"[SUCCESS] Task '{task_id}' recovered: {prior_status} -> PENDING.")
+        print(f"[INFO] Reason: {recovery_reason}")
+        print(f"[INFO] Event ID: {result.event_id}")
+        return 0
+    except LockAcquisitionError as e:
+        print(f"[FAIL] Cannot acquire state lock: {e}")
         return 1
 
 
@@ -912,6 +1029,71 @@ def cmd_plan_file(
     return cmd_plan_objective(repo_root, store, objective, max_tasks=max_tasks, model=model)
 
 
+def cmd_ingest_backlog(
+    repo_root: Path,
+    store: StateStore,
+    backlog_file_str: str,
+    risk_policy: str = "manual",
+    authorized: bool = False,
+    stage_only: bool = False,
+    output_manifest_str: str | None = None,
+) -> int:
+    """Ingest a Markdown bug backlog (.md) into canonical JSON manifest and maintenance queue."""
+    try:
+        from .manifest import ingest_backlog_workflow
+    except ImportError:
+        from manifest import ingest_backlog_workflow
+
+    backlog_path = Path(backlog_file_str).resolve()
+    output_manifest_path = Path(output_manifest_str).resolve() if output_manifest_str else None
+
+    print(f"\n=== MayaVE Bug Backlog Intake ===")
+    print(f"Backlog File : {backlog_path}")
+    print(f"Risk Policy  : {risk_policy}")
+    print(f"Authorized   : {authorized}")
+    print(f"Stage Only   : {stage_only}")
+
+    ok, info, msg = ingest_backlog_workflow(
+        repo_root=repo_root,
+        store=store,
+        backlog_path=backlog_path,
+        risk_policy=risk_policy,
+        authorized=authorized,
+        stage_only=stage_only,
+        output_manifest_path=output_manifest_path,
+    )
+
+    if not ok:
+        print(f"\n[FAIL] Backlog intake rejected:\n{msg}")
+        return 1
+
+    print(f"\n[SUCCESS] Backlog intake completed!")
+    print(f"Manifest ID    : {info.get('manifest_id')}")
+    print(f"Plan ID        : {info.get('plan_id')}")
+    print(f"Tasks Parsed   : {info.get('tasks_count')}")
+    print(f"Canonical JSON : {info.get('manifest_json')}")
+    print(f"Status         : {info.get('status')}")
+
+    if info.get("status") == "REGISTERED":
+        reg_ids = info.get("registered_ids", [])
+        held_ids = info.get("held_ids", [])
+        print(f"\nRegistered as PENDING (Ready for queue): {', '.join(reg_ids) if reg_ids else 'None'}")
+        if held_ids:
+            print(f"Held in NEEDS_APPROVAL (Operator decision required): {', '.join(held_ids)}")
+        print("\nNext step: Run batch repair queue:")
+        if risk_policy == "auto-low-medium":
+            print("  python -m skills.maintenance.coordinator --run-adaptive --authorize --risk-policy auto-low-medium --review-all")
+        else:
+            print("  python -m skills.maintenance.coordinator --run-adaptive --authorize --initial-workers 1 --max-workers 1")
+    else:
+        print(f"\nProposal staged under pending_proposals/. Zero modifications made to active ledger.")
+        print("Next steps:")
+        print(f"  Inspect plan: python -m skills.maintenance.coordinator --inspect-plan {info.get('plan_id')}")
+        print(f"  Approve plan: python -m skills.maintenance.coordinator --approve-plan {info.get('plan_id')} --authorize")
+
+    return 0
+
+
 def cmd_list_plans(store: StateStore) -> int:
     """List all plan proposals in pending_proposals/."""
     api = CoordinatorAPI(store)
@@ -1196,6 +1378,8 @@ def cmd_run_adaptive(
     resume: bool = False,
     local_model: str = "qwen2.5-coder:3b",
     route_complexity: bool = False,
+    risk_policy: str = "manual",
+    review_all: bool = False,
 ) -> int:
     """Execute maintenance loop using AdaptiveWorkerScheduler with pilot safety bounds."""
     try:
@@ -1251,7 +1435,7 @@ def cmd_run_adaptive(
     else:
         reviewer = CopilotReviewerAdapter()
 
-    review_policy = ReviewPolicy(max_reviews_per_session=max_reviews)
+    review_policy = ReviewPolicy(max_reviews_per_session=max_reviews, review_all=review_all)
 
     router = None
     if route_complexity:
@@ -1280,6 +1464,7 @@ def cmd_run_adaptive(
         router=router,
         concurrency_guard=concurrency_guard,
         local_adapter=local_adapter_instance,
+        risk_policy=risk_policy,
     )
 
     print("\n=== MayaVE Adaptive Worker Scheduler Starting ===")
@@ -1952,6 +2137,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--deny-request", type=str, metavar="REQ_ID", help="Deny specified permission request")
     parser.add_argument("--inspect-request", type=str, metavar="REQ_ID", help="Inspect diagnostic details and worktree state for a permission request")
     parser.add_argument("--approval-scope", type=str, default=None, help="Explicit scope for request approval (must match or refine reviewed scope)")
+    parser.add_argument(
+        "--recover-task",
+        type=str,
+        metavar="TASK_ID",
+        help="Explicitly authorize recovery/retry of a held or failed task, transitioning it to PENDING (requires --authorize)",
+    )
+    parser.add_argument(
+        "--recovery-reason",
+        type=str,
+        default=None,
+        help="Explicit justification for recovering a held or failed task",
+    )
     parser.add_argument("--execute-task", type=str, metavar="TASK_ID", help="Execute specified task through single-task orchestrator")
     parser.add_argument("--execute-next", action="store_true", help="Execute next eligible task through single-task orchestrator")
     parser.add_argument("--integrate-task", type=str, metavar="TASK_ID", default=None, help="Integrate verified task from worktree into main HEAD (requires --authorize)")
@@ -1995,6 +2192,41 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="PATH",
         help="Generate a structured maintenance plan from an objective file",
+    )
+    parser.add_argument(
+        "--ingest-backlog",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Ingest a Markdown bug backlog (.md) into the canonical manifest and maintenance queue",
+    )
+    parser.add_argument(
+        "--backlog-manifest",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Custom output path for generated canonical JSON manifest",
+    )
+    parser.add_argument(
+        "--risk-policy",
+        choices=["auto-low-medium", "manual"],
+        default="manual",
+        help=(
+            "Risk-based approval policy (default: manual; requires explicit operator approval for all tasks). "
+            "Under 'auto-low-medium', LOW and MEDIUM risk tasks are automatically approved at task-approval gates "
+            "with auditable evidence, while HIGH and uncertain risk tasks always remain held for operator decision. "
+            "Note: when used with --ingest-backlog, --authorize is still strictly required to register tasks."
+        ),
+    )
+    parser.add_argument(
+        "--stage-only",
+        action="store_true",
+        help="Stage plan proposal without registering to ledger, even if --authorize is provided",
+    )
+    parser.add_argument(
+        "--review-all",
+        action="store_true",
+        help="Enforce independent reviewer verification on all repair tasks (including LOW risk)",
     )
     parser.add_argument(
         "--max-plan-tasks",
@@ -2156,6 +2388,17 @@ def main(argv: list[str] | None = None) -> int:
             model=args.local_model,
         )
 
+    if args.ingest_backlog:
+        return cmd_ingest_backlog(
+            repo_root=repo_root,
+            store=store,
+            backlog_file_str=args.ingest_backlog,
+            risk_policy=args.risk_policy,
+            authorized=args.authorize,
+            stage_only=args.stage_only,
+            output_manifest_str=args.backlog_manifest,
+        )
+
     if args.list_plans:
         return cmd_list_plans(store=store)
 
@@ -2187,6 +2430,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.inspect_request:
         return cmd_inspect_request(repo_root, args.inspect_request)
+
+    if args.recover_task:
+        return cmd_recover_task(
+            repo_root=repo_root,
+            store=store,
+            task_id=args.recover_task,
+            authorized=args.authorize,
+            reason=args.recovery_reason,
+        )
 
     if args.init:
         return cmd_init(store, force=args.force)
@@ -2252,6 +2504,8 @@ def main(argv: list[str] | None = None) -> int:
             resume=args.resume,
             local_model=args.local_model,
             route_complexity=args.route_complexity,
+            risk_policy=args.risk_policy,
+            review_all=args.review_all,
         )
 
     if args.integrate_task:

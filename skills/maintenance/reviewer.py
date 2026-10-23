@@ -155,14 +155,18 @@ def detect_worktree_mutations(worktree_path: Path, before: dict[str, tuple[float
 class ReviewPolicy:
     """Evaluates whether an independent code review is required according to risk and budget."""
 
-    def __init__(self, max_reviews_per_session: int = 5) -> None:
+    def __init__(self, max_reviews_per_session: int = 5, review_all: bool = False) -> None:
         self.max_reviews_per_session = max_reviews_per_session
+        self.review_all = review_all
         self.reviews_conducted = 0
 
     def should_review(self, task: TaskDefinition) -> tuple[bool, str]:
         """
         Determine if review is warranted based on task risk and touched subsystems.
         """
+        if self.review_all:
+            return True, "Mandatory independent review requested for all repair tasks."
+
         # Low risk: automated checks and tests suffice
         if task.risk == TaskRisk.LOW:
             return False, "Low-risk task satisfied by targeted automated tests."

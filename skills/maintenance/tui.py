@@ -32,10 +32,12 @@ try:
 except ImportError:
     HAS_MSVCRT = False
 
+from rich import box
 from rich.console import Console, Group
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
@@ -50,6 +52,16 @@ except ImportError:
 SEVERITY_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "CRIT"]
 SEVERITY_ORDER = {sev: idx for idx, sev in enumerate(SEVERITY_LEVELS)}
 TAB_NAMES = ["OPERATIONS", "APPROVALS", "MERGES", "RECOVERY"]
+
+# Theme: lavender + cool gray + white as the base, with three soft semantic
+# accents (tuned to sit beside the lavender) used only to signal state.
+PURPLE = "rgb(180,156,255)"  # brand / active
+GRAY = "rgb(160,157,165)"    # secondary text, rules, labels
+WHITE = "white"              # primary text
+MINT = "rgb(128,222,184)"    # ok: running, verified, clean, merged
+AMBER = "rgb(244,201,125)"   # caution: needs approval, warnings, operate mode
+CORAL = "rgb(255,128,146)"   # danger: blocked, failed, recovery, errors
+ACCENT = f"bold {PURPLE}"
 
 
 @dataclass
@@ -298,7 +310,33 @@ class DashboardState:
         return [ev for ev in self.events if self.filters.matches(ev)]
 
 
-def render_header(state: DashboardState) -> Panel:
+def _table(**kw: Any) -> Table:
+    return Table(box=None, expand=True, padding=(0, 1), show_header=True,
+                 header_style=GRAY, pad_edge=False, **kw)
+
+
+def _risk_style(risk: Any) -> str:
+    r = str(risk or "").upper()
+    if r in ("HIGH", "CRITICAL", "CRIT"):
+        return f"bold {CORAL}"
+    if r in ("MEDIUM", "MED"):
+        return AMBER
+    return WHITE
+
+
+def _rule() -> Rule:
+    return Rule(characters="─", style=GRAY)
+
+
+def _section(title: str, body: Any, meta: str = "") -> Group:
+    head = Text()
+    head.append(title, style=ACCENT)
+    if meta:
+        head.append(f"  {meta}", style=GRAY)
+    return Group(head, body)
+
+
+def render_header(state: DashboardState) -> Group:
     session_str = state.session_id or (state.cached_session.get("session_id") or "UNKNOWN")
     status_str = state.cached_session.get("status", "IDLE")
 
@@ -321,7 +359,6 @@ def render_header(state: DashboardState) -> Panel:
         except Exception:
             pass
 
-    # Cloud tasks
     cloud_consumed = state.cached_budget.get("cloud_tasks_consumed", 0)
     cloud_max = state.cached_budget.get("max_cloud_tasks", 10)
     cloud_str = f"cloud {cloud_consumed}/{cloud_max}"
@@ -336,59 +373,57 @@ def render_header(state: DashboardState) -> Panel:
     else:
         tok_str = "tok unknown"
 
-    title_text = Text()
-    title_text.append(" AUTOPHAGE ", style="bold cyan")
-    title_text.append(f"─ session {session_str} ─ ", style="dim")
-    status_color = "green" if status_str == "RUNNING" else ("yellow" if status_str == "COMPLETED" else "white")
-    title_text.append(f"{status_str} ", style=f"bold {status_color}")
-    title_text.append(f"─ {elapsed_str} ─ {cloud_str} ─ {tok_str} ─ ", style="dim")
-
-    # Mode indicator
+    line1 = Text(no_wrap=True, overflow="ellipsis")
+    line1.append("autophage", style=ACCENT)
+    line1.append(f"  {session_str}", style=GRAY)
+    line1.append(f"  {status_str.lower()}", style=f"bold {MINT}" if status_str == "RUNNING" else WHITE)
+    line1.append(f"  {elapsed_str}  {cloud_str}  {tok_str}", style=GRAY)
     if state.operate_mode:
-        title_text.append("OPERATE ", style="bold yellow")
+        line1.append("  operate", style=f"bold {AMBER}")
+    elif state.paused:
+        line1.append("  paused", style=AMBER)
     else:
-        title_text.append("OBSERVING ", style="bold green" if not state.paused else "bold magenta")
+        line1.append("  observe", style=GRAY)
 
-    # Tab badges
+    # Inactive tabs light up when they hold something that needs attention.
     tabs = [
-        ("1:OPS", state.active_tab == "OPERATIONS"),
-        (f"2:APPROVALS ({len(state.pending_requests)})", state.active_tab == "APPROVALS"),
-        ("3:MERGES", state.active_tab == "MERGES"),
-        (f"4:RECOVERY ({len(state.cached_recovery)})", state.active_tab == "RECOVERY"),
+        ("1 ops", state.active_tab == "OPERATIONS", GRAY),
+        (f"2 approvals ({len(state.pending_requests)})", state.active_tab == "APPROVALS",
+         AMBER if state.pending_requests else GRAY),
+        ("3 merges", state.active_tab == "MERGES", GRAY),
+        (f"4 recovery ({len(state.cached_recovery)})", state.active_tab == "RECOVERY",
+         CORAL if state.cached_recovery else GRAY),
     ]
-    title_text.append("─ ", style="dim")
-    for name, is_active in tabs:
-        if is_active:
-            title_text.append(f"[{name}] ", style="bold cyan underline")
-        else:
-            title_text.append(f"{name} ", style="dim")
+    line2 = Text(no_wrap=True, overflow="ellipsis")
+    for name, is_active, idle_style in tabs:
+        line2.append(name + "   ", style=ACCENT if is_active else idle_style)
 
-    return Panel(title_text, style="cyan", border_style="dim", height=3)
+    return Group(line1, line2, _rule())
 
 
-def render_operations(state: DashboardState) -> Panel:
-    tasks_table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
-    tasks_table.add_column("Task ID", style="dim", width=9)
-    tasks_table.add_column("Prio", width=5)
-    tasks_table.add_column("Risk", width=6)
-    tasks_table.add_column("Status", width=18)
-    tasks_table.add_column("Attempts", width=8)
-    tasks_table.add_column("Details / Target Files", style="dim")
+def render_operations(state: DashboardState) -> Group:
+    tasks_table = _table()
+    tasks_table.add_column("task", style=GRAY, width=9)
+    tasks_table.add_column("prio", style=WHITE, width=5)
+    tasks_table.add_column("risk", style=WHITE, width=6)
+    tasks_table.add_column("status", width=18)
+    tasks_table.add_column("tries", style=WHITE, width=6)
+    tasks_table.add_column("details", style=GRAY)
 
     status_styles = {
-        "VERIFIED": "bold green",
-        "IN_PROGRESS": "bold cyan",
-        "VERIFYING": "bold yellow",
-        "READY_TO_INTEGRATE": "bold cyan",
-        "NEEDS_APPROVAL": "bold magenta",
-        "BLOCKED": "bold red",
-        "FAILED": "red",
-        "PENDING": "dim",
-        "RECOVERY_REQUIRED": "bold red",
+        "VERIFIED": MINT,
+        "IN_PROGRESS": PURPLE,
+        "VERIFYING": PURPLE,
+        "READY_TO_INTEGRATE": PURPLE,
+        "NEEDS_APPROVAL": f"bold {AMBER}",
+        "BLOCKED": f"bold {CORAL}",
+        "FAILED": f"bold {CORAL}",
+        "PENDING": GRAY,
+        "RECOVERY_REQUIRED": f"bold {CORAL}",
     }
 
     if not state.cached_tasks:
-        tasks_table.add_row("-", "-", "-", "NO TASKS", "-", "No active task ledger found")
+        tasks_table.add_row("-", "-", "-", Text("NO TASKS", style=GRAY), "-", "No active task ledger found")
     else:
         sorted_tasks = sorted(
             state.cached_tasks.values(),
@@ -407,27 +442,24 @@ def render_operations(state: DashboardState) -> Panel:
             prio = t.get("priority", "P2")
             risk = t.get("risk", "LOW")
             st = t.get("status", "PENDING")
-            att = f"a{t.get('attempts', 0)}/{t.get('max_attempts', 3)}"
-            st_style = status_styles.get(st, "white")
+            att = f"{t.get('attempts', 0)}/{t.get('max_attempts', 3)}"
 
-            details = ""
             if st == "NEEDS_APPROVAL":
-                details = f"[bold magenta]{t.get('blocking_reason', 'Requires Operator Approval')}[/bold magenta]"
+                details = Text(str(t.get("blocking_reason", "Requires Operator Approval")), style=AMBER)
             elif st == "RECOVERY_REQUIRED":
-                details = f"[bold red]{t.get('blocking_reason', 'Recovery required - in-flight interruption')}[/bold red]"
+                details = Text(str(t.get("blocking_reason", "Recovery required - in-flight interruption")), style=CORAL)
             elif st == "BLOCKED":
-                details = f"[red]{t.get('blocking_reason', 'Blocked')}[/red]"
+                details = Text(str(t.get("blocking_reason", "Blocked")), style=CORAL)
             else:
                 tf = t.get("target_files", [])
-                details = ", ".join(tf[:3]) if tf else (t.get("title", "")[:50])
+                details = Text(", ".join(tf[:3]) if tf else (t.get("title", "")[:50]), style=GRAY)
 
-            tasks_table.add_row(t_id, prio, risk, f"[{st_style}]{st}[/{st_style}]", att, details)
+            tasks_table.add_row(t_id, prio, Text(str(risk), style=_risk_style(risk)), Text(st, style=status_styles.get(st, WHITE)), att, details)
 
-    # Worker slots
-    workers_table = Table(box=None, expand=True, padding=(0, 1), show_header=False)
-    workers_table.add_column("Slot", style="bold", width=8)
-    workers_table.add_column("Icon", width=3)
-    workers_table.add_column("Description", style="dim")
+    workers_table = Table(box=None, expand=True, padding=(0, 1), show_header=False, pad_edge=False)
+    workers_table.add_column("slot", style=WHITE, width=6)
+    workers_table.add_column("icon", width=2)
+    workers_table.add_column("desc", style=GRAY)
 
     active_task = None
     for t in state.cached_tasks.values():
@@ -435,170 +467,154 @@ def render_operations(state: DashboardState) -> Panel:
             active_task = t
             break
 
-    workers_table.add_row("MACRO", "[green]●[/green]", "scheduler  cap 1/1  concurrency=single-writer  halt: -")
+    on, off = Text("●", style=MINT), Text("○", style=GRAY)
+    workers_table.add_row("macro", on, "scheduler  cap 1/1  single-writer  halt: -")
     if active_task:
-        w1_desc = f"Task {active_task.get('task_id')}  stage={active_task.get('status')}  attempt={active_task.get('attempts', 1)}"
-        workers_table.add_row("W1", "[green]●[/green]", w1_desc)
+        w1_desc = f"task {active_task.get('task_id')}  stage={active_task.get('status')}  attempt={active_task.get('attempts', 1)}"
+        workers_table.add_row("w1", on, w1_desc)
     else:
-        workers_table.add_row("W1", "[dim]○[/dim]", "idle  (waiting for eligible claim)")
+        workers_table.add_row("w1", off, "idle  (waiting for eligible claim)")
+    workers_table.add_row("rev", off, "reviewer idle (invoked for qualifying risk/safeguard gates)")
 
-    rev_desc = "reviewer idle (invoked for qualifying risk/safeguard gates)"
-    workers_table.add_row("REV", "[dim]○[/dim]", rev_desc)
-
-    content = Group(tasks_table, Text("─" * 40, style="dim"), workers_table)
-    return Panel(content, title="[bold]OPERATIONS (Tasks & Workers)[/bold]", border_style="dim", height=11)
+    return _section("operations", Group(tasks_table, _rule(), workers_table))
 
 
-def render_approvals(state: DashboardState) -> Panel:
+def render_approvals(state: DashboardState) -> Group:
     if not state.pending_requests:
-        content = Group(
-            Text("\n No pending permission requests awaiting operator approval.\n", style="dim green"),
-            Text(" Tasks requiring authorization will register binding requests here automatically.", style="dim"),
+        body = Group(
+            Text("\nNo pending permission requests.", style=WHITE),
+            Text("Tasks requiring authorization register binding requests here automatically.", style=GRAY),
         )
-        return Panel(content, title="[bold]PENDING APPROVAL REQUESTS (0)[/bold]", border_style="dim", height=11)
+        return _section("approvals", body, "0 pending")
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
-    table.add_column("Sel", width=3, style="bold cyan")
-    table.add_column("Request ID", width=22, style="dim")
-    table.add_column("Task", width=8, style="dim")
-    table.add_column("Risk", width=6)
-    table.add_column("Operation", width=18)
-    table.add_column("Patch SHA", width=10, style="dim")
-    table.add_column("Scope / Reason", style="dim")
+    table = _table()
+    table.add_column("", width=1, style=PURPLE)
+    table.add_column("request", width=22)
+    table.add_column("task", width=8)
+    table.add_column("risk", width=6)
+    table.add_column("operation", width=18)
+    table.add_column("patch", width=10)
+    table.add_column("scope / reason")
 
     for idx, req in enumerate(state.pending_requests[:4]):
         is_sel = (idx == state.selected_request_idx)
-        sel_marker = ">" if is_sel else " "
-        row_style = "bold white" if is_sel else ""
         patch_disp = (req.patch_sha256[:8] + "..") if req.patch_sha256 else "N/A"
         scope_disp = f"[{req.scope}] {req.reason}"[:50]
-
         table.add_row(
-            sel_marker,
-            req.request_id,
-            req.task_id,
-            req.risk,
-            req.operation,
-            patch_disp,
-            scope_disp,
-            style=row_style,
+            ">" if is_sel else "",
+            req.request_id, req.task_id, Text(str(req.risk), style=_risk_style(req.risk)),
+            req.operation, patch_disp, scope_disp,
+            style=WHITE if is_sel else GRAY,
         )
 
-    # Selected request detail card
     sel_req = state.pending_requests[state.selected_request_idx]
-    detail_lines = Text()
-    detail_lines.append(f" Selected: {sel_req.request_id} ", style="bold cyan")
-    detail_lines.append(f"| Task: {sel_req.task_id} | Op: {sel_req.operation} | Risk: {sel_req.risk}\n", style="white")
     patch_s = sel_req.patch_sha256 or "N/A"
     base_s = sel_req.baseline_commit or "N/A"
     ver_s = sel_req.verification_sha256 or "N/A"
-    detail_lines.append(f"   Bindings: patch={patch_s[:10]}... base={base_s[:10]}... ver={ver_s[:10]}...\n", style="dim")
-    detail_lines.append(f"   Scope: {sel_req.scope} | Reason: {sel_req.reason}", style="dim")
+    detail = Text()
+    detail.append(f"{sel_req.request_id}", style=ACCENT)
+    detail.append(f"  task {sel_req.task_id}  op {sel_req.operation}  risk {sel_req.risk}\n", style=WHITE)
+    detail.append(f"patch={patch_s[:10]}..  base={base_s[:10]}..  ver={ver_s[:10]}..\n", style=GRAY)
+    detail.append(f"scope: {sel_req.scope}  reason: {sel_req.reason}", style=GRAY)
 
-    content = Group(table, Text("─" * 40, style="dim"), detail_lines)
-    return Panel(content, title=f"[bold]PENDING APPROVAL REQUESTS ({len(state.pending_requests)})[/bold]", border_style="cyan", height=11)
+    return _section("approvals", Group(table, _rule(), detail), f"{len(state.pending_requests)} pending")
 
 
-def render_merges(state: DashboardState) -> Panel:
+def render_merges(state: DashboardState) -> Group:
     merges_info = state.cached_merges.get("merges", [])
     cleanup_info = state.cached_merges.get("cleanup", [])
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
-    table.add_column("Integration Branch", width=26, style="bold")
-    table.add_column("Task", width=8, style="dim")
-    table.add_column("Base..Head", width=16, style="dim")
-    table.add_column("Ahead", width=6)
-    table.add_column("Merge Status", width=13)
-    table.add_column("Worktree", width=9)
-    table.add_column("Actionable Blockers", style="dim")
+    table = _table()
+    table.add_column("branch", width=26, style=WHITE)
+    table.add_column("task", width=8, style=GRAY)
+    table.add_column("base..head", width=16, style=GRAY)
+    table.add_column("ahead", width=6, style=WHITE)
+    table.add_column("merge", width=13)
+    table.add_column("worktree", width=9)
+    table.add_column("blockers", style=GRAY)
 
     if not merges_info:
-        table.add_row("-", "-", "-", "-", "NONE", "-", "No active integration branches found")
+        table.add_row("-", "-", "-", "-", Text("NONE", style=GRAY), "-", "No active integration branches found")
     else:
         for m in merges_info[:3]:
             st = m.get("merge_status", "PENDING")
-            st_col = "green" if st == "MERGED" else "yellow"
-            wt_col = "green" if m.get("worktree") == "CLEAN" else ("red" if m.get("worktree") == "DIRTY" else "dim")
-            blockers = ", ".join(m.get("blockers", [])) or "None"
+            wt = m.get("worktree", "-")
+            blockers = ", ".join(m.get("blockers", [])) or "none"
             table.add_row(
                 m.get("branch", "?"),
                 m.get("task_id", "-"),
                 f"{m.get('base', '-')}..{m.get('head', '-')}",
                 str(m.get("ahead", 0)),
-                f"[{st_col}]{st}[/{st_col}]",
-                f"[{wt_col}]{m.get('worktree', '-')}[/{wt_col}]",
+                Text(st, style=MINT if st == "MERGED" else AMBER),
+                Text(str(wt), style=CORAL if wt == "DIRTY" else (MINT if wt == "CLEAN" else GRAY)),
                 blockers,
             )
 
-    cleanup_text = Text()
     safe_cleanup_count = sum(1 for c in cleanup_info if c.get("eligible"))
-    cleanup_text.append(f" Cleanup Preview: {len(cleanup_info)} workspaces inspected ({safe_cleanup_count} safe to clean). ", style="dim")
-    cleanup_text.append("[Strictly read-only; deletion requires explicit operator CLI --cleanup <task> --authorize]", style="dim italic")
+    cleanup_text = Text()
+    cleanup_text.append(f"cleanup preview: {len(cleanup_info)} inspected, {safe_cleanup_count} safe. ", style=WHITE)
+    cleanup_text.append("read-only; deletion requires CLI --cleanup <task> --authorize", style=GRAY)
 
-    content = Group(table, Text("─" * 40, style="dim"), cleanup_text)
-    return Panel(content, title="[bold]PENDING MERGES & CLEANUP PREVIEW[/bold]", border_style="dim", height=11)
+    return _section("merges", Group(table, _rule(), cleanup_text))
 
 
-def render_recovery(state: DashboardState) -> Panel:
+def render_recovery(state: DashboardState) -> Group:
     recovery_tasks = state.cached_recovery
 
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
-    table.add_column("Task ID", width=9, style="dim")
-    table.add_column("Stage / Interruption", width=22)
-    table.add_column("Worktree", width=9)
-    table.add_column("Actionable Blocker", width=34, style="yellow")
-    table.add_column("Next Safe Manual Action", style="white")
+    table = _table()
+    table.add_column("task", width=9, style=GRAY)
+    table.add_column("stage", width=22, style=WHITE)
+    table.add_column("worktree", width=9, style=WHITE)
+    table.add_column("blocker", width=34, style=CORAL)
+    table.add_column("next safe action", style=WHITE)
 
     if not recovery_tasks:
-        table.add_row("-", "-", "-", "No tasks in RECOVERY_REQUIRED status", "All tasks healthy")
+        table.add_row("-", "-", "-", "No tasks in RECOVERY_REQUIRED", "All tasks healthy")
     else:
         for r in recovery_tasks[:3]:
             wt_desc = "DIRTY" if r.get("is_dirty") else ("EXISTS" if r.get("worktree_exists") else "MISSING")
-            blocker = "; ".join(r.get("blockers", []))[:33]
             table.add_row(
                 r.get("task_id", "?"),
                 r.get("stage", "UNKNOWN"),
-                wt_desc,
-                blocker,
+                Text(wt_desc, style=CORAL if wt_desc == "DIRTY" else (AMBER if wt_desc == "MISSING" else WHITE)),
+                "; ".join(r.get("blockers", []))[:33],
                 r.get("next_safe_action", "")[:45],
             )
 
-    invariant_text = Text(
-        " [INVARIANT] Tasks in RECOVERY_REQUIRED remain strictly blocked. Automated bypass is forbidden. "
-        "Review diagnostics and run 'coordinator --reconcile' to synchronize.",
-        style="dim red",
+    invariant = Text(
+        "RECOVERY_REQUIRED tasks stay blocked; automated bypass is forbidden. "
+        "Review diagnostics, then run 'coordinator --reconcile'.",
+        style=GRAY,
     )
-    content = Group(table, Text("─" * 40, style="dim"), invariant_text)
-    return Panel(content, title=f"[bold red]RECOVERY REQUIRED TASKS ({len(recovery_tasks)})[/bold red]", border_style="red", height=11)
+    return _section("recovery", Group(table, _rule(), invariant), f"{len(recovery_tasks)} blocked")
 
 
-def render_trace(state: DashboardState, max_rows: int = 14) -> Panel:
+def render_trace(state: DashboardState, max_rows: int = 14) -> Group:
     filtered = state.get_filtered_events()
-    table = Table(box=None, expand=True, padding=(0, 1), show_header=True, header_style="bold")
-    table.add_column("Time", width=12, style="dim")
-    table.add_column("Sev", width=5)
-    table.add_column("Provenance", width=11)
-    table.add_column("Source → Dest", width=22)
-    table.add_column("Summary", style="white")
-    table.add_column("Usage / Tokens", width=18, style="dim")
+    table = _table()
+    table.add_column("time", width=12, style=GRAY)
+    table.add_column("sev", width=5)
+    table.add_column("prov", width=10, style=GRAY)
+    table.add_column("route", width=22, style=GRAY)
+    table.add_column("summary", style=WHITE)
+    table.add_column("usage", width=18, style=GRAY)
 
     if not filtered:
-        table.add_row("--:--:--.---", "INFO", "[captured]", "-", "No trace events matching filter", "-")
+        table.add_row("--:--:--.---", Text("INFO", style=GRAY), "captured", "-", "No trace events matching filter", "-")
     else:
         total = len(filtered)
         if state.follow:
-            start_idx = max(0, total - max_rows)
-            slice_evs = filtered[start_idx:]
+            slice_evs = filtered[max(0, total - max_rows):]
         else:
             offset = max(0, min(state.scroll_offset, max(0, total - max_rows)))
             slice_evs = filtered[offset : offset + max_rows]
 
-        sev_colors = {
-            "DEBUG": "dim",
-            "INFO": "green",
-            "WARN": "yellow",
-            "ERROR": "bold red",
-            "CRIT": "bold magenta",
+        sev_styles = {
+            "DEBUG": GRAY,
+            "INFO": GRAY,
+            "WARN": AMBER,
+            "ERROR": f"bold {CORAL}",
+            "CRIT": f"bold {WHITE} on {CORAL}",
         }
 
         for ev in slice_evs:
@@ -613,191 +629,155 @@ def render_trace(state: DashboardState, max_rows: int = 14) -> Panel:
                 time_display = ts_str[:12] or "--:--:--.---"
 
             sev = ev.severity.upper() if ev.severity else "INFO"
-            sev_col = sev_colors.get(sev, "white")
-            prov = f"[{ev.provenance}]" if ev.provenance else "[captured]"
+            prov = ev.provenance or "captured"
             sd = f"{ev.sender or 'sys'} → {ev.recipient or '*'}"[:22]
 
             summary = ev.summary or ""
             if ev.payload and "body_ref" in ev.payload:
-                summary += " [i]"
+                summary += " ›"
 
             usage = ev.usage if isinstance(ev.usage, dict) else {}
             u_src = usage.get("source", "unknown")
             if u_src == "provider":
-                inp = usage.get("input_tokens")
-                out = usage.get("output_tokens")
-                usage_str = f"in={inp or '?'} out={out or '?'}"
+                usage_str = f"in={usage.get('input_tokens') or '?'} out={usage.get('output_tokens') or '?'}"
             elif u_src == "unknown":
                 usage_str = "not reported"
             else:
                 usage_str = u_src
-
             if ev.latency_ms is not None:
                 usage_str += f" ({ev.latency_ms / 1000.0:.1f}s)"
 
-            table.add_row(
-                time_display,
-                f"[{sev_col}]{sev}[/{sev_col}]",
-                f"[dim]{prov}[/dim]",
-                sd,
-                summary,
-                usage_str,
-            )
+            table.add_row(time_display, Text(sev, style=sev_styles.get(sev, WHITE)), prov, sd, summary, usage_str)
 
     f_str = f"task={state.filters.task_id or '*'} worker={state.filters.worker_id or '*'} cat={state.filters.category or '*'} sev>={state.filters.min_severity}"
     if state.filters.search_query:
         f_str += f" search='{state.filters.search_query}'"
 
-    follow_mode = "[bold green]follow ▶[/bold green]" if state.follow else "[yellow]paused (scroll)[/yellow]"
-    title = f"TRACE  {follow_mode}  filter: {f_str} ({len(filtered)}/{len(state.events)} events)"
-    return Panel(table, title=title, border_style="dim")
+    head = Text()
+    head.append("trace", style=ACCENT)
+    head.append("  follow" if state.follow else "  scroll", style=MINT if state.follow else AMBER)
+    head.append(f"  {f_str}  {len(filtered)}/{len(state.events)}", style=GRAY)
+    return Group(head, table)
 
 
-def render_footer(state: DashboardState) -> Panel:
-    lag_str = f"lag: {state.lag_sec:.1f}s"
-    view_str = "PAUSED" if state.paused else ("LIVE" if state.follow else "SCROLL")
-    footer_text = Text()
+def render_footer(state: DashboardState) -> Group:
+    lag_str = f"lag {state.lag_sec:.1f}s"
+    view_str = "paused" if state.paused else ("live" if state.follow else "scroll")
+    t = Text(no_wrap=True, overflow="ellipsis")
+
+    def key(k: str, label: str) -> None:
+        t.append(k, style=WHITE)
+        t.append(f" {label}   ", style=GRAY)
 
     if state.modal_mode == "CONFIRM_APPROVE":
-        footer_text.append("[y / Enter] ", style="bold green")
-        footer_text.append("Confirm Authorize  ", style="white")
-        footer_text.append("[n / Esc / q] ", style="bold red")
-        footer_text.append("Cancel Decision  ", style="white")
+        key("y/enter", "confirm approve")
+        key("n/esc/q", "cancel")
     elif state.modal_mode == "CONFIRM_DENY":
-        footer_text.append("[y / Enter] ", style="bold red")
-        footer_text.append("Confirm Reject  ", style="white")
-        footer_text.append("[n / Esc / q] ", style="bold yellow")
-        footer_text.append("Cancel Decision  ", style="white")
+        key("y/enter", "confirm reject")
+        key("n/esc/q", "cancel")
     elif state.modal_mode in ("INSPECT", "MESSAGE"):
-        footer_text.append("[Esc / Enter / q] ", style="bold cyan")
-        footer_text.append("Close Popup  ", style="white")
-    elif state.operate_mode:
-        footer_text.append("[a]", style="bold green")
-        footer_text.append("pprove  ", style="dim")
-        footer_text.append("[d]", style="bold red")
-        footer_text.append("eny  ", style="dim")
-        footer_text.append("[i]", style="bold cyan")
-        footer_text.append("nspect  ", style="dim")
-        footer_text.append("[Tab/1-4]", style="bold cyan")
-        footer_text.append("view  ", style="dim")
-        footer_text.append("[f]", style="bold cyan")
-        footer_text.append("ollow  ", style="dim")
-        footer_text.append("[/]", style="bold cyan")
-        footer_text.append("search  ", style="dim")
-        footer_text.append("[q]", style="bold cyan")
-        footer_text.append("quit  │  ", style="dim")
-        footer_text.append("MODE: OPERATE  ", style="bold yellow")
-        footer_text.append(f"{view_str}  {lag_str}", style="dim")
+        key("esc/enter/q", "close")
     else:
-        footer_text.append("[space]", style="bold cyan")
-        footer_text.append("pause  ", style="dim")
-        footer_text.append("[f]", style="bold cyan")
-        footer_text.append("ollow  ", style="dim")
-        footer_text.append("[/]", style="bold cyan")
-        footer_text.append("search  ", style="dim")
-        footer_text.append("[i]", style="bold cyan")
-        footer_text.append("nspect  ", style="dim")
-        footer_text.append("[Tab/1-4]", style="bold cyan")
-        footer_text.append("view  ", style="dim")
-        footer_text.append("[0]", style="bold cyan")
-        footer_text.append("clear  ", style="dim")
-        footer_text.append("[q]", style="bold cyan")
-        footer_text.append("quit  │  ", style="dim")
-        footer_text.append("MODE: OBSERVE  ", style="bold green")
-        footer_text.append(f"{view_str}  {lag_str}", style="dim")
+        if state.operate_mode:
+            key("a", "approve")
+            key("d", "deny")
+        else:
+            key("space", "pause")
+        key("i", "inspect")
+        key("tab/1-4", "view")
+        key("f", "follow")
+        if not state.operate_mode:
+            key("0", "clear")
+        key("q", "quit")
+        t.append("operate" if state.operate_mode else "observe", style=f"bold {AMBER}" if state.operate_mode else GRAY)
+        t.append(f"  {view_str}  {lag_str}", style=GRAY)
 
     if state.status_banner:
-        footer_text.append(f"  [{state.status_banner}]", style="bold magenta")
+        t.append(f"  {state.status_banner}", style=f"bold {AMBER}")
 
-    return Panel(footer_text, style="white", border_style="dim", height=3)
+    return Group(_rule(), t)
+
+
+def _popup(title: str, body: Text, border: str = PURPLE) -> Panel:
+    return Panel(body, title=Text(title, style=f"bold {border}"), title_align="left",
+                 box=box.ROUNDED, border_style=border, padding=(1, 2))
 
 
 def render_confirm_approve_popup(state: DashboardState) -> Panel:
     req = state.modal_req
     text = Text()
-    text.append("You are about to authorize a consequential maintenance operation.\n\n", style="bold yellow")
+    text.append("Authorize a consequential maintenance operation.\n\n", style=WHITE)
     if req:
-        text.append(f"  Operation   : {req.operation}\n", style="bold white")
-        text.append(f"  Affected Task: {req.task_id}\n", style="bold white")
-        text.append(f"  Request ID  : {req.request_id}\n", style="white")
-        text.append(f"  Risk Tier   : {req.risk}\n", style="white")
-        text.append(f"  Patch SHA   : {req.patch_sha256 or 'N/A'}\n", style="cyan")
-        text.append(f"  Baseline    : {req.baseline_commit or 'N/A'}\n", style="dim")
-        text.append(f"  Verify SHA  : {req.verification_sha256 or 'N/A'}\n", style="dim")
-        text.append(f"  Exact Scope : {req.scope}\n", style="dim")
-        text.append(f"  Reason      : {req.reason}\n\n", style="dim")
-    text.append("Exact cryptographic bindings will be revalidated upon confirmation.\n", style="italic")
-    text.append("Press [Y] or [Enter] to CONFIRM  │  Press [N], [Esc] or [q] to CANCEL", style="bold green")
-
-    return Panel(text, title="[bold yellow]CONFIRM OPERATOR APPROVAL[/bold yellow]", border_style="yellow")
+        for label, value, style in (
+            ("operation", req.operation, WHITE),
+            ("task", req.task_id, WHITE),
+            ("request", req.request_id, GRAY),
+            ("risk", req.risk, WHITE),
+            ("patch sha", req.patch_sha256 or "N/A", PURPLE),
+            ("baseline", req.baseline_commit or "N/A", GRAY),
+            ("verify sha", req.verification_sha256 or "N/A", GRAY),
+            ("scope", req.scope, GRAY),
+            ("reason", req.reason, GRAY),
+        ):
+            text.append(f"{label:<11}", style=GRAY)
+            text.append(f"{value}\n", style=style)
+        text.append("\n")
+    text.append("Bindings are revalidated on confirmation.\n\n", style=GRAY)
+    text.append("y / enter", style=f"bold {MINT}")
+    text.append(" confirm   ", style=GRAY)
+    text.append("n / esc / q", style=WHITE)
+    text.append(" cancel", style=GRAY)
+    return _popup("confirm approval", text, AMBER)
 
 
 def render_confirm_deny_popup(state: DashboardState) -> Panel:
     req = state.modal_req
     text = Text()
-    text.append("You are about to reject this permission request.\n\n", style="bold red")
+    text.append("Reject this permission request.\n\n", style=WHITE)
     if req:
-        text.append(f"  Operation   : {req.operation}\n", style="bold white")
-        text.append(f"  Affected Task: {req.task_id}\n", style="bold white")
-        text.append(f"  Request ID  : {req.request_id}\n\n", style="white")
-    text.append("An auditable rejection record will be preserved in approvals.json and the event ledger.\n", style="italic")
-    text.append("Press [Y] or [Enter] to CONFIRM REJECTION  │  Press [N], [Esc] or [q] to CANCEL", style="bold red")
-
-    return Panel(text, title="[bold red]CONFIRM OPERATOR REJECTION[/bold red]", border_style="red")
+        for label, value in (("operation", req.operation), ("task", req.task_id), ("request", req.request_id)):
+            text.append(f"{label:<11}", style=GRAY)
+            text.append(f"{value}\n", style=WHITE)
+        text.append("\n")
+    text.append("An auditable rejection is kept in approvals.json and the event ledger.\n\n", style=GRAY)
+    text.append("y / enter", style=f"bold {CORAL}")
+    text.append(" confirm   ", style=GRAY)
+    text.append("n / esc / q", style=WHITE)
+    text.append(" cancel", style=GRAY)
+    return _popup("confirm rejection", text, CORAL)
 
 
 def render_inspect_popup(state: DashboardState) -> Panel:
-    content = Text(state.inspection_content or "No body or payload content available.", style="white")
-    return Panel(
-        content,
-        title=f"[bold cyan]INSPECT: {state.inspection_title}[/bold cyan] ([dim]Press Esc/i/q to return[/dim])",
-        border_style="bold cyan",
-    )
+    content = Text(state.inspection_content or "No body or payload content available.", style=WHITE)
+    return _popup(f"inspect  {state.inspection_title}", content)
 
 
 def render_message_popup(state: DashboardState) -> Panel:
-    content = Text(f"\n{state.inspection_content}\n", style="bold white")
-    return Panel(
-        content,
-        title=f"[bold]{state.inspection_title}[/bold] ([dim]Press Esc/Enter to dismiss[/dim])",
-        border_style="cyan",
-    )
+    content = Text(state.inspection_content, style=WHITE)
+    return _popup(state.inspection_title or "message", content)
 
 
 def render_dashboard(state: DashboardState, console: Console) -> Layout:
     layout = Layout()
 
-    # Active modal overlay
+    popup: Optional[Panel] = None
     if state.modal_mode == "CONFIRM_APPROVE":
-        layout.split_column(
-            Layout(render_header(state), size=3),
-            Layout(render_confirm_approve_popup(state)),
-            Layout(render_footer(state), size=3),
-        )
-        return layout
+        popup = render_confirm_approve_popup(state)
     elif state.modal_mode == "CONFIRM_DENY":
-        layout.split_column(
-            Layout(render_header(state), size=3),
-            Layout(render_confirm_deny_popup(state)),
-            Layout(render_footer(state), size=3),
-        )
-        return layout
+        popup = render_confirm_deny_popup(state)
     elif state.modal_mode == "MESSAGE":
-        layout.split_column(
-            Layout(render_header(state), size=3),
-            Layout(render_message_popup(state)),
-            Layout(render_footer(state), size=3),
-        )
-        return layout
+        popup = render_message_popup(state)
     elif state.inspecting or state.modal_mode == "INSPECT":
+        popup = render_inspect_popup(state)
+
+    if popup is not None:
         layout.split_column(
             Layout(render_header(state), size=3),
-            Layout(render_inspect_popup(state)),
-            Layout(render_footer(state), size=3),
+            Layout(popup),
+            Layout(render_footer(state), size=2),
         )
         return layout
 
-    # Tab selection
     if state.active_tab == "APPROVALS":
         main_panel = render_approvals(state)
     elif state.active_tab == "MERGES":
@@ -809,9 +789,10 @@ def render_dashboard(state: DashboardState, console: Console) -> Layout:
 
     layout.split_column(
         Layout(render_header(state), size=3),
-        Layout(main_panel, size=11),
+        Layout(main_panel, size=10),
+        Layout(_rule(), size=1),
         Layout(render_trace(state), ratio=1),
-        Layout(render_footer(state), size=3),
+        Layout(render_footer(state), size=2),
     )
     return layout
 
@@ -1116,7 +1097,7 @@ def run_tui(
     except KeyboardInterrupt:
         pass
 
-    console.print("[dim]Autophage TUI exited. Background coordinator and worktrees preserved.[/dim]")
+    console.print("Autophage TUI exited. Background coordinator and worktrees preserved.", style=GRAY)
     return 0
 
 

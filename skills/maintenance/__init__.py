@@ -27,6 +27,12 @@ from .ledger import (
     TaskLedger,
     UnknownDependencyError,
 )
+from .manifest import (
+    evaluate_risk_approval,
+    ingest_backlog_workflow,
+    manifest_to_contracts,
+    parse_markdown_backlog,
+)
 from .models import (
     BudgetState,
     CheckpointRecord,
@@ -168,6 +174,10 @@ __all__ = [
     "ContextCache",
     "CopilotReviewerAdapter",
     "CoordinatorAPI",
+    "evaluate_risk_approval",
+    "ingest_backlog_workflow",
+    "manifest_to_contracts",
+    "parse_markdown_backlog",
     "CorruptStateError",
     "DEFAULT_TIER_LIMITS",
     "DependencyCycleError",

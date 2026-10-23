@@ -27,7 +27,7 @@ try:
     from .ledger import TaskLedger
     from .hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from .models import CheckpointRecord, EvidenceRecord, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
-    from .quality import QualityGateEngine, QualityReport, freeze_task_tests
+    from .quality import QualityGateEngine, QualityReport, freeze_task_tests, is_valid_defect_baseline
     from .reviewer import (
         FakeReviewerAdapter,
         ReviewPolicy,
@@ -47,7 +47,7 @@ except ImportError:
     from ledger import TaskLedger
     from hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from models import CheckpointRecord, EvidenceRecord, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
-    from quality import QualityGateEngine, QualityReport, freeze_task_tests
+    from quality import QualityGateEngine, QualityReport, freeze_task_tests, is_valid_defect_baseline
     from reviewer import (
         FakeReviewerAdapter,
         ReviewPolicy,
@@ -125,6 +125,7 @@ class SingleTaskOrchestrator:
         local_adapter: Optional[AgentAdapter] = None,
         safeguard_scanner: Optional[ReviewerSafeguardScanner] = None,
         approval_manager: Optional[TerminalApprovalManager] = None,
+        risk_policy: str = "manual",
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.store = store
@@ -145,6 +146,7 @@ class SingleTaskOrchestrator:
         self.router = router
         self.concurrency_guard = concurrency_guard
         self.safeguard_scanner = safeguard_scanner or ReviewerSafeguardScanner()
+        self.risk_policy = risk_policy
         if approval_manager is not None:
             self.approval_manager = approval_manager
         else:
@@ -438,14 +440,56 @@ class SingleTaskOrchestrator:
                     message=f"Task '{task.task_id}' is BLOCKED: max attempts reached.",
                 )
 
-            # 3. Check authorization for real execution
-            if not dry_run and not authorized:
+            # 3. Check authorization for real execution under explicit risk policy
+            effective_authorized = authorized
+            if not dry_run and self.risk_policy == "auto-low-medium":
+                try:
+                    from .manifest import evaluate_risk_approval
+                except ImportError:
+                    from manifest import evaluate_risk_approval
+                can_auto, policy_msg = evaluate_risk_approval(task.risk, risk_policy=self.risk_policy)
+                if can_auto:
+                    effective_authorized = True
+                    task.history.append(
+                        EvidenceRecord(
+                            timestamp=utc_now_iso(),
+                            stage="RISK_APPROVAL_POLICY",
+                            details=f"Execution gate auto-approved by policy: {policy_msg}",
+                            success=True,
+                        )
+                    )
+                else:
+                    # HIGH, VERY_HIGH, or uncertain risk: NEVER auto-approve
+                    effective_authorized = False
+                    reason = f"Execution held: {policy_msg}"
+                    task.failure_reason = reason
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                    _transition(
+                        TaskStatus.NEEDS_APPROVAL,
+                        stage="RISK_APPROVAL_POLICY",
+                        details={"risk_policy": self.risk_policy, "risk": task.risk.value if hasattr(task.risk, "value") else str(task.risk)},
+                        event_type="APPROVAL_HELD_BY_POLICY",
+                        blocking_reason=policy_msg,
+                        idempotency_key=f"risk-policy-hold:{task.task_id}",
+                    )
+                    return ExecutionSummary(
+                        task_id=task.task_id,
+                        success=False,
+                        final_status=TaskStatus.NEEDS_APPROVAL,
+                        dry_run=dry_run,
+                        authorized=False,
+                        duration_sec=time.monotonic() - start_time,
+                        message=reason,
+                    )
+
+            if not dry_run and not effective_authorized:
                 return ExecutionSummary(
                     task_id=task.task_id,
                     success=False,
                     final_status=task.status,
                     dry_run=dry_run,
-                    authorized=authorized,
+                    authorized=effective_authorized,
                     duration_sec=time.monotonic() - start_time,
                     message="Execution halted: Operator authorization (--authorize) required for real execution.",
                 )
@@ -632,42 +676,38 @@ class SingleTaskOrchestrator:
 
             if task.is_defect_task():
                 # Defect task requires baseline failure to reproduce defect
-                if baseline_gate_res.passed is True:
-                    reason = "test doesn't prove the defect: baseline tests passed before patch was applied"
+                is_valid, verif_msg = is_valid_defect_baseline(baseline_gate_res.details)
+                if not is_valid:
+                    reason = f"test doesn't prove the defect: {verif_msg}"
                     task.failure_reason = reason
                     if task.workspace:
                         task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+
+                    # Register a durable PermissionRequest in approvals.json so hold can be audited/approved
+                    if self.approval_manager:
+                        try:
+                            req_id = f"req-{task.task_id}-baseline-review"
+                            if req_id not in self.approval_manager._requests:
+                                self.approval_manager.create_request(
+                                    task_id=task.task_id,
+                                    risk=task.risk.value if hasattr(task.risk, "value") else str(task.risk),
+                                    operation="baseline_verification",
+                                    target=", ".join(task.test_targets or task.target_files or []),
+                                    scope=f"baseline defect reproduction review for {task.task_id}: {verif_msg}",
+                                    reason=reason,
+                                    request_id=req_id,
+                                    lock_held=acquire_coarse_lock,
+                                )
+                        except Exception as req_err:
+                            logger.warning("Failed to record baseline approval request for %s: %s", task.task_id, req_err)
+
                     _transition(
                         TaskStatus.NEEDS_APPROVAL,
                         stage="BASELINE_VERIFICATION",
-                        details={"baseline_verification": baseline_evidence},
+                        details={"baseline_verification": baseline_evidence, "rejection_reason": verif_msg},
                         event_type="BASELINE_VERIFICATION_INCONCLUSIVE",
                         blocking_reason=reason,
-                        idempotency_key=f"baseline-verif-pass:{task.task_id}",
-                    )
-                    return _return_summary(ExecutionSummary(
-                        task_id=task.task_id,
-                        success=False,
-                        final_status=TaskStatus.NEEDS_APPROVAL,
-                        dry_run=False,
-                        authorized=authorized,
-                        duration_sec=time.monotonic() - start_time,
-                        worktree_path=str(worktree_path),
-                        message=f"Task '{task.task_id}' halted: {reason}. Human approval required.",
-                    ))
-                elif baseline_gate_res.details.get("exit_code") in (-1, 5) or not baseline_gate_res.details.get("test_results"):
-                    # Test runner failed or no tests collected
-                    reason = f"test doesn't prove the defect: target cannot be exercised ({baseline_gate_res.message})"
-                    task.failure_reason = reason
-                    if task.workspace:
-                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                    _transition(
-                        TaskStatus.NEEDS_APPROVAL,
-                        stage="BASELINE_VERIFICATION",
-                        details={"baseline_verification": baseline_evidence},
-                        event_type="BASELINE_VERIFICATION_INCONCLUSIVE",
-                        blocking_reason=reason,
-                        idempotency_key=f"baseline-verif-unexercised:{task.task_id}",
+                        idempotency_key=f"baseline-verif-invalid:{task.task_id}",
                     )
                     return _return_summary(ExecutionSummary(
                         task_id=task.task_id,
