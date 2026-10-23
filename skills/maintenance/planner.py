@@ -9,35 +9,37 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 import time
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Optional
 
 try:
-    from .models import PlanProposal, TaskRisk, TaskPriority, utc_now_iso
+    from .models import PlanProposal, utc_now_iso
     from .task_contract import (
-        CONTRACT_SCHEMA_VERSION,
-        TaskContractValidationError,
         TaskContractValidator,
         ALLOWED_SUBSYSTEM_ROOTS,
-        FORBIDDEN_TARGET_PREFIXES,
-        FORBIDDEN_TARGET_EXACT,
     )
 except ImportError:
-    from models import PlanProposal, TaskRisk, TaskPriority, utc_now_iso
+    from models import PlanProposal, utc_now_iso
     from task_contract import (
-        CONTRACT_SCHEMA_VERSION,
-        TaskContractValidationError,
         TaskContractValidator,
         ALLOWED_SUBSYSTEM_ROOTS,
-        FORBIDDEN_TARGET_PREFIXES,
-        FORBIDDEN_TARGET_EXACT,
     )
+
+try:
+    from .trace import TraceEvent, emit as trace_emit, write_trace_body
+except ImportError:
+    try:
+        from trace import TraceEvent, emit as trace_emit, write_trace_body
+    except ImportError:
+        def trace_emit(*args, **kwargs): pass
+        def write_trace_body(*args, **kwargs): return None, False, 0
+        class TraceEvent:
+            def __init__(self, **kwargs): pass
 
 logger = logging.getLogger("maya.maintenance.planner")
 
@@ -59,10 +61,12 @@ class PlannerConfig:
     base_url: str = "http://127.0.0.1:11434"
     temperature: float = 0.1
     max_context_tokens: int = 4096
+    num_ctx: int = 4096  # Explicit Ollama context window size (maps directly to options.num_ctx)
     max_completion_tokens: int = 2048
     timeout_seconds: float = 120.0
     default_max_tasks: int = 5
     hard_max_tasks: int = 8
+    truncation_threshold: float = 0.95  # Reject if prompt_eval_count reaches this ratio of num_ctx
 
 
 class PlannerPromptEngine:
@@ -85,7 +89,7 @@ class PlannerPromptEngine:
                     sample = files[:8]
                     more = f" ... (+{len(files) - 8} more)" if len(files) > 8 else ""
                     summary_lines.append(f"Subsystem '{sub}': {len(files)} files: {', '.join(sample)}{more}")
-        except Exception as e:
+        except Exception:
             summary_lines.append(f"Subsystems: {', '.join(sorted(ALLOWED_SUBSYSTEM_ROOTS))}")
 
         full_summary = "\n".join(summary_lines)
@@ -100,11 +104,13 @@ class PlannerPromptEngine:
         repo_root: Path,
         max_tasks: int = 5,
         known_task_ids: set[str] | None = None,
+        repair_memory_context: str = "",
     ) -> str:
         """Construct the prompt enforcing schema v1.0.0, bounded task counts, and test policy."""
         subsystem_summary = cls.collect_repository_summary(repo_root)
         task_cap = min(max_tasks, 8)
         existing_info = f"Existing Task IDs: {', '.join(sorted(known_task_ids))}" if known_task_ids else "No prior tasks."
+        mem_block = f"\n{repair_memory_context.strip()}\n" if repair_memory_context.strip() else ""
 
         return f"""You are the MayaVE Maintenance Planner (Milestone P5).
 Your objective is to decompose an explicit maintenance objective into a structured, dependency-ordered task plan.
@@ -137,7 +143,7 @@ Your objective is to decompose an explicit maintenance objective into a structur
 7. Test Targets: All test files MUST strictly reside under '.maya/tests/'.
 8. Dependencies: Must form an acyclic directed graph (no circular dependencies).
 9. Output JSON ONLY. No conversational preamble, explanation, or markdown fences.
-
+{mem_block}
 === REPOSITORY SUBSYSTEMS ===
 {subsystem_summary}
 
@@ -171,6 +177,7 @@ class LocalPlanner:
             return self._transport(prompt, self.config)
 
         url = f"{self.config.base_url.rstrip('/')}/api/generate"
+        effective_num_ctx = getattr(self.config, "num_ctx", None) or self.config.max_context_tokens
         payload = json.dumps({
             "model": self.config.model,
             "prompt": prompt,
@@ -180,6 +187,7 @@ class LocalPlanner:
             "options": {
                 "temperature": self.config.temperature,
                 "num_predict": self.config.max_completion_tokens,
+                "num_ctx": effective_num_ctx,
             },
         }).encode("utf-8")
 
@@ -218,21 +226,121 @@ class LocalPlanner:
 
         clean_objective = objective.strip()
         task_cap = min(max(1, max_tasks), self.config.hard_max_tasks)
+        start_time = time.monotonic()
+        req_id = f"plan-{int(time.time() * 1000) % 1000000}"
+        effective_ctx = getattr(self.config, "num_ctx", None) or self.config.max_context_tokens
+        threshold = getattr(self.config, "truncation_threshold", 0.95)
+
+        repair_ctx = ""
+        try:
+            try:
+                from .repair_memory import RepairMemoryStore
+            except ImportError:
+                from repair_memory import RepairMemoryStore
+            mem_store = RepairMemoryStore(self.repo_root / ".maya" / "maintenance" / "repair_memory.jsonl")
+            repair_ctx = mem_store.format_prompt_context(defect_category="planner", max_chars=800)
+        except Exception as mem_err:
+            logger.debug("Could not load repair memory for planner: %s", mem_err)
 
         prompt = PlannerPromptEngine.build_prompt(
             objective=clean_objective,
             repo_root=self.repo_root,
             max_tasks=task_cap,
             known_task_ids=known_task_ids,
+            repair_memory_context=repair_ctx,
+        )
+
+        prompt_ref, prompt_trunc, _ = write_trace_body(req_id, "req", prompt)
+        trace_emit(
+            TraceEvent(
+                category="planner",
+                type="planner.request.started",
+                request_id=req_id,
+                sender="LocalPlanner",
+                recipient=self.config.model,
+                summary=f"Planning request for objective: {clean_objective[:100]}",
+                payload={
+                    "model": self.config.model,
+                    "effective_num_ctx": effective_ctx,
+                    "body_ref": prompt_ref,
+                    "body_truncated": prompt_trunc,
+                },
+            )
         )
 
         try:
             response_text, in_tokens, out_tokens = self._call_ollama(prompt)
         except Exception as e:
+            trace_emit(
+                TraceEvent(
+                    category="planner",
+                    type="planner.request.failed",
+                    severity="ERROR",
+                    request_id=req_id,
+                    sender="LocalPlanner",
+                    summary=f"Planner model invocation failed: {e}",
+                    latency_ms=int((time.monotonic() - start_time) * 1000),
+                    latency_source="measured",
+                    payload={"error": str(e)},
+                )
+            )
             return None, [f"Planner model invocation failed: {e}"]
 
+        latency_ms = int((time.monotonic() - start_time) * 1000)
+        usage_dict = {
+            "source": "provider" if (in_tokens is not None or out_tokens is not None) else "unknown",
+            "input_tokens": in_tokens,
+            "output_tokens": out_tokens,
+        }
+
+        # Check for context limit exhaustion or credible prompt truncation
+        if in_tokens is not None and in_tokens >= int(effective_ctx * threshold):
+            err = (
+                f"Planner context limit exceeded / prompt truncation detected: "
+                f"prompt_eval_count ({in_tokens}) reached context limit threshold "
+                f"({int(effective_ctx * threshold)}/{effective_ctx}). Planning aborted."
+            )
+            trace_emit(
+                TraceEvent(
+                    category="planner",
+                    type="planner.context_overflow",
+                    severity="ERROR",
+                    request_id=req_id,
+                    sender="LocalPlanner",
+                    summary=err,
+                    usage=usage_dict,
+                    latency_ms=latency_ms,
+                    latency_source="measured",
+                    payload={"effective_num_ctx": effective_ctx, "error": err},
+                )
+            )
+            return None, [err]
+
+        if in_tokens is None and len(prompt) > effective_ctx * 4:
+            err = (
+                f"Planner prompt character length ({len(prompt)}) exceeds safe context capacity "
+                f"({effective_ctx} tokens) with missing provider usage metadata. Planning aborted."
+            )
+            return None, [err]
+
         if not response_text or not response_text.strip():
+            trace_emit(
+                TraceEvent(
+                    category="planner",
+                    type="planner.request.failed",
+                    severity="ERROR",
+                    request_id=req_id,
+                    sender=self.config.model,
+                    recipient="LocalPlanner",
+                    summary="Planner returned empty response",
+                    usage=usage_dict,
+                    latency_ms=latency_ms,
+                    latency_source="measured",
+                )
+            )
             return None, ["Planner returned empty response."]
+
+        resp_ref, resp_trunc, _ = write_trace_body(req_id, "resp", response_text)
 
         # Clean markdown code fences if emitted by model
         raw_text = response_text.strip()
@@ -247,6 +355,21 @@ class LocalPlanner:
         try:
             parsed_json = json.loads(raw_text)
         except Exception as e:
+            trace_emit(
+                TraceEvent(
+                    category="planner",
+                    type="planner.request.rejected",
+                    severity="WARN",
+                    request_id=req_id,
+                    sender=self.config.model,
+                    recipient="LocalPlanner",
+                    summary=f"Planner generated invalid JSON: {e}",
+                    usage=usage_dict,
+                    latency_ms=latency_ms,
+                    latency_source="measured",
+                    payload={"body_ref": resp_ref, "error": str(e)},
+                )
+            )
             return None, [f"Planner generated invalid JSON: {e}"]
 
         # Extract tasks
@@ -272,10 +395,40 @@ class LocalPlanner:
         )
 
         if not is_valid:
+            trace_emit(
+                TraceEvent(
+                    category="planner",
+                    type="planner.request.rejected",
+                    severity="WARN",
+                    request_id=req_id,
+                    sender=self.config.model,
+                    recipient="LocalPlanner",
+                    summary=f"Planner proposal rejected ({len(validation_errors)} contract errors)",
+                    usage=usage_dict,
+                    latency_ms=latency_ms,
+                    latency_source="measured",
+                    payload={"body_ref": resp_ref, "errors": validation_errors},
+                )
+            )
             return None, validation_errors
 
         proposal_hash = compute_proposal_hash(clean_objective, tasks)
         plan_id = f"PLAN-{uuid.uuid4().hex[:12].upper()}"
+
+        trace_emit(
+            TraceEvent(
+                category="planner",
+                type="planner.request.completed",
+                request_id=req_id,
+                sender=self.config.model,
+                recipient="LocalPlanner",
+                summary=f"Plan {plan_id} generated with {len(tasks)} tasks (hash={proposal_hash[:8]})",
+                usage=usage_dict,
+                latency_ms=latency_ms,
+                latency_source="measured",
+                payload={"body_ref": resp_ref, "plan_id": plan_id, "proposal_hash": proposal_hash, "task_count": len(tasks)},
+            )
+        )
 
         proposal = PlanProposal(
             plan_id=plan_id,

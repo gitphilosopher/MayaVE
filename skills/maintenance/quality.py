@@ -6,18 +6,31 @@ runs targeted pytest checks in the worktree, and validates changelog updates.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 try:
-    from .models import TaskDefinition, TaskRisk
+    from .models import TaskDefinition, TaskRisk, utc_now_iso
 except ImportError:
-    from models import TaskDefinition, TaskRisk
+    from models import TaskDefinition, TaskRisk, utc_now_iso
+
+try:
+    from .trace import TraceEvent, emit as trace_emit
+except ImportError:
+    try:
+        from trace import TraceEvent, emit as trace_emit
+    except ImportError:
+        def trace_emit(*args, **kwargs): pass
+        class TraceEvent:
+            def __init__(self, **kwargs): pass
 
 
 @dataclass
@@ -54,6 +67,36 @@ class QualityReport:
         }
 
 
+def freeze_task_tests(task: TaskDefinition, worktree_path: Path) -> tuple[dict[str, Any], list[str]]:
+    """
+    Validate and freeze test targets before code modifications.
+    Computes cryptographic SHA-256 hashes for all declared test target files.
+    Returns (frozen_metadata, errors).
+    """
+    if task.is_defect_task() and not task.test_targets:
+        return {}, ["Defect task requires non-empty 'test_targets' to establish baseline fail-to-pass evidence."]
+
+    hashes: dict[str, str] = {}
+    for t in (task.test_targets or []):
+        target_path = (worktree_path / t).resolve()
+        if not target_path.is_file():
+            return {}, [f"Declared test target '{t}' does not exist on disk in worktree."]
+        try:
+            content = target_path.read_bytes()
+            hashes[t] = hashlib.sha256(content).hexdigest()
+        except Exception as e:
+            return {}, [f"Could not read test target '{t}': {e}"]
+
+    metadata = {
+        "task_id": task.task_id,
+        "frozen_at": utc_now_iso(),
+        "targets": list(task.test_targets or []),
+        "hashes": hashes,
+        "origin": getattr(task, "audit_source", "") or "task_preparation",
+    }
+    return metadata, []
+
+
 class QualityGateEngine:
     """Evaluates worktree modifications against strict repository quality invariants."""
 
@@ -65,6 +108,80 @@ class QualityGateEngine:
         if venv_py.is_file():
             return str(venv_py)
         return sys.executable
+
+    def _get_ruff_executable(self) -> Optional[str]:
+        candidates = [
+            str(self.repo_root / ".venv" / "Scripts" / "ruff.exe"),
+            str(self.repo_root / ".venv" / "bin" / "ruff"),
+            str(Path(sys.executable).parent / "ruff.exe"),
+            str(Path(sys.executable).parent / "ruff"),
+            shutil.which("ruff"),
+        ]
+        for c in candidates:
+            if c and Path(c).is_file():
+                return str(Path(c).resolve())
+        return None
+
+    def _ensure_frontend_node_modules(self, worktree_path: Path) -> None:
+        wt_front = worktree_path / "frontend"
+        if not wt_front.is_dir():
+            return
+        wt_nm = wt_front / "node_modules"
+        if wt_nm.exists():
+            return
+        repo_nm = self.repo_root / "frontend" / "node_modules"
+        if repo_nm.is_dir():
+            try:
+                import _winapi
+                _winapi.CreateJunction(str(repo_nm), str(wt_nm))
+            except Exception:
+                try:
+                    os.symlink(repo_nm, wt_nm, target_is_directory=True)
+                except Exception:
+                    pass
+
+    def _get_changed_files(self, task: TaskDefinition, worktree_path: Path) -> list[str]:
+        changed = set()
+        try:
+            diff_proc = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD"],
+                cwd=str(worktree_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if diff_proc.returncode == 0 and diff_proc.stdout.strip():
+                for line in diff_proc.stdout.splitlines():
+                    s = line.strip().replace("\\", "/")
+                    if s:
+                        changed.add(s)
+        except Exception:
+            pass
+
+        try:
+            status_proc = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(worktree_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if status_proc.returncode == 0 and status_proc.stdout.strip():
+                for line in status_proc.stdout.splitlines():
+                    if len(line) >= 4:
+                        p = line[3:].strip().strip('"').replace("\\", "/")
+                        if p:
+                            changed.add(p)
+        except Exception:
+            pass
+
+        if not changed and task.target_files:
+            for tf in task.target_files:
+                norm_tf = tf.replace("\\", "/").strip()
+                if (worktree_path / norm_tf).exists():
+                    changed.add(norm_tf)
+
+        return sorted(list(changed))
 
     def check_diff_bounds(self, task: TaskDefinition, worktree_path: Path) -> QualityGateResult:
         """
@@ -124,10 +241,12 @@ class QualityGateEngine:
 
         unauthorized: list[str] = []
         for f in changed_files:
-            # Check if file is explicitly allowed or under .maya/tests/
+            # Check if file is explicitly allowed or under .maya/
             if f in allowed_targets:
                 continue
-            if f.startswith(".maya/tests/"):
+            if f.startswith(".maya/"):
+                continue
+            if "__pycache__" in f or f.endswith(".pyc"):
                 continue
             unauthorized.append(f)
 
@@ -356,68 +475,419 @@ class QualityGateEngine:
             details={"added_lines_sample": added_lines[:5]},
         )
 
-    def check_defect_resolved(self, task: TaskDefinition, worktree_path: Path) -> QualityGateResult:
+    def check_test_integrity(self, task: TaskDefinition, worktree_path: Path) -> QualityGateResult:
         """
-        Re-evaluate the pre-validation pattern against the target file.
-        If the unpatched defect regex still matches, the fix is incomplete.
+        Verify that frozen test targets were not modified, weakened, or deleted during execution.
         """
-        if not task.pre_validation_pattern:
+        if not task.is_defect_task() and not task.frozen_tests:
             return QualityGateResult(
-                gate_name="defect_resolved",
+                gate_name="test_integrity",
                 passed=True,
-                message="No pre-validation pattern defined for task; defect resolution assumed.",
+                message="Test integrity verification not required for non-defect task.",
             )
 
-        pat = task.pre_validation_pattern
-        target = worktree_path / pat.file_path
-        if not target.is_file():
+        if task.is_defect_task() and not task.frozen_tests:
             return QualityGateResult(
-                gate_name="defect_resolved",
+                gate_name="test_integrity",
                 passed=False,
-                message=f"Target file {pat.file_path} missing in worktree.",
+                message="test doesn't prove the defect: test targets were not frozen prior to execution.",
+                details={"error": "unfrozen_tests"},
             )
 
-        try:
-            content = target.read_text(encoding="utf-8", errors="replace")
-            compiled = re.compile(pat.pattern, re.MULTILINE)
-            if compiled.search(content):
-                # If the pattern is a function/class/export signature rather than an unpatched defect line,
-                # verify that the declared target files were actively modified in the worktree.
-                is_decl = bool(re.search(r"^\s*(def|class|export|function|const|let|var)\b", pat.pattern.strip()))
-                if is_decl:
-                    targets_to_check = [str(f) for f in task.target_files if (worktree_path / f).exists()] or [str(pat.file_path)]
-                    diff_proc = subprocess.run(
-                        ["git", "diff", "HEAD", "--"] + targets_to_check,
+        hashes = task.frozen_tests.get("hashes", {})
+        for t, orig_hash in hashes.items():
+            target_path = (worktree_path / t).resolve()
+            if not target_path.is_file():
+                return QualityGateResult(
+                    gate_name="test_integrity",
+                    passed=False,
+                    message=f"Test target '{t}' was deleted during execution (tampering rejected).",
+                    details={"target": t, "tampered": True},
+                )
+            cur_hash = hashlib.sha256(target_path.read_bytes()).hexdigest()
+            if cur_hash != orig_hash:
+                return QualityGateResult(
+                    gate_name="test_integrity",
+                    passed=False,
+                    message=f"Test target '{t}' was modified after baseline freezing (tampering rejected).",
+                    details={"target": t, "original_hash": orig_hash, "current_hash": cur_hash, "tampered": True},
+                )
+
+        return QualityGateResult(
+            gate_name="test_integrity",
+            passed=True,
+            message="All frozen test targets verified unmodified.",
+            details={"frozen_count": len(hashes)},
+        )
+
+    def check_python_static(self, task: TaskDefinition, worktree_path: Path) -> list[QualityGateResult]:
+        """
+        Deterministic static quality gates for changed Python files:
+        1. py_compile check on each changed .py file.
+        2. ruff check --select F on each changed .py file.
+        Fails closed if a required tool is unavailable.
+        """
+        changed_files = self._get_changed_files(task, worktree_path)
+        py_files = [f for f in changed_files if f.endswith(".py")]
+
+        if not py_files:
+            return [
+                QualityGateResult(
+                    gate_name="static_py_compile",
+                    passed=True,
+                    message="No Python files modified in worktree.",
+                    details={"scope": "none"},
+                )
+            ]
+
+        results: list[QualityGateResult] = []
+        py_exe = self._get_python_executable()
+        ruff_exe = self._get_ruff_executable()
+
+        for rel in py_files:
+            abs_path = worktree_path / rel
+            if not abs_path.is_file():
+                continue
+
+            # 1. py_compile check
+            try:
+                compile_proc = subprocess.run(
+                    [py_exe, "-m", "py_compile", str(abs_path)],
+                    cwd=str(worktree_path),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if compile_proc.returncode != 0:
+                    err = compile_proc.stderr.strip() or compile_proc.stdout.strip()
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_py_compile",
+                            passed=False,
+                            message=f"Python compilation failed for '{rel}': {err[:300]}",
+                            details={"command": f"python -m py_compile {rel}", "scope": rel, "exit_code": compile_proc.returncode, "diagnostics": err},
+                        )
+                    )
+                else:
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_py_compile",
+                            passed=True,
+                            message=f"Python compilation passed for '{rel}'.",
+                            details={"command": f"python -m py_compile {rel}", "scope": rel, "exit_code": 0},
+                        )
+                    )
+            except Exception as exc:
+                results.append(
+                    QualityGateResult(
+                        gate_name="static_py_compile",
+                        passed=False,
+                        message=f"Failed to run py_compile on '{rel}': {exc}",
+                        details={"scope": rel, "error": str(exc)},
+                    )
+                )
+
+            # 2. ruff check --select F
+            if not ruff_exe:
+                results.append(
+                    QualityGateResult(
+                        gate_name="static_ruff",
+                        passed=False,
+                        message="Required static analysis tool 'ruff' is unavailable in environment.",
+                        details={"command": "ruff check --select F", "scope": rel, "exit_code": 1, "diagnostics": "Tool 'ruff' not found"},
+                    )
+                )
+            else:
+                try:
+                    ruff_proc = subprocess.run(
+                        [ruff_exe, "check", "--select", "F", "--no-cache", str(abs_path)],
                         cwd=str(worktree_path),
                         capture_output=True,
                         text=True,
-                        encoding="utf-8",
-                        errors="replace",
                         check=False,
                     )
-                    if (diff_proc.stdout or "").strip():
-                        return QualityGateResult(
-                            gate_name="defect_resolved",
-                            passed=True,
-                            message=f"Target file(s) modified in worktree around '{pat.description}'.",
+                    if ruff_proc.returncode != 0:
+                        out = ruff_proc.stdout.strip() or ruff_proc.stderr.strip()
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_ruff",
+                                passed=False,
+                                message=f"Ruff F-checks failed for '{rel}': {out[:300]}",
+                                details={"command": f"ruff check --select F {rel}", "scope": rel, "exit_code": ruff_proc.returncode, "diagnostics": out},
+                            )
                         )
-                return QualityGateResult(
-                    gate_name="defect_resolved",
-                    passed=False,
-                    message=f"Defect pattern '{pat.description}' still found in {pat.file_path}.",
-                    details={"pattern": pat.pattern, "file": pat.file_path},
+                    else:
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_ruff",
+                                passed=True,
+                                message=f"Ruff F-checks passed for '{rel}'.",
+                                details={"command": f"ruff check --select F {rel}", "scope": rel, "exit_code": 0},
+                            )
+                        )
+                except Exception as exc:
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_ruff",
+                            passed=False,
+                            message=f"Failed to execute ruff on '{rel}': {exc}",
+                            details={"scope": rel, "error": str(exc)},
+                        )
+                    )
+
+        return results
+
+    def check_javascript_static(self, task: TaskDefinition, worktree_path: Path) -> list[QualityGateResult]:
+        """
+        Deterministic static quality gates for changed JavaScript and frontend files:
+        1. node --check syntax check on each changed .js file.
+        2. npm run build bundle/import check if any frontend file was modified.
+        Fails closed if a required tool is unavailable.
+        """
+        changed_files = self._get_changed_files(task, worktree_path)
+        js_files = [f for f in changed_files if f.endswith(".js")]
+        frontend_modified = any(f.startswith("frontend/") for f in changed_files)
+
+        if not js_files and not frontend_modified:
+            return [
+                QualityGateResult(
+                    gate_name="static_javascript",
+                    passed=True,
+                    message="No JavaScript or frontend files modified in worktree.",
+                    details={"scope": "none"},
                 )
-        except Exception as e:
+            ]
+
+        results: list[QualityGateResult] = []
+        node_exe = shutil.which("node")
+
+        if js_files:
+            if not node_exe:
+                return [
+                    QualityGateResult(
+                        gate_name="static_js_syntax",
+                        passed=False,
+                        message="Required JavaScript runtime 'node' is unavailable in environment.",
+                        details={"command": "node --check", "scope": "node", "exit_code": 1, "diagnostics": "Tool 'node' not found"},
+                    )
+                ]
+
+            for rel in js_files:
+                abs_path = worktree_path / rel
+                if not abs_path.is_file():
+                    continue
+                try:
+                    proc = subprocess.run(
+                        [node_exe, "--check", str(abs_path)],
+                        cwd=str(worktree_path),
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if proc.returncode != 0:
+                        err = proc.stderr.strip() or proc.stdout.strip()
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_js_syntax",
+                                passed=False,
+                                message=f"JavaScript syntax check failed for '{rel}': {err[:300]}",
+                                details={"command": f"node --check {rel}", "scope": rel, "exit_code": proc.returncode, "diagnostics": err},
+                            )
+                        )
+                    else:
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_js_syntax",
+                                passed=True,
+                                message=f"JavaScript syntax check passed for '{rel}'.",
+                                details={"command": f"node --check {rel}", "scope": rel, "exit_code": 0},
+                            )
+                        )
+                except Exception as exc:
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_js_syntax",
+                            passed=False,
+                            message=f"Failed to run node --check on '{rel}': {exc}",
+                            details={"scope": rel, "error": str(exc)},
+                        )
+                    )
+
+        if frontend_modified and (worktree_path / "frontend" / "package.json").is_file():
+            npm_exe = shutil.which("npm.cmd") or shutil.which("npm")
+            if not npm_exe:
+                results.append(
+                    QualityGateResult(
+                        gate_name="static_frontend_build",
+                        passed=False,
+                        message="Required tool 'npm' is unavailable to verify frontend build.",
+                        details={"command": "npm run build", "scope": "frontend", "exit_code": 1, "diagnostics": "Tool 'npm' not found"},
+                    )
+                )
+            else:
+                self._ensure_frontend_node_modules(worktree_path)
+                try:
+                    build_proc = subprocess.run(
+                        [npm_exe, "run", "build"],
+                        cwd=str(worktree_path / "frontend"),
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=180,
+                    )
+                    if build_proc.returncode != 0:
+                        err = (build_proc.stderr or build_proc.stdout).strip()
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_frontend_build",
+                                passed=False,
+                                message=f"Frontend build verification failed: {err[:300]}",
+                                details={"command": "npm run build", "scope": "frontend", "exit_code": build_proc.returncode, "diagnostics": err[-1500:]},
+                            )
+                        )
+                    else:
+                        results.append(
+                            QualityGateResult(
+                                gate_name="static_frontend_build",
+                                passed=True,
+                                message="Frontend build verification passed cleanly.",
+                                details={"command": "npm run build", "scope": "frontend", "exit_code": 0},
+                            )
+                        )
+                except subprocess.TimeoutExpired:
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_frontend_build",
+                            passed=False,
+                            message="Frontend build verification timed out after 180s.",
+                            details={"command": "npm run build", "scope": "frontend", "exit_code": 124},
+                        )
+                    )
+                except Exception as exc:
+                    results.append(
+                        QualityGateResult(
+                            gate_name="static_frontend_build",
+                            passed=False,
+                            message=f"Frontend build failed to execute: {exc}",
+                            details={"scope": "frontend", "error": str(exc)},
+                        )
+                    )
+
+        return results
+
+    def check_defect_resolved(
+        self,
+        task: TaskDefinition,
+        worktree_path: Path,
+        patched_test_result: Optional[QualityGateResult] = None,
+    ) -> QualityGateResult:
+        """
+        Verify defect resolution using evidence-based fail-to-pass test execution.
+        Requires:
+        1. Baseline test failure (exit code != 0) proving defect reproduction.
+        2. Patched test success (exit code == 0) proving defect resolution.
+        3. Optional pre-validation pattern sanity check if defined.
+        For non-defect tasks (feature/improvement), exempt from fail-to-pass.
+        """
+        if not task.is_defect_task():
+            return QualityGateResult(
+                gate_name="defect_resolved",
+                passed=True,
+                message=f"Task classified as non-defect ({task.task_type}); fail-to-pass verification exempt.",
+                details={"task_type": task.task_type, "fail_to_pass": "exempt"},
+            )
+
+        # Retrieve baseline verification evidence from checkpoint stage details
+        baseline = None
+        if task.checkpoint and getattr(task.checkpoint, "stage_details", None) and isinstance(task.checkpoint.stage_details, dict):
+            baseline = task.checkpoint.stage_details.get("baseline_verification")
+        if not baseline and task.checkpoint and getattr(task.checkpoint, "details", None) and isinstance(task.checkpoint.details, dict):
+            baseline = task.checkpoint.details.get("baseline_verification")
+        if not baseline:
+            for rec in reversed(task.history):
+                if rec.stage == "BASELINE_VERIFICATION":
+                    if isinstance(rec.details, str):
+                        try:
+                            baseline = json.loads(rec.details)
+                            break
+                        except Exception:
+                            pass
+                    elif isinstance(rec.details, dict):
+                        baseline = rec.details.get("baseline_verification") or rec.details
+                        if baseline:
+                            break
+
+        if not baseline:
             return QualityGateResult(
                 gate_name="defect_resolved",
                 passed=False,
-                message=f"Error evaluating defect pattern: {e}",
+                message="test doesn't prove the defect: no baseline failure evidence recorded prior to patch.",
+                details={"error": "missing_baseline_evidence"},
             )
+
+        if baseline.get("passed") is True:
+            return QualityGateResult(
+                gate_name="defect_resolved",
+                passed=False,
+                message="test doesn't prove the defect: baseline tests passed before patch was applied.",
+                details=baseline,
+            )
+
+        # Baseline confirmed failed! Now check patched verification test results
+        if patched_test_result is None:
+            patched_test_result = self.run_verification_tests(task, worktree_path)
+
+        if not patched_test_result.passed:
+            return QualityGateResult(
+                gate_name="defect_resolved",
+                passed=False,
+                message=f"Defect unresolved: post-patch verification tests failed (exit code {patched_test_result.details.get('exit_code')}).",
+                details={"baseline": baseline, "patched": patched_test_result.details},
+            )
+
+        # Secondary sanity check: pre_validation_pattern if defined
+        if task.pre_validation_pattern:
+            pat = task.pre_validation_pattern
+            target = worktree_path / pat.file_path
+            if not target.is_file():
+                return QualityGateResult(
+                    gate_name="defect_resolved",
+                    passed=False,
+                    message=f"Target file {pat.file_path} missing in worktree.",
+                )
+            try:
+                content = target.read_text(encoding="utf-8", errors="replace")
+                compiled = re.compile(pat.pattern, re.MULTILINE)
+                is_decl = bool(re.search(r"^\s*(def|class|export|function|const|let|var)\b", pat.pattern.strip()))
+                if not is_decl and compiled.search(content):
+                    return QualityGateResult(
+                        gate_name="defect_resolved",
+                        passed=False,
+                        message=f"Pre-validation defect pattern '{pat.description}' still found in {pat.file_path}.",
+                        details={"pattern": pat.pattern, "file": pat.file_path},
+                    )
+            except Exception as e:
+                return QualityGateResult(
+                    gate_name="defect_resolved",
+                    passed=False,
+                    message=f"Error evaluating defect pattern: {e}",
+                )
+
+        b_exit = baseline.get("exit_code")
+        if b_exit is None and isinstance(baseline.get("details"), dict):
+            b_exit = baseline["details"].get("exit_code")
+
+        p_exit = patched_test_result.details.get("exit_code", 0) if isinstance(patched_test_result.details, dict) else 0
 
         return QualityGateResult(
             gate_name="defect_resolved",
             passed=True,
-            message=f"Defect pattern '{pat.description}' successfully resolved in {pat.file_path}.",
+            message="Defect resolution verified via evidence-based fail-to-pass test execution.",
+            details={
+                "baseline_exit_code": b_exit,
+                "patched_exit_code": p_exit,
+                "fail_to_pass_verified": True,
+            },
         )
 
     def run_verification_tests(self, task: TaskDefinition, worktree_path: Path) -> QualityGateResult:
@@ -425,10 +895,17 @@ class QualityGateEngine:
         Execute task.test_targets inside the worktree using the repository Python virtualenv.
         """
         if not task.test_targets:
+            if task.is_defect_task():
+                return QualityGateResult(
+                    gate_name="verification_tests",
+                    passed=False,
+                    message="test doesn't prove the defect: no test targets specified for defect-fix task.",
+                    details={"missing_target": True},
+                )
             return QualityGateResult(
                 gate_name="verification_tests",
                 passed=True,
-                message="No test targets specified for this task.",
+                message="No test targets specified for this non-defect task.",
             )
 
         py_exe = self._get_python_executable()
@@ -439,7 +916,6 @@ class QualityGateEngine:
             if target_path.exists():
                 resolved_targets.append(str(target_path))
             else:
-                # If target does not exist on disk, report failure
                 return QualityGateResult(
                     gate_name="verification_tests",
                     passed=False,
@@ -448,7 +924,6 @@ class QualityGateEngine:
                 )
 
         env = os.environ.copy()
-        # Include worktree in PYTHONPATH so tests import worktree modules
         orig_pypath = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = f"{str(worktree_path)}{os.pathsep}{orig_pypath}"
 
@@ -497,28 +972,34 @@ class QualityGateEngine:
         results: list[QualityGateResult] = []
 
         # 1. Diff Bounds Check
-        r_bounds = self.check_diff_bounds(task, worktree_path)
-        results.append(r_bounds)
+        results.append(self.check_diff_bounds(task, worktree_path))
 
         # 2. Local-Only Test Policy & Staging Check
-        r_policy = self.check_test_policy_and_staging(worktree_path)
-        results.append(r_policy)
+        results.append(self.check_test_policy_and_staging(worktree_path))
 
         # 3. Test Weakening Check
-        r_weakening = self.check_no_weakened_tests(worktree_path)
-        results.append(r_weakening)
+        results.append(self.check_no_weakened_tests(worktree_path))
 
-        # 4. Defect Resolution Check
-        r_resolved = self.check_defect_resolved(task, worktree_path)
-        results.append(r_resolved)
+        # 4. Test Integrity Check (tampering defense against modifying frozen tests)
+        r_integrity = self.check_test_integrity(task, worktree_path)
+        results.append(r_integrity)
 
-        # 5. Changelog Check
-        r_changelog = self.check_changelog_entry(worktree_path)
-        results.append(r_changelog)
+        # 5. Deterministic Static Quality Gates (py_compile and ruff F-checks for changed Python files)
+        results.extend(self.check_python_static(task, worktree_path))
 
-        # 6. Targeted Verification Tests
+        # 6. JavaScript Static Gates (node --check syntax and frontend build verification)
+        results.extend(self.check_javascript_static(task, worktree_path))
+
+        # 7. Targeted Verification Tests (run against patched worktree)
         r_tests = self.run_verification_tests(task, worktree_path)
         results.append(r_tests)
+
+        # 8. Evidence-Based Defect Resolution Check (baseline fail-to-pass)
+        r_resolved = self.check_defect_resolved(task, worktree_path, patched_test_result=r_tests)
+        results.append(r_resolved)
+
+        # 9. Changelog Check
+        results.append(self.check_changelog_entry(worktree_path))
 
         all_passed = all(r.passed for r in results)
         failure_reason = None
@@ -526,11 +1007,30 @@ class QualityGateEngine:
             failed_gates = [r.gate_name for r in results if not r.passed]
             failure_reason = f"Quality gate(s) failed: {', '.join(failed_gates)}"
 
+        for r in results:
+            trace_emit(
+                TraceEvent(
+                    category="quality",
+                    type="quality.gate_result",
+                    task_id=task.task_id,
+                    severity="INFO" if r.passed else "WARN",
+                    summary=f"Gate {r.gate_name}: {'PASS' if r.passed else 'FAIL'} - {r.message[:100]}",
+                    payload={"gate_name": r.gate_name, "passed": r.passed, "message": r.message},
+                )
+            )
+
         # Evaluate approval elevation:
-        # High-risk tasks or cases with passing tests but boundary/changelog anomalies
+        # Inconclusive evidence, test tampering, or high risk
         elevate = False
         approval_reason = None
-        if task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH) and all_passed:
+
+        if not r_integrity.passed:
+            elevate = True
+            approval_reason = f"Verification inconclusive: {r_integrity.message}"
+        elif not r_resolved.passed and "test doesn't prove the defect" in r_resolved.message:
+            elevate = True
+            approval_reason = r_resolved.message
+        elif task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH) and all_passed:
             elevate = True
             approval_reason = f"{task.risk.value}-risk task requires human operator sign-off before downstream progression."
 

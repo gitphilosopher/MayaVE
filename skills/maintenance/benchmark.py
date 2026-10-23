@@ -16,9 +16,8 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
 logger = logging.getLogger("maya.maintenance.benchmark")
 
@@ -491,8 +490,6 @@ class Tier2BenchmarkHarness:
         allowed_files: set[str],
     ) -> tuple[list[str], Optional[str], Optional[str]]:
         """Parse and apply patches; returns (applied_files, error, security_violation)."""
-        applied: list[str] = []
-
         # Check for unified diff format
         diff_pattern = re.compile(
             r"(?:diff --git[^\r\n]*[\r\n]+)?--- (?:a/)?([^\r\n\t]+)[\r\n]+\+\+\+ (?:b/)?([^\r\n\t]+)",
@@ -500,8 +497,6 @@ class Tier2BenchmarkHarness:
         )
         diff_matches = list(diff_pattern.finditer(text))
         if diff_matches:
-            # Unified diff path
-            file_blocks: dict[str, str] = {}
             # Quick block extraction for diff simulation
             for match in diff_matches:
                 raw_path = match.group(2).strip()
@@ -646,3 +641,178 @@ def generate_benchmark_report(
         output_path.write_text(report_content, encoding="utf-8")
 
     return report_content
+
+
+@dataclass
+class RepairMemoryComparisonReport:
+    """Evaluation comparing task execution with vs without historical repair memory."""
+    total_fixtures: int
+    without_memory_success_count: int
+    with_memory_success_count: int
+    without_memory_success_rate: float
+    with_memory_success_rate: float
+    avg_tokens_without_memory: float
+    avg_tokens_with_memory: float
+    avg_latency_without_memory: float
+    avg_latency_with_memory: float
+    sample_size_sufficient: bool
+    verdict: str  # "INSUFFICIENT_SAMPLE_SIZE"
+    notes: str
+    fixture_details: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_fixtures": self.total_fixtures,
+            "without_memory_success_count": self.without_memory_success_count,
+            "with_memory_success_count": self.with_memory_success_count,
+            "without_memory_success_rate": round(self.without_memory_success_rate, 4),
+            "with_memory_success_rate": round(self.with_memory_success_rate, 4),
+            "avg_tokens_without_memory": round(self.avg_tokens_without_memory, 1),
+            "avg_tokens_with_memory": round(self.avg_tokens_with_memory, 1),
+            "avg_latency_without_memory": round(self.avg_latency_without_memory, 3),
+            "avg_latency_with_memory": round(self.avg_latency_with_memory, 3),
+            "sample_size_sufficient": self.sample_size_sufficient,
+            "verdict": self.verdict,
+            "notes": self.notes,
+            "fixture_details": self.fixture_details,
+        }
+
+
+def evaluate_repair_memory_comparison(
+    fixtures_dir: Path | str | None = None,
+    harness: Optional[Tier2BenchmarkHarness] = None,
+    output_path: Path | str | None = None,
+) -> RepairMemoryComparisonReport:
+    """
+    Compare first-attempt task replay outcomes with vs without historical repair memory.
+    Enforces honest reporting when sample size is insufficient.
+    """
+    if fixtures_dir:
+        fix_dir = Path(fixtures_dir).resolve()
+    else:
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        fix_dir = (repo_root / ".maya" / "maintenance" / "benchmark_fixtures").resolve()
+
+    if harness is None:
+        harness = Tier2BenchmarkHarness()
+
+    fixtures: list[dict[str, Any]] = []
+    if fix_dir.is_dir():
+        for p in sorted(fix_dir.glob("*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if "task_id" in data and "recorded_data" in data:
+                    fixtures.append(data)
+            except Exception:
+                continue
+
+    total_fixtures = len(fixtures)
+    if total_fixtures == 0:
+        rep = RepairMemoryComparisonReport(
+            total_fixtures=0,
+            without_memory_success_count=0,
+            with_memory_success_count=0,
+            without_memory_success_rate=0.0,
+            with_memory_success_rate=0.0,
+            avg_tokens_without_memory=0.0,
+            avg_tokens_with_memory=0.0,
+            avg_latency_without_memory=0.0,
+            avg_latency_with_memory=0.0,
+            sample_size_sufficient=False,
+            verdict="INSUFFICIENT_SAMPLE_SIZE",
+            notes="No valid replay fixtures found under benchmark_fixtures/. Sample size is zero.",
+        )
+        return rep
+
+    task_map = {t.task_id: t for t in harness.tasks}
+    without_pass = 0
+    with_pass = 0
+    tot_tok_without = 0
+    tot_tok_with = 0
+    tot_lat_without = 0.0
+    tot_lat_with = 0.0
+    fixture_details = []
+
+    for fix in fixtures:
+        tid = fix["task_id"]
+        task = task_map.get(tid)
+        rec_data = fix.get("recorded_data", {})
+        data_without = rec_data.get("without_memory", {})
+        data_with = rec_data.get("with_memory", {})
+
+        res_without = harness._evaluate_single_task(
+            task=task,
+            candidate_id="replay_without_memory",
+            replay=data_without,
+            cost_in=0.0001,
+            cost_out=0.0002,
+        ) if task else None
+
+        res_with = harness._evaluate_single_task(
+            task=task,
+            candidate_id="replay_with_memory",
+            replay=data_with,
+            cost_in=0.0001,
+            cost_out=0.0002,
+        ) if task else None
+
+        without_ok = bool(res_without and res_without.success)
+        with_ok = bool(res_with and res_with.success)
+
+        if without_ok:
+            without_pass += 1
+        if with_ok:
+            with_pass += 1
+
+        in_without = int(data_without.get("input_tokens", 0)) + int(data_without.get("output_tokens", 0))
+        in_with = int(data_with.get("input_tokens", 0)) + int(data_with.get("output_tokens", 0))
+        lat_without = float(data_without.get("latency_sec", 0.0))
+        lat_with = float(data_with.get("latency_sec", 0.0))
+
+        tot_tok_without += in_without
+        tot_tok_with += in_with
+        tot_lat_without += lat_without
+        tot_lat_with += lat_with
+
+        fixture_details.append({
+            "task_id": tid,
+            "without_memory_success": without_ok,
+            "with_memory_success": with_ok,
+            "tokens_without": in_without,
+            "tokens_with": in_with,
+            "latency_without": lat_without,
+            "latency_with": lat_with,
+        })
+
+    sample_sufficient = total_fixtures >= 5
+    verdict = "VALID_SAMPLE" if sample_sufficient else "INSUFFICIENT_SAMPLE_SIZE"
+    notes = (
+        f"Sample size (N={total_fixtures}) is insufficient to establish statistical significance "
+        "or automatically enable repair memory in production. Replay results serve as functional "
+        "verification only."
+        if not sample_sufficient
+        else f"Evaluated across N={total_fixtures} deterministic replay fixtures."
+    )
+
+    report = RepairMemoryComparisonReport(
+        total_fixtures=total_fixtures,
+        without_memory_success_count=without_pass,
+        with_memory_success_count=with_pass,
+        without_memory_success_rate=without_pass / total_fixtures,
+        with_memory_success_rate=with_pass / total_fixtures,
+        avg_tokens_without_memory=tot_tok_without / total_fixtures,
+        avg_tokens_with_memory=tot_tok_with / total_fixtures,
+        avg_latency_without_memory=tot_lat_without / total_fixtures,
+        avg_latency_with_memory=tot_lat_with / total_fixtures,
+        sample_size_sufficient=sample_sufficient,
+        verdict=verdict,
+        notes=notes,
+        fixture_details=fixture_details,
+    )
+
+    if output_path:
+        out_p = Path(output_path).resolve()
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        out_p.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    return report

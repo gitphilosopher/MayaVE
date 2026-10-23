@@ -15,19 +15,19 @@ import shutil
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger("maya.maintenance.orchestrator")
 
 try:
-    from .adapter import AgentAdapter, AgentExecutionResult, FakeAgentAdapter
+    from .adapter import AgentAdapter, AgentExecutionResult, FakeAgentAdapter, LocalModelAgentAdapter, AntigravityAgentAdapter
     from .cache import ContextCache
     from .ledger import TaskLedger
     from .hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from .models import CheckpointRecord, EvidenceRecord, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
-    from .quality import QualityGateEngine, QualityReport
+    from .quality import QualityGateEngine, QualityReport, freeze_task_tests
     from .reviewer import (
         FakeReviewerAdapter,
         ReviewPolicy,
@@ -38,14 +38,16 @@ try:
     from .scheduler import DependencyScheduler
     from .store import StateStore
     from .worktree import WorktreeManager, safe_restore_worktree_attempt
-    from .routing import ComplexityRouter, RoutingDecision, RoutingTier, WorkerConcurrencyGuard
+    from .routing import ComplexityRouter, FallbackDecision, RoutingDecision, RoutingTier, WorkerConcurrencyGuard
+    from .reviewer_safeguards import ReviewerSafeguardScanner, ScanReport
+    from .terminal_approval import TerminalApprovalManager
 except ImportError:
     from adapter import AgentAdapter, AgentExecutionResult, FakeAgentAdapter, LocalModelAgentAdapter, AntigravityAgentAdapter
     from cache import ContextCache
     from ledger import TaskLedger
     from hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from models import CheckpointRecord, EvidenceRecord, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
-    from quality import QualityGateEngine, QualityReport
+    from quality import QualityGateEngine, QualityReport, freeze_task_tests
     from reviewer import (
         FakeReviewerAdapter,
         ReviewPolicy,
@@ -56,7 +58,19 @@ except ImportError:
     from scheduler import DependencyScheduler
     from store import StateStore
     from worktree import WorktreeManager, safe_restore_worktree_attempt
-    from routing import ComplexityRouter, RoutingDecision, RoutingTier, WorkerConcurrencyGuard
+    from routing import ComplexityRouter, FallbackDecision, RoutingDecision, RoutingTier, WorkerConcurrencyGuard
+    from reviewer_safeguards import ReviewerSafeguardScanner, ScanReport
+    from terminal_approval import TerminalApprovalManager
+
+try:
+    from .trace import TraceEvent, emit as trace_emit
+except ImportError:
+    try:
+        from trace import TraceEvent, emit as trace_emit
+    except ImportError:
+        def trace_emit(*args, **kwargs): pass
+        class TraceEvent:
+            def __init__(self, **kwargs): pass
 
 
 @dataclass
@@ -109,6 +123,8 @@ class SingleTaskOrchestrator:
         router: Optional[ComplexityRouter] = None,
         concurrency_guard: Optional[WorkerConcurrencyGuard] = None,
         local_adapter: Optional[AgentAdapter] = None,
+        safeguard_scanner: Optional[ReviewerSafeguardScanner] = None,
+        approval_manager: Optional[TerminalApprovalManager] = None,
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.store = store
@@ -128,6 +144,12 @@ class SingleTaskOrchestrator:
         self.timeout_seconds = timeout_seconds
         self.router = router
         self.concurrency_guard = concurrency_guard
+        self.safeguard_scanner = safeguard_scanner or ReviewerSafeguardScanner()
+        if approval_manager is not None:
+            self.approval_manager = approval_manager
+        else:
+            approvals_path = self.repo_root / ".maya" / "maintenance" / "approvals.json"
+            self.approval_manager = TerminalApprovalManager(approvals_path, repo_root=self.repo_root, store=self.store)
 
     def build_prompt(self, task: TaskDefinition, worktree_path: Path) -> str:
         """
@@ -152,6 +174,26 @@ class SingleTaskOrchestrator:
                     f"Please adjust your implementation to satisfy all verification requirements."
                 )
 
+        # Query bounded repair memory context
+        repair_memory_snippet = ""
+        try:
+            try:
+                from .repair_memory import RepairMemoryStore
+            except ImportError:
+                from repair_memory import RepairMemoryStore
+            mem_store = RepairMemoryStore(self.repo_root / ".maya" / "maintenance" / "repair_memory.jsonl")
+            formatted, selected_recs = mem_store.get_prompt_context_with_metadata(
+                target_files=task.target_files,
+                defect_category=task.audit_source,
+                max_chars=800,
+            )
+            if formatted:
+                repair_memory_snippet = f"\n\n{formatted}\n"
+                if task.checkpoint and isinstance(task.checkpoint.details, dict):
+                    task.checkpoint.details["memory_selected"] = [r.task_id for r in selected_recs]
+        except Exception as mem_err:
+            logger.debug("Could not retrieve repair memory for orchestrator prompt: %s", mem_err)
+
         prompt = (
             f"You are acting as the lightweight MayaVE Implementer role on Task {task.task_id}.\n\n"
             f"=== TASK SPECIFICATION ===\n"
@@ -161,7 +203,7 @@ class SingleTaskOrchestrator:
             f"Risk      : {task.risk.value}\n"
             f"Audit Ref : {task.audit_source}\n\n"
             f"Description:\n{task.description}\n\n"
-            f"Evidence of Defect:\n{task.evidence}{previous_feedback}\n\n"
+            f"Evidence of Defect:\n{task.evidence}{previous_feedback}{repair_memory_snippet}\n\n"
             f"Target Files Allowed to Modify:\n{target_files_str}\n\n"
             f"Verification Test Targets:\n{test_targets_str}\n\n"
             f"Acceptance Criteria:\n{criteria_str}\n\n"
@@ -318,6 +360,18 @@ class SingleTaskOrchestrator:
             )
             if not result.accepted:
                 raise RuntimeError(f"Coordinator rejected {event_type}: {result.error_code}: {result.message}")
+
+            trace_emit(
+                TraceEvent(
+                    category="lifecycle",
+                    type=event_type,
+                    provenance="captured",
+                    task_id=task.task_id if task else None,
+                    severity="WARN" if (failure_reason or blocking_reason) else "INFO",
+                    summary=f"Task transitioned to {status.name} [{stage}]: {failure_reason or blocking_reason or 'ok'}",
+                    payload=details if isinstance(details, dict) else {},
+                )
+            )
 
         with lock_ctx:
             # 1. Reconcile interrupted or in-flight work on startup (skipped in dry-run mode)
@@ -519,6 +573,113 @@ class SingleTaskOrchestrator:
             )
             _persist_task(task)
 
+            # 5b. Freeze test targets and execute baseline verification
+            frozen_hashes, freeze_errs = freeze_task_tests(task, worktree_path)
+            if task.is_defect_task():
+                if freeze_errs or not frozen_hashes:
+                    reason = (
+                        f"test doesn't prove the defect: {'; '.join(freeze_errs) if freeze_errs else 'no test targets specified'}"
+                    )
+                    task.failure_reason = reason
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                    _transition(
+                        TaskStatus.NEEDS_APPROVAL,
+                        stage="BASELINE_VERIFICATION",
+                        details={"error": "missing_or_invalid_test_targets", "freeze_errors": freeze_errs},
+                        event_type="BASELINE_VERIFICATION_INCONCLUSIVE",
+                        blocking_reason=reason,
+                        idempotency_key=f"baseline-freeze-err:{task.task_id}",
+                    )
+                    return _return_summary(ExecutionSummary(
+                        task_id=task.task_id,
+                        success=False,
+                        final_status=TaskStatus.NEEDS_APPROVAL,
+                        dry_run=False,
+                        authorized=authorized,
+                        duration_sec=time.monotonic() - start_time,
+                        worktree_path=str(worktree_path),
+                        message=f"Task '{task.task_id}' halted: {reason}. Human approval required.",
+                    ))
+                task.frozen_tests = frozen_hashes
+            elif frozen_hashes:
+                task.frozen_tests = frozen_hashes
+
+            # Run baseline verification against unpatched worktree
+            baseline_gate_res = self.quality_engine.run_verification_tests(task, worktree_path)
+            baseline_evidence = baseline_gate_res.to_dict()
+            self._update_checkpoint(
+                task,
+                stage="BASELINE_VERIFICATION",
+                stage_details={"baseline_verification": baseline_evidence},
+            )
+            _persist_task(task)
+
+            trace_emit(
+                TraceEvent(
+                    category="quality",
+                    type="quality.baseline_evaluated",
+                    severity="INFO" if not (task.is_defect_task() and baseline_gate_res.passed) else "WARNING",
+                    task_id=task.task_id,
+                    summary=f"Baseline verification executed: passed={baseline_gate_res.passed}",
+                    payload={
+                        "passed": baseline_gate_res.passed,
+                        "is_defect": task.is_defect_task(),
+                        "exit_code": baseline_gate_res.details.get("exit_code"),
+                    },
+                )
+            )
+
+            if task.is_defect_task():
+                # Defect task requires baseline failure to reproduce defect
+                if baseline_gate_res.passed is True:
+                    reason = "test doesn't prove the defect: baseline tests passed before patch was applied"
+                    task.failure_reason = reason
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                    _transition(
+                        TaskStatus.NEEDS_APPROVAL,
+                        stage="BASELINE_VERIFICATION",
+                        details={"baseline_verification": baseline_evidence},
+                        event_type="BASELINE_VERIFICATION_INCONCLUSIVE",
+                        blocking_reason=reason,
+                        idempotency_key=f"baseline-verif-pass:{task.task_id}",
+                    )
+                    return _return_summary(ExecutionSummary(
+                        task_id=task.task_id,
+                        success=False,
+                        final_status=TaskStatus.NEEDS_APPROVAL,
+                        dry_run=False,
+                        authorized=authorized,
+                        duration_sec=time.monotonic() - start_time,
+                        worktree_path=str(worktree_path),
+                        message=f"Task '{task.task_id}' halted: {reason}. Human approval required.",
+                    ))
+                elif baseline_gate_res.details.get("exit_code") in (-1, 5) or not baseline_gate_res.details.get("test_results"):
+                    # Test runner failed or no tests collected
+                    reason = f"test doesn't prove the defect: target cannot be exercised ({baseline_gate_res.message})"
+                    task.failure_reason = reason
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                    _transition(
+                        TaskStatus.NEEDS_APPROVAL,
+                        stage="BASELINE_VERIFICATION",
+                        details={"baseline_verification": baseline_evidence},
+                        event_type="BASELINE_VERIFICATION_INCONCLUSIVE",
+                        blocking_reason=reason,
+                        idempotency_key=f"baseline-verif-unexercised:{task.task_id}",
+                    )
+                    return _return_summary(ExecutionSummary(
+                        task_id=task.task_id,
+                        success=False,
+                        final_status=TaskStatus.NEEDS_APPROVAL,
+                        dry_run=False,
+                        authorized=authorized,
+                        duration_sec=time.monotonic() - start_time,
+                        worktree_path=str(worktree_path),
+                        message=f"Task '{task.task_id}' halted: {reason}. Human approval required.",
+                    ))
+
             # 6. Build bounded prompt
             prompt = self.build_prompt(task, worktree_path)
 
@@ -637,11 +798,52 @@ class SingleTaskOrchestrator:
                     else:
                         active_adapter = LocalModelAgentAdapter(model=self.router.config.local_model)
 
+            worker_adapter_name = active_adapter.__class__.__name__
+            worker_id = "W1"
+            exec_req_id = f"exec-{task.task_id}-a{task.attempts}"
+
+            trace_emit(
+                TraceEvent(
+                    category="worker",
+                    type="worker.dispatched",
+                    task_id=task.task_id,
+                    worker_id=worker_id,
+                    request_id=exec_req_id,
+                    sender="orchestrator",
+                    recipient=worker_adapter_name,
+                    summary=f"Dispatched attempt {task.attempts} to {worker_adapter_name}",
+                    payload={"adapter": worker_adapter_name, "timeout": self.timeout_seconds},
+                )
+            )
+
             agent_result: AgentExecutionResult = active_adapter.execute(
                 task=task,
                 prompt=prompt,
                 worktree_path=worktree_path,
                 timeout_seconds=self.timeout_seconds,
+            )
+
+            tok_reported = agent_result.input_tokens is not None or agent_result.output_tokens is not None
+            trace_emit(
+                TraceEvent(
+                    category="worker",
+                    type="worker.completed" if agent_result.success else "worker.failed",
+                    severity="INFO" if agent_result.success else "ERROR",
+                    task_id=task.task_id,
+                    worker_id=worker_id,
+                    request_id=exec_req_id,
+                    sender=worker_adapter_name,
+                    recipient="orchestrator",
+                    summary=f"Worker {worker_adapter_name} attempt {task.attempts} {'succeeded' if agent_result.success else 'failed'}: exit={agent_result.exit_code}",
+                    usage={
+                        "source": "provider" if tok_reported else "unknown",
+                        "input_tokens": agent_result.input_tokens,
+                        "output_tokens": agent_result.output_tokens,
+                    },
+                    latency_ms=int(agent_result.duration_sec * 1000),
+                    latency_source="measured",
+                    payload={"exit_code": agent_result.exit_code, "error": agent_result.error_message or ""},
+                )
             )
 
             # Record persistent token and cost usage into ledger budget (P6 WS2)
@@ -852,6 +1054,19 @@ class SingleTaskOrchestrator:
 
             quality_report: QualityReport = self.quality_engine.evaluate(task, worktree_path)
 
+            trace_emit(
+                TraceEvent(
+                    category="quality",
+                    type="quality.evaluated",
+                    task_id=task.task_id,
+                    severity="INFO" if quality_report.passed else "WARN",
+                    sender="quality",
+                    recipient="orchestrator",
+                    summary=f"Quality gates: {'PASSED' if quality_report.passed else 'FAILED'} (failed: {[r.gate_name for r in quality_report.results if not r.passed]})",
+                    payload={"passed": quality_report.passed, "results": [{"gate": r.gate_name, "passed": r.passed, "message": r.message} for r in quality_report.results]},
+                )
+            )
+
             task.history.append(
                 EvidenceRecord(
                     timestamp=utc_now_iso(),
@@ -862,131 +1077,243 @@ class SingleTaskOrchestrator:
             )
 
             review_result: Optional[ReviewResult] = None
+            scan_report: Optional[ScanReport] = None
+            safeguard_approved = False
             final_status = TaskStatus.FAILED
             final_failure_reason: str | None = None
             final_blocking_reason: str | None = None
 
             if quality_report.passed:
-                should_rev, rev_reason = self.review_policy.should_review(task)
-                if should_rev:
-                    def _perform_review() -> Optional[ReviewResult]:
-                        # Check review budget
-                        if not self.review_policy.has_budget_available():
-                            nonlocal final_status, final_blocking_reason
-                            final_status = TaskStatus.NEEDS_APPROVAL
-                            final_blocking_reason = (
-                                f"Review required ({rev_reason}), but session review budget "
-                                f"({self.review_policy.max_reviews_per_session}) is exhausted."
-                            )
-                            if task.workspace:
-                                task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                            return None
+                # Capture candidate diff for deterministic safeguard scan
+                diff_proc = subprocess.run(
+                    ["git", "diff", "HEAD"],
+                    cwd=str(worktree_path),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                diff_text = diff_proc.stdout
+                diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
 
-                        # Capture diff
-                        diff_proc = subprocess.run(
-                            ["git", "diff", "HEAD"],
-                            cwd=str(worktree_path),
-                            capture_output=True,
-                            text=True,
-                            check=False,
+                # Fail-closed if diff extraction failed
+                if diff_proc.returncode != 0:
+                    scan_report = ScanReport(
+                        passed=False,
+                        diff_sha256=diff_hash,
+                        requires_approval=True,
+                        approval_reason=f"Failed to extract candidate diff (exit {diff_proc.returncode}): {diff_proc.stderr}",
+                    )
+                else:
+                    try:
+                        scan_report = self.safeguard_scanner.scan_diff(
+                            task,
+                            diff_text,
+                            worktree_path=worktree_path,
                         )
-                        diff_text = diff_proc.stdout
-                        diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+                    except Exception as scan_err:
+                        logger.exception("Pre-review safeguard scanner error on %s: %s", task.task_id, scan_err)
+                        scan_report = ScanReport(
+                            passed=False,
+                            diff_sha256=diff_hash,
+                            requires_approval=True,
+                            approval_reason=f"Safeguard scanner internal error: {scan_err}",
+                        )
 
-                        # Check for cached review on identical diff
-                        cache_key = (task.task_id, diff_hash)
-                        cached_rev = self._review_cache.get(cache_key)
+                # Emit safeguard scan trace event
+                trace_emit(
+                    TraceEvent(
+                        category="review",
+                        type="reviewer.safeguards_scanned",
+                        task_id=task.task_id,
+                        severity="INFO" if scan_report.passed else "WARN",
+                        sender="reviewer_safeguards",
+                        recipient="orchestrator",
+                        summary=f"Safeguards scan: {'PASSED' if scan_report.passed else 'HELD'} (findings={len(scan_report.findings)}, limits_exceeded={len(scan_report.limits_exceeded)})",
+                        payload=scan_report.to_dict(),
+                    )
+                )
 
-                        if cached_rev:
-                            return cached_rev
-                        else:
-                            self.review_policy.consume_review()
-                            verif_summary = "\n".join(r.message for r in quality_report.results)
-                            res = self.reviewer.review(
-                                task=task,
-                                diff=diff_text,
-                                verification_summary=verif_summary,
-                                worktree_path=worktree_path,
-                                timeout_seconds=self.timeout_seconds,
+                # Evaluate pre-review safeguard outcome
+                safeguard_approved = False
+                if scan_report.requires_approval:
+                    approval_scope = scan_report.get_approval_scope()
+                    if self.approval_manager:
+                        safeguard_approved = self.approval_manager.is_operation_approved(
+                            task_id=task.task_id,
+                            operation="reviewer_safeguards",
+                            target=str(worktree_path),
+                            scope=approval_scope,
+                            patch_sha256=scan_report.diff_sha256,
+                        )
+
+                    if not safeguard_approved:
+                        if self.approval_manager:
+                            try:
+                                self.approval_manager.create_request(
+                                    task_id=task.task_id,
+                                    risk=task.risk.value if hasattr(task.risk, "value") else str(task.risk),
+                                    operation="reviewer_safeguards",
+                                    target=str(worktree_path),
+                                    scope=approval_scope,
+                                    reason=scan_report.approval_reason or "Reviewer safeguards triggered.",
+                                    patch_sha256=scan_report.diff_sha256,
+                                    lock_held=acquire_coarse_lock,
+                                )
+                            except Exception as req_err:
+                                logger.warning("Failed to record permission request for %s: %s", task.task_id, req_err)
+
+                        task.history.append(
+                            EvidenceRecord(
+                                timestamp=utc_now_iso(),
+                                stage="REVIEWER_SAFEGUARDS",
+                                details=f"Held by pre-review safeguards: {scan_report.approval_reason}. Scope: {approval_scope}",
+                                success=False,
                             )
-                            self._review_cache[cache_key] = res
-                            return res
+                        )
 
-                    if self.reviewer_lock:
-                        with self.reviewer_lock:
-                            review_result = _perform_review()
+                        final_status = TaskStatus.NEEDS_APPROVAL
+                        final_blocking_reason = f"Pre-review safeguards held patch: {scan_report.approval_reason}"
+                        if task.workspace:
+                            task.workspace.lifecycle_state = "NEEDS_APPROVAL"
                     else:
-                        review_result = _perform_review()
+                        task.history.append(
+                            EvidenceRecord(
+                                timestamp=utc_now_iso(),
+                                stage="REVIEWER_SAFEGUARDS",
+                                details=f"Explicit operator approval confirmed for scope: {approval_scope}",
+                                success=True,
+                            )
+                        )
+                else:
+                    task.history.append(
+                        EvidenceRecord(
+                            timestamp=utc_now_iso(),
+                            stage="REVIEWER_SAFEGUARDS",
+                            details=(
+                                f"Passed pre-review safeguards: files={scan_report.total_files}, "
+                                f"+{scan_report.total_added}/-{scan_report.total_deleted} lines."
+                            ),
+                            success=True,
+                        )
+                    )
 
-                    if review_result is not None:
-                        # Record evidence
+                # Only proceed to reviewer invocation or downstream readiness if not held by safeguards
+                if not scan_report.requires_approval or safeguard_approved:
+                    should_rev, rev_reason = self.review_policy.should_review(task)
+                    if should_rev:
+                        def _perform_review() -> Optional[ReviewResult]:
+                            # Check review budget
+                            if not self.review_policy.has_budget_available():
+                                nonlocal final_status, final_blocking_reason
+                                final_status = TaskStatus.NEEDS_APPROVAL
+                                final_blocking_reason = (
+                                    f"Review required ({rev_reason}), but session review budget "
+                                    f"({self.review_policy.max_reviews_per_session}) is exhausted."
+                                )
+                                if task.workspace:
+                                    task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                                return None
+
+                            # Check for cached review on identical diff
+                            cache_key = (task.task_id, diff_hash)
+                            cached_rev = self._review_cache.get(cache_key)
+
+                            if cached_rev:
+                                return cached_rev
+                            else:
+                                self.review_policy.consume_review()
+                                verif_summary = "\n".join(r.message for r in quality_report.results)
+                                res = self.reviewer.review(
+                                    task=task,
+                                    diff=diff_text,
+                                    verification_summary=verif_summary,
+                                    worktree_path=worktree_path,
+                                    timeout_seconds=self.timeout_seconds,
+                                )
+                                self._review_cache[cache_key] = res
+                                return res
+
+                        if self.reviewer_lock:
+                            with self.reviewer_lock:
+                                review_result = _perform_review()
+                        else:
+                            review_result = _perform_review()
+
+                        if review_result is not None:
+                            # Record evidence
+                            task.history.append(
+                                EvidenceRecord(
+                                    timestamp=utc_now_iso(),
+                                    stage="INDEPENDENT_REVIEW",
+                                    details=(
+                                        f"Recommendation={review_result.recommendation.value}: "
+                                        f"{review_result.summary} (Mutated={review_result.worktree_mutated})"
+                                    ),
+                                    success=(review_result.recommendation == ReviewRecommendation.APPROVE),
+                                )
+                            )
+
+                            # Evaluate review outcome
+                            if review_result.worktree_mutated:
+                                final_status = TaskStatus.FAILED
+                                final_failure_reason = f"CRITICAL: Reviewer mutated worktree files: {review_result.error_message}"
+                                if task.workspace:
+                                    task.workspace.lifecycle_state = "FAILED"
+                            elif review_result.auth_failed or review_result.rate_limited or not review_result.success:
+                                final_status = TaskStatus.NEEDS_APPROVAL
+                                final_blocking_reason = f"Independent review halted: {review_result.error_message or review_result.summary}"
+                                if task.workspace:
+                                    task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                            elif review_result.recommendation == ReviewRecommendation.REQUEST_CHANGES:
+                                final_status = TaskStatus.FAILED
+                                final_failure_reason = f"Independent review requested changes: {review_result.summary}"
+                                if task.workspace:
+                                    task.workspace.lifecycle_state = "FAILED"
+                            elif review_result.recommendation == ReviewRecommendation.NEEDS_HUMAN_APPROVAL:
+                                final_status = TaskStatus.NEEDS_APPROVAL
+                                final_blocking_reason = f"Independent review requires human approval: {review_result.summary}"
+                                if task.workspace:
+                                    task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                            elif review_result.recommendation == ReviewRecommendation.APPROVE:
+                                if task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH):
+                                    final_status = TaskStatus.NEEDS_APPROVAL
+                                    final_blocking_reason = f"{task.risk.value}-risk task requires human operator sign-off before downstream progression."
+                                    if task.workspace:
+                                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                                else:
+                                    final_status = TaskStatus.READY_TO_INTEGRATE
+                    else:
+                        # Review skipped by policy (low risk)
                         task.history.append(
                             EvidenceRecord(
                                 timestamp=utc_now_iso(),
                                 stage="INDEPENDENT_REVIEW",
-                                details=(
-                                    f"Recommendation={review_result.recommendation.value}: "
-                                    f"{review_result.summary} (Mutated={review_result.worktree_mutated})"
-                                ),
-                                success=(review_result.recommendation == ReviewRecommendation.APPROVE),
+                                details=f"Skipped by policy: {rev_reason}",
+                                success=True,
                             )
                         )
-
-                        # Evaluate review outcome
-                        if review_result.worktree_mutated:
-                            final_status = TaskStatus.FAILED
-                            final_failure_reason = f"CRITICAL: Reviewer mutated worktree files: {review_result.error_message}"
-                            if task.workspace:
-                                task.workspace.lifecycle_state = "FAILED"
-                        elif review_result.auth_failed or review_result.rate_limited or not review_result.success:
+                        if quality_report.should_elevate_approval:
                             final_status = TaskStatus.NEEDS_APPROVAL
-                            final_blocking_reason = f"Independent review halted: {review_result.error_message or review_result.summary}"
+                            final_blocking_reason = quality_report.approval_reason
                             if task.workspace:
                                 task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                        elif review_result.recommendation == ReviewRecommendation.REQUEST_CHANGES:
-                            final_status = TaskStatus.FAILED
-                            final_failure_reason = f"Independent review requested changes: {review_result.summary}"
-                            if task.workspace:
-                                task.workspace.lifecycle_state = "FAILED"
-                        elif review_result.recommendation == ReviewRecommendation.NEEDS_HUMAN_APPROVAL:
-                            final_status = TaskStatus.NEEDS_APPROVAL
-                            final_blocking_reason = f"Independent review requires human approval: {review_result.summary}"
-                            if task.workspace:
-                                task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                        elif review_result.recommendation == ReviewRecommendation.APPROVE:
-                            if task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH):
-                                final_status = TaskStatus.NEEDS_APPROVAL
-                                final_blocking_reason = f"{task.risk.value}-risk task requires human operator sign-off before downstream progression."
-                                if task.workspace:
-                                    task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                            else:
-                                final_status = TaskStatus.READY_TO_INTEGRATE
-                else:
-                    # Review skipped by policy (low risk)
-                    task.history.append(
-                        EvidenceRecord(
-                            timestamp=utc_now_iso(),
-                            stage="INDEPENDENT_REVIEW",
-                            details=f"Skipped by policy: {rev_reason}",
-                            success=True,
-                        )
-                    )
-                    if quality_report.should_elevate_approval:
-                        final_status = TaskStatus.NEEDS_APPROVAL
-                        final_blocking_reason = quality_report.approval_reason
-                        if task.workspace:
-                            task.workspace.lifecycle_state = "NEEDS_APPROVAL"
-                    else:
-                        final_status = TaskStatus.READY_TO_INTEGRATE
+                        else:
+                            final_status = TaskStatus.READY_TO_INTEGRATE
             else:
-                final_status = TaskStatus.FAILED
-                final_failure_reason = quality_report.failure_reason or "Quality gate verification failed."
-                if task.workspace:
-                    task.workspace.lifecycle_state = "FAILED"
+                if quality_report.should_elevate_approval:
+                    final_status = TaskStatus.NEEDS_APPROVAL
+                    final_blocking_reason = quality_report.approval_reason
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+                else:
+                    final_status = TaskStatus.FAILED
+                    final_failure_reason = quality_report.failure_reason or "Quality gate verification failed."
+                    if task.workspace:
+                        task.workspace.lifecycle_state = "FAILED"
 
-                # Safely reset only attempt-modified files to baseline commit
-                base_sha = task.workspace.base_commit if task.workspace else None
-                safe_restore_worktree_attempt(worktree_path, task, base_commit=base_sha, repo_root=self.repo_root)
+                    # Safely reset only attempt-modified files to baseline commit
+                    base_sha = task.workspace.base_commit if task.workspace else None
+                    safe_restore_worktree_attempt(worktree_path, task, base_commit=base_sha, repo_root=self.repo_root)
 
                 # Extract concise, bounded diagnostics from failing gates for the next attempt
                 failing_gates_summary = []
@@ -1035,11 +1362,24 @@ class SingleTaskOrchestrator:
                 )
             if final_status == TaskStatus.READY_TO_INTEGRATE:
                 task.failure_reason = None
+            if scan_report and scan_report.requires_approval and not safeguard_approved:
+                stage_val = "REVIEWER_SAFEGUARD_HELD"
+                event_val = "REVIEWER_SAFEGUARD_BLOCKED"
+            elif quality_report.passed:
+                stage_val = "PRE_INTEGRATION_VERIFICATION"
+                event_val = "PRE_INTEGRATION_VERIFICATION_PASSED"
+            elif quality_report.should_elevate_approval:
+                stage_val = "INCONCLUSIVE_VERIFICATION"
+                event_val = "INCONCLUSIVE_VERIFICATION_ELEVATED"
+            else:
+                stage_val = "QUALITY_FAILED"
+                event_val = "QUALITY_VERIFICATION_FAILED"
+
             _transition(
                 final_status,
-                stage="PRE_INTEGRATION_VERIFICATION" if quality_report.passed else "QUALITY_FAILED",
+                stage=stage_val,
                 details=stage_details,
-                event_type="PRE_INTEGRATION_VERIFICATION_PASSED" if quality_report.passed else "QUALITY_VERIFICATION_FAILED",
+                event_type=event_val,
                 failure_reason=final_failure_reason,
                 blocking_reason=final_blocking_reason,
                 idempotency_key=f"candidate-result:{task.task_id}:{task.attempts}",
@@ -1071,6 +1411,31 @@ class SingleTaskOrchestrator:
                     mem_store.record_outcome(outcome)
                 except Exception as mem_err:
                     logger.debug("Could not record repair memory outcome: %s", mem_err)
+
+            if not overall_success and not quality_report.passed:
+                try:
+                    try:
+                        from .repair_memory import RepairMemoryStore, RepairOutcome
+                    except ImportError:
+                        from repair_memory import RepairMemoryStore, RepairOutcome
+                    mem_store = RepairMemoryStore(self.repo_root / ".maya" / "maintenance" / "repair_memory.jsonl")
+                    fail_summary = gate_diag.get("summary", "Quality gate verification failed")[:200] if "gate_diag" in locals() else "Quality verification failed"
+                    outcome = RepairOutcome(
+                        task_id=task.task_id,
+                        target_files=list(task.target_files),
+                        defect_category=task.audit_source or "maintenance",
+                        model_id=str(getattr(active_adapter, "model", "local")),
+                        patch_sha256="",
+                        verification_sha256="",
+                        test_targets=list(task.test_targets),
+                        verification_passed=False,
+                        status="failed",
+                        duration_sec=duration,
+                        diff_summary=fail_summary,
+                    )
+                    mem_store.record_outcome(outcome)
+                except Exception as mem_err:
+                    logger.debug("Could not record failed repair memory outcome: %s", mem_err)
 
             if not overall_success:
                 self._save_diagnostic_report(task, agent_result, quality_report, review_result)

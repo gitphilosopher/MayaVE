@@ -10,7 +10,6 @@ import abc
 import enum
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -21,10 +20,10 @@ from typing import Callable, Optional
 
 try:
     from .adapter import kill_process_tree
-    from .models import TaskDefinition, TaskRisk, utc_now_iso
+    from .models import TaskDefinition, TaskRisk
 except ImportError:
     from adapter import kill_process_tree
-    from models import TaskDefinition, TaskRisk, utc_now_iso
+    from models import TaskDefinition, TaskRisk
 
 
 class ReviewRecommendation(str, enum.Enum):
@@ -404,6 +403,30 @@ class CopilotReviewerAdapter(ReviewerAdapter):
                 success=False,
                 recommendation=ReviewRecommendation.ERROR,
                 error_message=f"Worktree path does not exist: {worktree_path}",
+                diff_sha256=diff_sha,
+            )
+
+        # Defense-in-depth: Deterministic pre-review security and diff limit scan
+        try:
+            try:
+                from .reviewer_safeguards import ReviewerSafeguardScanner
+            except ImportError:
+                from reviewer_safeguards import ReviewerSafeguardScanner
+            safeguard_report = ReviewerSafeguardScanner().scan_diff(task, diff, worktree_path=worktree_path)
+            if safeguard_report.requires_approval:
+                return ReviewResult(
+                    success=False,
+                    recommendation=ReviewRecommendation.NEEDS_HUMAN_APPROVAL,
+                    summary=f"Pre-review safeguards held patch: {safeguard_report.approval_reason}",
+                    error_message=f"Reviewer safeguards blocked external review: {safeguard_report.approval_reason}",
+                    duration_sec=time.monotonic() - start_time,
+                    diff_sha256=diff_sha,
+                )
+        except Exception as scan_err:
+            return ReviewResult(
+                success=False,
+                recommendation=ReviewRecommendation.ERROR,
+                error_message=f"Reviewer safeguard scanner failed closed: {scan_err}",
                 diff_sha256=diff_sha,
             )
 

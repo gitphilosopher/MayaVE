@@ -176,7 +176,7 @@ class TerminalApprovalManager:
             logger.error("Approval transition was not persisted: %s", result.message)
         return result.accepted
 
-    def _record_lifecycle_event(self, req: PermissionRequest, event_type: str) -> bool:
+    def _record_lifecycle_event(self, req: PermissionRequest, event_type: str, lock_held: bool = False) -> bool:
         if not self.store or not self.store.exists():
             return True
         try:
@@ -199,6 +199,7 @@ class TerminalApprovalManager:
                     "verification_sha256": req.verification_sha256,
                 },
                 idempotency_key=f"approval-event:{req.request_id}:{event_type}",
+                lock_held=lock_held,
             )
             return result.accepted
         except Exception as exc:
@@ -244,6 +245,7 @@ class TerminalApprovalManager:
         patch_sha256: Optional[str] = None,
         baseline_commit: Optional[str] = None,
         verification_sha256: Optional[str] = None,
+        lock_held: bool = False,
     ) -> PermissionRequest:
         if not request_id:
             ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -277,7 +279,7 @@ class TerminalApprovalManager:
         )
         self._requests[request_id] = req
         self.save()
-        if not self._record_lifecycle_event(req, "PERMISSION_REQUEST_CREATED"):
+        if not self._record_lifecycle_event(req, "PERMISSION_REQUEST_CREATED", lock_held=lock_held):
             raise RuntimeError("Permission request was saved, but its coordinator lifecycle event could not be persisted.")
         return req
 

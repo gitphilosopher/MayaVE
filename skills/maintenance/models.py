@@ -218,8 +218,20 @@ class TaskDefinition:
     blocking_reason: str | None = None
     integration_approval: dict | None = None
     allow_file_deletion: bool = False
+    task_type: str = "defect"  # defect, feature, improvement, refactor, chore
+    frozen_tests: dict | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
+
+    def is_defect_task(self) -> bool:
+        """
+        Conservative defect classification:
+        A task is a defect task requiring fail-to-pass verification unless explicitly
+        declared as a non-defect type (feature, improvement, refactor, chore).
+        """
+        if self.task_type and self.task_type.lower() in ("feature", "improvement", "refactor", "chore"):
+            return False
+        return True
 
     def to_dict(self) -> dict:
         return {
@@ -247,6 +259,8 @@ class TaskDefinition:
             "blocking_reason": self.blocking_reason,
             "integration_approval": dict(self.integration_approval) if self.integration_approval else None,
             "allow_file_deletion": self.allow_file_deletion,
+            "task_type": self.task_type,
+            "frozen_tests": dict(self.frozen_tests) if self.frozen_tests else None,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -287,6 +301,8 @@ class TaskDefinition:
             blocking_reason=data.get("blocking_reason"),
             integration_approval=dict(data["integration_approval"]) if data.get("integration_approval") else None,
             allow_file_deletion=bool(data.get("allow_file_deletion", False)),
+            task_type=data.get("task_type", "defect"),
+            frozen_tests=dict(data["frozen_tests"]) if data.get("frozen_tests") else None,
             created_at=data.get("created_at", utc_now_iso()),
             updated_at=data.get("updated_at", utc_now_iso()),
         )

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import abc
 import json
+import logging
 import os
 import re
 import shutil
@@ -15,14 +16,35 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+logger = logging.getLogger("maya.maintenance.adapter")
+
 try:
-    from .models import TaskDefinition, TaskPriority, TaskRisk
+    from .models import TaskDefinition, TaskRisk
 except ImportError:
-    from models import TaskDefinition, TaskPriority, TaskRisk
+    from models import TaskDefinition, TaskRisk
+
+try:
+    from .worktree import safe_restore_worktree_attempt
+except ImportError:
+    try:
+        from worktree import safe_restore_worktree_attempt
+    except ImportError:
+        safe_restore_worktree_attempt = None
+
+try:
+    from .trace import TraceEvent, emit as trace_emit, write_trace_body
+except ImportError:
+    try:
+        from trace import TraceEvent, emit as trace_emit, write_trace_body
+    except ImportError:
+        def trace_emit(*args, **kwargs): pass
+        def write_trace_body(*args, **kwargs): return None, False, 0
+        class TraceEvent:
+            def __init__(self, **kwargs): pass
 
 
 def kill_process_tree(proc: subprocess.Popen) -> None:
@@ -444,6 +466,137 @@ class AntigravityAgentAdapter(AgentAdapter):
         )
 
 
+@dataclass
+class SourceSliceResult:
+    content: str
+    is_sliced: bool
+    line_range: tuple[int, int]  # (1-based start, 1-based end)
+    total_lines: int
+    sliced_function_or_class: Optional[str] = None
+    reason: str = "full"
+
+
+def slice_source_context(
+    content: str,
+    rel_path: str,
+    focus_pattern: Optional[str] = None,
+    evidence: Optional[str] = None,
+    max_lines: int = 120,
+    max_budget_chars: int = 8000,
+) -> SourceSliceResult:
+    """
+    Produce a bounded, function/class-level source slice around the relevant defect.
+    Preserves module imports and surrounding context lines to support exact-match validation.
+    If the file is within budget, returns the complete file.
+    If the file is large and cannot be sliced confidently, checks if it fits context budget;
+    if not, returns reason='oversized_ambiguous_context'.
+    """
+    lines = content.splitlines(keepends=True)
+    total_lines = len(lines)
+    if total_lines == 0:
+        return SourceSliceResult(content="", is_sliced=False, line_range=(0, 0), total_lines=0, reason="empty_file")
+
+    if total_lines <= max_lines and len(content) <= max_budget_chars:
+        return SourceSliceResult(
+            content=content,
+            is_sliced=False,
+            line_range=(1, total_lines),
+            total_lines=total_lines,
+            reason="within_budget",
+        )
+
+    # For Python files, attempt AST-based structural function/class slicing
+    if rel_path.endswith(".py"):
+        try:
+            import ast
+            tree = ast.parse(content)
+
+            # Identify module-level header (imports and docstrings)
+            last_import_line = 0
+            for node in tree.body:
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    last_import_line = max(last_import_line, getattr(node, "end_lineno", node.lineno))
+
+            header_lines_count = max(0, min(last_import_line, 40))
+
+            # Search for candidate functions or classes matching focus_pattern or evidence keywords
+            keywords: set[str] = set()
+            if focus_pattern:
+                for word in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]{2,}\b", focus_pattern):
+                    keywords.add(word)
+            if evidence:
+                for word in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]{3,}\b", evidence):
+                    keywords.add(word)
+
+            best_node = None
+            best_score = 0
+
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    node_name = node.name
+                    score = 0
+                    if focus_pattern and (focus_pattern in node_name or (hasattr(node, "name") and re.search(focus_pattern, node_name))):
+                        score += 10
+                    if node_name in keywords:
+                        score += 5
+                    node_text = "".join(lines[node.lineno - 1 : getattr(node, "end_lineno", node.lineno + 20)])
+                    if focus_pattern and focus_pattern in node_text:
+                        score += 8
+                    for kw in keywords:
+                        if kw in node_text:
+                            score += 1
+
+                    if score > best_score:
+                        best_score = score
+                        best_node = node
+
+            if best_node is not None and best_score >= 3:
+                node_start = max(1, best_node.lineno - 3)
+                node_end = min(total_lines, getattr(best_node, "end_lineno", best_node.lineno + 30) + 3)
+
+                header = "".join(lines[:header_lines_count])
+                sliced_body = "".join(lines[node_start - 1 : node_end])
+
+                parts = []
+                if header.strip():
+                    parts.append(header)
+                if node_start > header_lines_count + 1:
+                    parts.append(f"# ... [Lines {header_lines_count + 1} to {node_start - 1} omitted for bounded context] ...\n")
+                parts.append(sliced_body)
+                if node_end < total_lines:
+                    parts.append(f"# ... [Lines {node_end + 1} to {total_lines} omitted for bounded context] ...\n")
+
+                slice_text = "".join(parts)
+                return SourceSliceResult(
+                    content=slice_text,
+                    is_sliced=True,
+                    line_range=(node_start, node_end),
+                    total_lines=total_lines,
+                    sliced_function_or_class=best_node.name,
+                    reason="target_node_located",
+                )
+        except Exception:
+            pass
+
+    # Fallback: if the full file fits within the maximum context budget, return it
+    if len(content) <= max_budget_chars:
+        return SourceSliceResult(
+            content=content,
+            is_sliced=False,
+            line_range=(1, total_lines),
+            total_lines=total_lines,
+            reason="unambiguous_fallback_within_budget",
+        )
+
+    return SourceSliceResult(
+        content="",
+        is_sliced=False,
+        line_range=(0, 0),
+        total_lines=total_lines,
+        reason="oversized_ambiguous_context",
+    )
+
+
 class LocalModelAgentAdapter(AgentAdapter):
     """
     Adapter for invoking a local LLM (defaults to Qwen-2.5-Coder 3B via Ollama)
@@ -457,11 +610,17 @@ class LocalModelAgentAdapter(AgentAdapter):
         model: str = "qwen2.5-coder:3b",
         temperature: float = 0.2,
         client: Optional[Any] = None,
+        exact_match: bool = True,
+        num_ctx: int = 4096,
+        truncation_threshold: float = 0.95,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.temperature = temperature
         self._client = client
+        self.exact_match = exact_match
+        self.num_ctx = num_ctx
+        self.truncation_threshold = truncation_threshold
 
     def _call_ollama(self, prompt: str, timeout_seconds: int = 120) -> tuple[str, Optional[int], Optional[int]]:
         """
@@ -485,7 +644,10 @@ class LocalModelAgentAdapter(AgentAdapter):
             "model": self.model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": self.temperature},
+            "options": {
+                "temperature": self.temperature,
+                "num_ctx": self.num_ctx,
+            },
         }).encode("utf-8")
 
         req = urllib.request.Request(
@@ -538,12 +700,14 @@ class LocalModelAgentAdapter(AgentAdapter):
         text: str,
         allowed_files: set[str],
         worktree_path: Path,
+        exact_match: bool | None = None,
     ) -> tuple[dict[str, str], set[str], Optional[str], Optional[str]]:
         """
         Extract and apply unified diff format patches from model output.
-        Enforces F-01 (distinctive context threshold >= 2) and F-02 (file deletion detection).
+        Enforces exact-match-or-reject by default, preventing fuzzy misapplication.
         Returns (modified_files_dict, deleted_files_set, error_message, security_violation_message).
         """
+        strict_exact = self.exact_match if exact_match is None else exact_match
         diff_pattern = re.compile(
             r"(?:diff --git[^\r\n]*[\r\n]+)?--- (?:a/)?([^\r\n\t]+)[\r\n]+\+\+\+ (?:b/)?([^\r\n\t]+)[\r\n]+"
             r"((?:@@ -[\d,]+ \+[\d,]+ @@[^\r\n]*[\r\n]+(?:(?: [^\r\n]*|-(?!--)[^\r\n]*|\+(?!\+\+)[^\r\n]*|\\[^\r\n]*)(?:[\r\n]+|$))*)+)",
@@ -651,33 +815,43 @@ class LocalModelAgentAdapter(AgentAdapter):
                     if new_lines[target_idx:target_idx + len(expected_block)] == expected_block:
                         match_pos = target_idx
 
-                # If not exact, evaluate context distinctiveness before sliding-window search (F-01)
-                if match_pos == -1 and expected_block:
-                    distinctive_count = sum(1 for line in expected_block if self._is_distinctive_context_line(line))
-                    if distinctive_count < 2:
+                # If exact matching is enforced, reject immediately if not at target_idx
+                if strict_exact:
+                    if match_pos == -1 and expected_block:
                         return (
                             {},
                             set(),
-                            f"Hunk failed to apply to '{norm_path}' near line {old_start}: context has only {distinctive_count} distinctive line(s) (< 2 required for fuzzy search). Guessing rejected.",
+                            f"Hunk failed to apply to '{norm_path}' at line {old_start}: exact context match not found. Fuzzy misapplication rejected.",
                             None,
                         )
+                else:
+                    # If not exact and fuzzy allowed, evaluate context distinctiveness before sliding-window search (F-01)
+                    if match_pos == -1 and expected_block:
+                        distinctive_count = sum(1 for line in expected_block if self._is_distinctive_context_line(line))
+                        if distinctive_count < 2:
+                            return (
+                                {},
+                                set(),
+                                f"Hunk failed to apply to '{norm_path}' near line {old_start}: context has only {distinctive_count} distinctive line(s) (< 2 required for fuzzy search). Guessing rejected.",
+                                None,
+                            )
 
-                    search_start = max(0, target_idx - 15)
-                    search_end = min(len(new_lines) - len(expected_block) + 1, target_idx + 15)
-                    candidate_matches = []
-                    for pos in range(search_start, search_end):
-                        if new_lines[pos:pos + len(expected_block)] == expected_block:
-                            candidate_matches.append(pos)
+                        search_start = max(0, target_idx - 15)
+                        search_end = min(len(new_lines) - len(expected_block) + 1, target_idx + 15)
+                        candidate_matches = []
+                        for pos in range(search_start, search_end):
+                            if new_lines[pos:pos + len(expected_block)] == expected_block:
+                                candidate_matches.append(pos)
 
-                    if len(candidate_matches) == 1:
-                        match_pos = candidate_matches[0]
-                    elif len(candidate_matches) > 1:
-                        return (
-                            {},
-                            set(),
-                            f"Hunk failed to apply to '{norm_path}' near line {old_start}: ambiguous fuzzy match ({len(candidate_matches)} occurrences found in +-15 lines).",
-                            None,
-                        )
+                        if len(candidate_matches) == 1:
+                            match_pos = candidate_matches[0]
+                        elif len(candidate_matches) > 1:
+                            return (
+                                {},
+                                set(),
+                                f"Hunk failed to apply to '{norm_path}' near line {old_start}: ambiguous fuzzy match ({len(candidate_matches)} occurrences found in +-15 lines).",
+                                None,
+                            )
 
                 if match_pos == -1 and expected_block:
                     return {}, set(), f"Hunk failed to apply to '{norm_path}' near line {old_start}", None
@@ -733,14 +907,55 @@ class LocalModelAgentAdapter(AgentAdapter):
                 error_message=f"Target worktree path does not exist or is not a directory: {worktree_path}",
             )
 
-        # 1. Read existing target file contents to provide full context
+        # 1. Read existing target file contents with intelligent source slicing
         file_contexts = []
+        slice_traces: list[dict[str, Any]] = []
+        focus_pat = task.pre_validation_pattern.pattern if task.pre_validation_pattern else None
+        evidence_text = f"{task.evidence or ''}\n{task.description or ''}"
+
         for tf in task.target_files:
             target_file = worktree_path / tf
             if target_file.exists():
                 try:
                     f_content = target_file.read_text(encoding="utf-8", errors="replace")
-                    file_contexts.append(f"--- File: {tf} ---\n{f_content}\n")
+                    slice_res = slice_source_context(
+                        f_content,
+                        rel_path=tf,
+                        focus_pattern=focus_pat,
+                        evidence=evidence_text,
+                        max_lines=120,
+                        max_budget_chars=8000,
+                    )
+                    if slice_res.reason == "oversized_ambiguous_context":
+                        err_msg = (
+                            f"Source file '{tf}' ({slice_res.total_lines} lines, {len(f_content)} chars) "
+                            f"exceeds context budget and cannot be sliced confidently without risk of truncation. "
+                            f"Human approval required."
+                        )
+                        return AgentExecutionResult(
+                            success=False,
+                            exit_code=1,
+                            stdout="",
+                            stderr=err_msg,
+                            duration_sec=time.monotonic() - start_time,
+                            error_message=err_msg,
+                        )
+
+                    slice_traces.append({
+                        "file": tf,
+                        "mode": "sliced" if slice_res.is_sliced else "full",
+                        "line_range": list(slice_res.line_range),
+                        "total_lines": slice_res.total_lines,
+                        "target_node": slice_res.sliced_function_or_class,
+                        "reason": slice_res.reason,
+                    })
+
+                    header_label = (
+                        f"--- File: {tf} (SLICED lines {slice_res.line_range[0]}-{slice_res.line_range[1]} of {slice_res.total_lines}) ---\n"
+                        if slice_res.is_sliced
+                        else f"--- File: {tf} (FULL {slice_res.total_lines} lines) ---\n"
+                    )
+                    file_contexts.append(f"{header_label}{slice_res.content}\n")
                 except Exception as e:
                     file_contexts.append(f"--- File: {tf} (Error reading: {e}) ---\n")
 
@@ -835,6 +1050,29 @@ Verification Test Targets: {test_targets_str}
 5. ONLY modify declared target files and docs/CHANGELOG.md. Do not modify any other files.
 """
 
+        req_id = f"req-{task.task_id}-a{task.attempts}-{int(time.time() * 1000) % 1000000}"
+        prompt_ref, prompt_trunc, _ = write_trace_body(req_id, "req", local_prompt)
+        trace_emit(
+            TraceEvent(
+                category="request",
+                type="request.started",
+                task_id=task.task_id,
+                worker_id="local_model",
+                request_id=req_id,
+                correlation_id=f"attempt-{task.attempts}",
+                sender="LocalModelAgentAdapter",
+                recipient=self.model,
+                summary=f"Calling {self.model} for task {task.task_id} (attempt {task.attempts})",
+                payload={
+                    "model": self.model,
+                    "effective_num_ctx": self.num_ctx,
+                    "source_slices": slice_traces,
+                    "body_ref": prompt_ref,
+                    "body_truncated": prompt_trunc,
+                },
+            )
+        )
+
         in_tokens: Optional[int] = None
         out_tokens: Optional[int] = None
 
@@ -845,7 +1083,100 @@ Verification Test Targets: {test_targets_str}
                 response_text, in_tokens, out_tokens = res
             else:
                 response_text = str(res)
+            req_latency = time.monotonic() - start_time
+
+            # Check for context limit exhaustion or credible prompt truncation
+            if in_tokens is not None and in_tokens >= int(self.num_ctx * self.truncation_threshold):
+                trunc_err = (
+                    f"Context limit exceeded / prompt truncation detected: "
+                    f"prompt_eval_count ({in_tokens}) reached context limit threshold "
+                    f"({int(self.num_ctx * self.truncation_threshold)}/{self.num_ctx}). "
+                    f"Proposed patch rejected for safety."
+                )
+                trace_emit(
+                    TraceEvent(
+                        category="request",
+                        type="request.context_overflow",
+                        severity="ERROR",
+                        task_id=task.task_id,
+                        worker_id="local_model",
+                        request_id=req_id,
+                        correlation_id=f"attempt-{task.attempts}",
+                        sender=self.model,
+                        recipient="LocalModelAgentAdapter",
+                        summary=trunc_err,
+                        usage={"source": "provider", "input_tokens": in_tokens, "output_tokens": out_tokens},
+                        latency_ms=int(req_latency * 1000),
+                        latency_source="measured",
+                        payload={"effective_num_ctx": self.num_ctx, "error": trunc_err},
+                    )
+                )
+                return AgentExecutionResult(
+                    success=False,
+                    exit_code=1,
+                    stdout=response_text,
+                    stderr=trunc_err,
+                    duration_sec=time.monotonic() - start_time,
+                    error_message=trunc_err,
+                    input_tokens=in_tokens,
+                    output_tokens=out_tokens,
+                )
+
+            if in_tokens is None and len(local_prompt) > self.num_ctx * 4:
+                trunc_err = (
+                    f"Prompt character length ({len(local_prompt)}) exceeds model context budget "
+                    f"({self.num_ctx} tokens) with missing provider usage metadata. Execution aborted for safety."
+                )
+                return AgentExecutionResult(
+                    success=False,
+                    exit_code=1,
+                    stdout=response_text,
+                    stderr=trunc_err,
+                    duration_sec=time.monotonic() - start_time,
+                    error_message=trunc_err,
+                )
+
+            resp_ref, resp_trunc, _ = write_trace_body(req_id, "resp", response_text)
+            trace_emit(
+                TraceEvent(
+                    category="request",
+                    type="request.completed",
+                    task_id=task.task_id,
+                    worker_id="local_model",
+                    request_id=req_id,
+                    correlation_id=f"attempt-{task.attempts}",
+                    sender=self.model,
+                    recipient="LocalModelAgentAdapter",
+                    summary=f"{self.model} responded in {req_latency:.2f}s",
+                    usage={
+                        "source": "provider" if (in_tokens is not None or out_tokens is not None) else "unknown",
+                        "input_tokens": in_tokens,
+                        "output_tokens": out_tokens,
+                    },
+                    latency_ms=int(req_latency * 1000),
+                    latency_source="measured",
+                    payload={"body_ref": resp_ref, "body_truncated": resp_trunc},
+                )
+            )
         except TimeoutError as te:
+            req_latency = time.monotonic() - start_time
+            trace_emit(
+                TraceEvent(
+                    category="request",
+                    type="request.timeout",
+                    severity="ERROR",
+                    task_id=task.task_id,
+                    worker_id="local_model",
+                    request_id=req_id,
+                    correlation_id=f"attempt-{task.attempts}",
+                    sender=self.model,
+                    recipient="LocalModelAgentAdapter",
+                    summary=f"Local model request timed out after {call_timeout}s",
+                    latency_ms=int(req_latency * 1000),
+                    latency_source="measured",
+                    payload={"error": str(te)},
+                )
+            )
             return AgentExecutionResult(
                 success=False,
                 exit_code=124,
@@ -856,6 +1187,24 @@ Verification Test Targets: {test_targets_str}
                 error_message=f"Local model request timed out after {call_timeout}s.",
             )
         except ConnectionError as ce:
+            req_latency = time.monotonic() - start_time
+            trace_emit(
+                TraceEvent(
+                    category="request",
+                    type="request.transport_error",
+                    severity="ERROR",
+                    task_id=task.task_id,
+                    worker_id="local_model",
+                    request_id=req_id,
+                    correlation_id=f"attempt-{task.attempts}",
+                    sender=self.model,
+                    recipient="LocalModelAgentAdapter",
+                    summary=f"Ollama transport unavailable: {ce}",
+                    latency_ms=int(req_latency * 1000),
+                    latency_source="measured",
+                    payload={"error": str(ce)},
+                )
+            )
             return AgentExecutionResult(
                 success=False,
                 exit_code=1,
@@ -869,6 +1218,24 @@ Verification Test Targets: {test_targets_str}
                 ),
             )
         except Exception as e:
+            req_latency = time.monotonic() - start_time
+            trace_emit(
+                TraceEvent(
+                    category="request",
+                    type="request.failed",
+                    severity="ERROR",
+                    task_id=task.task_id,
+                    worker_id="local_model",
+                    request_id=req_id,
+                    correlation_id=f"attempt-{task.attempts}",
+                    sender=self.model,
+                    recipient="LocalModelAgentAdapter",
+                    summary=f"Local model execution failed: {e}",
+                    latency_ms=int(req_latency * 1000),
+                    latency_source="measured",
+                    payload={"error": str(e)},
+                )
+            )
             return AgentExecutionResult(
                 success=False,
                 exit_code=1,
@@ -883,7 +1250,7 @@ Verification Test Targets: {test_targets_str}
 
         # 3. First attempt: Strict Unified Diff extraction
         modified_files, deleted_files, diff_err, sec_violation = self._parse_unified_diff(
-            response_text, allowed_files, worktree_path
+            response_text, allowed_files, worktree_path, exact_match=self.exact_match
         )
 
         if sec_violation:
@@ -1120,17 +1487,23 @@ class TieredAgentAdapter(AgentAdapter):
             })
 
             if self.escalation_adapter is not None:
-                try:
-                    subprocess.run(["git", "checkout", "."], cwd=str(worktree_path), capture_output=True, check=False)
-                    subprocess.run(["git", "clean", "-fd"], cwd=str(worktree_path), capture_output=True, check=False)
-                except Exception:
-                    pass
+                if safe_restore_worktree_attempt is not None:
+                    try:
+                        safe_restore_worktree_attempt(worktree_path=worktree_path, task=task)
+                    except Exception as clean_err:
+                        logger.warning("Failed scoped attempt restore for task %s before escalation: %s", task.task_id, clean_err)
+                else:
+                    for tf in getattr(task, "target_files", []):
+                        try:
+                            subprocess.run(["git", "checkout", "HEAD", "--", tf], cwd=str(worktree_path), capture_output=True, check=False)
+                        except Exception:
+                            pass
 
                 escalation_context = (
                     f"\n\n=== ESCALATION CONTEXT ===\n"
                     f"This task was escalated from a local model execution.\n"
                     f"Reason for escalation: {escalation_reason}\n"
-                    f"Worktree has been sanitized to clean baseline HEAD to ensure safe implementation.\n"
+                    f"Worktree target files have been sanitized to baseline HEAD to ensure safe implementation.\n"
                 )
                 esc_res = self.escalation_adapter.execute(
                     task=task,
@@ -1144,13 +1517,19 @@ class TieredAgentAdapter(AgentAdapter):
             return local_res
 
         if self.escalation_adapter is not None:
-            # On retry escalation, sanitize any partial local edits from previous attempts
+            # On retry escalation, sanitize target files from previous attempts
             if getattr(task, "attempts", 0) > 1:
-                try:
-                    subprocess.run(["git", "checkout", "."], cwd=str(worktree_path), capture_output=True, check=False)
-                    subprocess.run(["git", "clean", "-fd"], cwd=str(worktree_path), capture_output=True, check=False)
-                except Exception:
-                    pass
+                if safe_restore_worktree_attempt is not None:
+                    try:
+                        safe_restore_worktree_attempt(worktree_path=worktree_path, task=task)
+                    except Exception as clean_err:
+                        logger.warning("Failed scoped attempt restore for task %s on retry: %s", task.task_id, clean_err)
+                else:
+                    for tf in getattr(task, "target_files", []):
+                        try:
+                            subprocess.run(["git", "checkout", "HEAD", "--", tf], cwd=str(worktree_path), capture_output=True, check=False)
+                        except Exception:
+                            pass
 
             self.history.append({
                 "task_id": task.task_id,
@@ -1159,7 +1538,7 @@ class TieredAgentAdapter(AgentAdapter):
             })
             retry_note = ""
             if getattr(task, "attempts", 0) > 1:
-                retry_note = f"\n\n=== RETRY CONTEXT ===\nAttempt {task.attempts}/{task.max_attempts}. Worktree has been sanitized to clean baseline HEAD.\n"
+                retry_note = f"\n\n=== RETRY CONTEXT ===\nAttempt {task.attempts}/{task.max_attempts}. Worktree target files have been sanitized to baseline HEAD.\n"
             return self.escalation_adapter.execute(
                 task=task,
                 prompt=prompt + retry_note,

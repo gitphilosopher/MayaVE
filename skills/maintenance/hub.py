@@ -11,7 +11,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 try:
     from .ledger import LedgerValidationError, TaskLedger
@@ -65,7 +65,7 @@ ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     },
     TaskStatus.NEEDS_APPROVAL: {TaskStatus.PENDING, TaskStatus.RECOVERY_REQUIRED},
     TaskStatus.RECOVERY_REQUIRED: {
-        TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.NEEDS_APPROVAL,
+        TaskStatus.PENDING, TaskStatus.NEEDS_APPROVAL,
     },
     TaskStatus.BLOCKED: {TaskStatus.PENDING, TaskStatus.NEEDS_APPROVAL},
     TaskStatus.VERIFIED: {TaskStatus.RECOVERY_REQUIRED, TaskStatus.NEEDS_APPROVAL},
@@ -1211,11 +1211,16 @@ def compute_patch_sha256(worktree: Path | str, baseline_commit: str) -> str:
     if untracked.returncode:
         raise RuntimeError(f"Cannot enumerate untracked patch files: {untracked.stderr}")
     for rel in sorted(p for p in untracked.stdout.splitlines() if p):
+        norm_rel = rel.replace("\\", "/")
+        if "__pycache__" in norm_rel or norm_rel.endswith(".pyc"):
+            continue
+        if norm_rel.startswith(".maya/"):
+            continue
         full = (root / rel).resolve()
         if not full.is_relative_to(root) or not full.is_file():
             raise RuntimeError(f"Unsafe or unreadable untracked patch path: {rel}")
         content = full.read_bytes()
-        h.update(rel.replace("\\", "/").encode("utf-8") + b"\0")
+        h.update(norm_rel.encode("utf-8") + b"\0")
         h.update(hashlib.sha256(content).digest())
     return h.hexdigest()
 

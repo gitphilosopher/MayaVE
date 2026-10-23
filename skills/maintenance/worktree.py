@@ -77,8 +77,12 @@ class CleanupPreviewItem:
     branch_name: str
     is_dirty: bool
     task_status: str
-    recommendation: str  # MANUAL_REVIEW_REQUIRED, PRESERVE_FOR_INSPECTION, SAFE_TO_CLEAN_MANUALLY
+    recommendation: str  # MANUAL_REVIEW_REQUIRED, PRESERVE_FOR_INSPECTION, SAFE_TO_CLEAN
     reason: str
+    is_merged: bool = False
+    eligible: bool = False
+    blocking_reasons: list[str] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -188,6 +192,33 @@ class WorktreeManager:
             check=False,
         )
         return proc.returncode == 0
+
+    def is_branch_merged(self, branch_name: str, target_branch: str = "main") -> bool:
+        """Check if branch_name is merged into target_branch (branch is an ancestor of target)."""
+        if not self.branch_exists(branch_name) or not self.branch_exists(target_branch):
+            return False
+        proc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", branch_name, target_branch],
+            cwd=str(self.repo_root),
+            capture_output=True,
+            check=False,
+        )
+        return proc.returncode == 0
+
+    def has_pending_approvals(self, task_id: str) -> bool:
+        """Check if approvals.json contains any pending permission request for task_id."""
+        if not self.approvals_path or not self.approvals_path.is_file():
+            return False
+        try:
+            with open(self.approvals_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            requests = data.get("requests", {})
+            for r in requests.values():
+                if isinstance(r, dict) and r.get("task_id") == task_id and r.get("status") == "PENDING":
+                    return True
+        except Exception:
+            pass
+        return False
 
     def inspect_workspace(self, task_id: str) -> WorkspaceStatus:
         """Inspect the current on-disk and Git status of a task workspace."""
@@ -445,8 +476,8 @@ class WorktreeManager:
             if not isinstance(task.checkpoint.details, dict):
                 return False
 
-            # 4. Checkpoint operation must be workspace_adoption
-            if task.checkpoint.details.get("operation") != "workspace_adoption":
+            # 4. Checkpoint operation must be workspace_adoption or reviewer_safeguards
+            if task.checkpoint.details.get("operation") not in ("workspace_adoption", "reviewer_safeguards"):
                 return False
 
             # 5. Checkpoint target must resolve to the same canonical path as ws_status.path
@@ -500,7 +531,7 @@ class WorktreeManager:
                         return False
                     if req.task_id != task.task_id:
                         return False
-                    if req.operation != "workspace_adoption":
+                    if req.operation not in ("workspace_adoption", "reviewer_safeguards"):
                         return False
                     persisted_target = req.target
                 except Exception:
@@ -512,7 +543,7 @@ class WorktreeManager:
                     return False
                 if req_data.get("task_id") != task.task_id:
                     return False
-                if req_data.get("operation") != "workspace_adoption":
+                if req_data.get("operation") not in ("workspace_adoption", "reviewer_safeguards"):
                     return False
                 persisted_target = req_data.get("target")
 
@@ -560,7 +591,7 @@ class WorktreeManager:
                 continue
 
             # Rule 2: Interrupted in-progress tasks must be caught and marked RECOVERY_REQUIRED
-            if task.status in (TaskStatus.IN_PROGRESS, TaskStatus.VERIFYING):
+            if task.status in (TaskStatus.IN_PROGRESS, TaskStatus.VERIFYING, TaskStatus.INTEGRATING):
                 prev_status = task.status
                 blocking_reason = (
                     f"Coordinator restart: Interrupted while {prev_status.value}. "
@@ -594,6 +625,52 @@ class WorktreeManager:
                         reason="Interruption detected on restart while task was in flight.",
                     )
                 )
+
+            # Rule 2b: Interrupted integration with unverified commit on integration branch
+            elif task.status == TaskStatus.READY_TO_INTEGRATE:
+                int_branch = f"autophage/integrate-{task.task_id}"
+                ref_check = subprocess.run(
+                    ["git", "rev-parse", "--verify", f"refs/heads/{int_branch}"],
+                    cwd=str(self.repo_root),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if ref_check.returncode == 0:
+                    branch_tip = ref_check.stdout.strip()
+                    base_commit = task.workspace.base_commit if task.workspace else ""
+                    if branch_tip and base_commit and branch_tip != base_commit:
+                        blocking_reason = (
+                            f"Coordinator restart: Interrupted integration detected on branch '{int_branch}' "
+                            f"(tip: {branch_tip[:7]}, baseline: {base_commit[:7]}). "
+                            "Integration commit exists but was not verified. Requires explicit recovery review."
+                        )
+                        if coordinator_api is None:
+                            raise WorkspaceError("CoordinatorAPI is required to reconcile protected task state.")
+                        result = coordinator_api.transition_task(
+                            ledger, task.task_id, TaskStatus.RECOVERY_REQUIRED, actor="recovery",
+                            blocking_reason=blocking_reason,
+                            checkpoint_stage="INTERRUPTED_INTEGRATION_DETECTED",
+                            checkpoint_details={
+                                "integration_branch": int_branch,
+                                "branch_tip": branch_tip,
+                                "baseline_commit": base_commit,
+                            },
+                            event_type="INTERRUPTED_INTEGRATION_DETECTED",
+                            idempotency_key=f"interrupted-integration:{task.task_id}:{branch_tip}",
+                            lock_held=lock_held,
+                        )
+                        if not result.accepted:
+                            raise WorkspaceError(f"Coordinator rejected recovery transition for {task.task_id}: {result.message}")
+                        reconciliations.append(
+                            ReconciliationItem(
+                                task_id=task.task_id,
+                                previous_status=TaskStatus.READY_TO_INTEGRATE,
+                                new_status=TaskStatus.RECOVERY_REQUIRED,
+                                action_taken="Marked RECOVERY_REQUIRED and recorded checkpoint",
+                                reason="Unverified integration commit detected on integration branch after interruption.",
+                            )
+                        )
 
             # Rule 3: Unscheduled worktree found for a PENDING or NEEDS_APPROVAL task
             elif task.status in (TaskStatus.PENDING, TaskStatus.NEEDS_APPROVAL) and ws_status.exists_on_disk:
@@ -702,9 +779,10 @@ class WorktreeManager:
 
         return reconciliations
 
-    def get_cleanup_preview(self, ledger: TaskLedger) -> list[CleanupPreviewItem]:
+    def get_cleanup_preview(self, ledger: TaskLedger, target_branch: str = "main") -> list[CleanupPreviewItem]:
         """
         Produce a non-destructive cleanup preview of all managed and orphan worktrees.
+        Evaluates the 5 explicit eligibility conditions before recommending SAFE_TO_CLEAN.
         Never deletes anything.
         """
         preview: list[CleanupPreviewItem] = []
@@ -734,9 +812,12 @@ class WorktreeManager:
                 task = ledger.get_task(task_id)
 
             status = self.inspect_workspace(task_id)
+            blocking_reasons: list[str] = []
+            actions: list[str] = []
+            is_merged = False
 
             if task is None:
-                # Orphan
+                blocking_reasons.append("Worktree is not registered in task ledger (unregistered orphan).")
                 preview.append(
                     CleanupPreviewItem(
                         task_id=None,
@@ -746,49 +827,168 @@ class WorktreeManager:
                         task_status="UNREGISTERED_ORPHAN",
                         recommendation="MANUAL_REVIEW_REQUIRED",
                         reason="Worktree is not registered in task ledger. Preserve for manual inspection.",
+                        is_merged=False,
+                        eligible=False,
+                        blocking_reasons=blocking_reasons,
+                        actions=[],
                     )
                 )
-            elif status.is_dirty:
-                preview.append(
-                    CleanupPreviewItem(
-                        task_id=task_id,
-                        path=str(wt_path),
-                        branch_name=status.branch_name,
-                        is_dirty=True,
-                        task_status=task.status.value,
-                        recommendation="MANUAL_REVIEW_REQUIRED",
-                        reason=(
-                            f"Worktree has {len(status.modified_files)} modified and "
-                            f"{len(status.untracked_files)} untracked files. Must not delete uncommitted work."
-                        ),
-                    )
-                )
-            elif task.status == TaskStatus.VERIFIED:
-                preview.append(
-                    CleanupPreviewItem(
-                        task_id=task_id,
-                        path=str(wt_path),
-                        branch_name=status.branch_name,
-                        is_dirty=False,
-                        task_status=task.status.value,
-                        recommendation="SAFE_TO_CLEAN_MANUALLY",
-                        reason=f"Task {task_id} is VERIFIED and worktree is clean.",
-                    )
-                )
-            else:
-                preview.append(
-                    CleanupPreviewItem(
-                        task_id=task_id,
-                        path=str(wt_path),
-                        branch_name=status.branch_name,
-                        is_dirty=status.is_dirty,
-                        task_status=task.status.value,
-                        recommendation="PRESERVE_FOR_INSPECTION",
-                        reason=f"Task is in state {task.status.value}. Preserving worktree for debugging or resumption.",
-                    )
+                continue
+
+            # Condition 1: Task must be in terminal state permitting cleanup (VERIFIED)
+            if task.status != TaskStatus.VERIFIED:
+                blocking_reasons.append(
+                    f"Task status is '{task.status.value}' (only VERIFIED tasks are eligible for cleanup)."
                 )
 
+            # Condition 2: Worktree must be clean (no untracked, modified or staged files)
+            if status.is_dirty:
+                blocking_reasons.append(
+                    f"Worktree has {len(status.modified_files)} modified and {len(status.untracked_files)} untracked files."
+                )
+
+            # Condition 3: Worktree branch must be verified merged into target_branch
+            if status.branch_name:
+                is_merged = self.is_branch_merged(status.branch_name, target_branch)
+                if not is_merged:
+                    blocking_reasons.append(
+                        f"Branch '{status.branch_name}' is not verified merged into target branch '{target_branch}'."
+                    )
+            else:
+                blocking_reasons.append("No active Git branch identified for worktree.")
+
+            # Condition 4: Managed ownership and branch naming match Autophage conventions
+            expected_branch = self.get_branch_name(task.task_id)
+            if status.ownership_status != "MANAGED":
+                blocking_reasons.append(
+                    f"Worktree ownership status is '{status.ownership_status}' (expected 'MANAGED')."
+                )
+            if status.branch_name and status.branch_name != expected_branch:
+                blocking_reasons.append(
+                    f"Branch name '{status.branch_name}' does not match expected Autophage branch '{expected_branch}'."
+                )
+
+            # Condition 5: No active task, pending approval or unresolved recovery references the workspace
+            if task.status in (TaskStatus.IN_PROGRESS, TaskStatus.VERIFYING, TaskStatus.INTEGRATING, TaskStatus.RECOVERY_REQUIRED):
+                blocking_reasons.append(
+                    f"Task {task.task_id} is currently active or in recovery ({task.status.value})."
+                )
+            if self.has_pending_approvals(task.task_id):
+                blocking_reasons.append(
+                    f"Task {task.task_id} has pending approval requests in approvals.json."
+                )
+
+            eligible = (len(blocking_reasons) == 0)
+
+            if eligible:
+                actions = [
+                    f"git worktree remove {wt_path}",
+                    f"git branch -d {status.branch_name}",
+                ]
+                rec = "SAFE_TO_CLEAN"
+                reason = (
+                    f"Task {task_id} is VERIFIED, branch '{status.branch_name}' is merged into '{target_branch}', "
+                    "worktree is clean, and no pending approvals exist."
+                )
+            elif status.is_dirty:
+                rec = "MANUAL_REVIEW_REQUIRED"
+                reason = (
+                    f"Worktree is dirty ({len(status.modified_files)} modified, "
+                    f"{len(status.untracked_files)} untracked). Must preserve uncommitted work."
+                )
+            else:
+                rec = "PRESERVE_FOR_INSPECTION"
+                reason = "; ".join(blocking_reasons)
+
+            preview.append(
+                CleanupPreviewItem(
+                    task_id=task_id,
+                    path=str(wt_path),
+                    branch_name=status.branch_name,
+                    is_dirty=status.is_dirty,
+                    task_status=task.status.value,
+                    recommendation=rec,
+                    reason=reason,
+                    is_merged=is_merged,
+                    eligible=eligible,
+                    blocking_reasons=blocking_reasons,
+                    actions=actions,
+                )
+            )
+
         return preview
+
+    def cleanup_workspace(
+        self,
+        task_id: str,
+        ledger: TaskLedger,
+        target_branch: str = "main",
+        authorized: bool = False,
+    ) -> tuple[bool, str]:
+        """
+        Safely remove a finished task's worktree and delete its merged local branch.
+        Fails closed unless all 5 safety conditions are met and authorized=True.
+        Never force-deletes. Preserves task ledger records, event history, and trace data.
+        """
+        if not authorized:
+            return False, f"Operator authorization required to cleanup worktree for task {task_id}."
+
+        if task_id not in ledger:
+            return False, f"Task {task_id} not found in task ledger; cannot clean up unmanaged worktree."
+
+        task = ledger.get_task(task_id)
+        status = self.inspect_workspace(task_id)
+        wt_path = self.get_workspace_path(task_id)
+
+        # Condition 1: Task must be VERIFIED
+        if task.status != TaskStatus.VERIFIED:
+            return False, f"Refusing cleanup: Task {task_id} is in status '{task.status.value}' (only VERIFIED tasks can be cleaned)."
+
+        # Condition 2: Worktree must be clean
+        if status.is_dirty:
+            return False, f"Refusing cleanup: Worktree at {wt_path} has uncommitted/untracked changes."
+
+        # Condition 3: Branch must be verified merged
+        if not status.branch_name:
+            return False, f"Refusing cleanup: Worktree at {wt_path} has no active branch."
+        if not self.is_branch_merged(status.branch_name, target_branch):
+            return False, f"Refusing cleanup: Branch '{status.branch_name}' is not verified merged into '{target_branch}'."
+
+        # Condition 4: Managed ownership and branch naming match
+        expected_branch = self.get_branch_name(task_id)
+        if status.ownership_status != "MANAGED" or status.branch_name != expected_branch:
+            return False, f"Refusing cleanup: Worktree ownership or branch '{status.branch_name}' does not match expected '{expected_branch}'."
+
+        # Condition 5: No active task, pending approval or unresolved recovery
+        if self.has_pending_approvals(task_id):
+            return False, f"Refusing cleanup: Task {task_id} has pending approval requests."
+
+        # Execute removal cleanly:
+        # Step A: git worktree remove <path>
+        if status.registered_in_git or status.exists_on_disk:
+            res_wt = subprocess.run(
+                ["git", "worktree", "remove", str(wt_path)],
+                cwd=str(self.repo_root),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res_wt.returncode != 0:
+                return False, f"git worktree remove failed: {res_wt.stderr.strip() or res_wt.stdout.strip()}"
+
+        # Step B: Prune local branch using safe -d (never force -D)
+        if self.branch_exists(status.branch_name):
+            res_br = subprocess.run(
+                ["git", "branch", "-d", status.branch_name],
+                cwd=str(self.repo_root),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res_br.returncode != 0:
+                return False, f"git branch -d failed (branch not pruned): {res_br.stderr.strip() or res_br.stdout.strip()}"
+
+        return True, f"Successfully cleaned worktree and pruned merged branch '{status.branch_name}' for task {task_id}."
 
 
 def safe_restore_worktree_attempt(

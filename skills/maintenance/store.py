@@ -6,13 +6,15 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import sys
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 try:
     from .ledger import LedgerValidationError, TaskLedger
@@ -20,6 +22,8 @@ try:
 except ImportError:
     from ledger import LedgerValidationError, TaskLedger
     from models import TaskDefinition
+
+logger = logging.getLogger("maya.maintenance.store")
 
 
 class StateStoreError(Exception):
@@ -58,13 +62,148 @@ def _is_pid_alive(pid: int) -> bool:
             return False
 
 
-class StateStore:
-    """Manages atomic JSON file persistence and execution lock for TaskLedger."""
+class EventLedgerArchive:
+    """
+    Append-only durable archive for authoritative lifecycle ledger events at .maya/maintenance/events.jsonl.
+    Preserves all historical events beyond in-memory window, ensuring:
+    - Ordered, append-only persistence.
+    - Idempotency & deduplication: duplicate events (by event_id or idempotency_key) are never archived twice.
+    - Fault tolerance: safely skips or handles partial lines, malformed JSON, and truncated records from past crashes.
+    - Durability: write + flush + fsync; does not claim success unless the disk write completes.
+    - Separation from TUI trace: strictly dedicated to authoritative lifecycle state transitions.
+    """
 
-    def __init__(self, state_path: Path | str) -> None:
+    def __init__(self, archive_path: Path | str) -> None:
+        self.archive_path = Path(archive_path).resolve()
+        self._lock = threading.Lock()
+        self._seen_event_ids: set[str] = set()
+        self._seen_idempotency_keys: set[str] = set()
+        self._initialized = False
+
+    def _ensure_indexed(self) -> None:
+        """Scan existing archive to index seen event IDs and keys, tolerating corrupt lines."""
+        if self._initialized:
+            return
+        if not self.archive_path.exists():
+            self._initialized = True
+            return
+
+        try:
+            with open(self.archive_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    try:
+                        ev = json.loads(line_str)
+                        if isinstance(ev, dict):
+                            eid = ev.get("event_id")
+                            if eid:
+                                self._seen_event_ids.add(eid)
+                            ikey = ev.get("idempotency_key")
+                            if ikey:
+                                self._seen_idempotency_keys.add(ikey)
+                    except json.JSONDecodeError:
+                        # Malformed or partially written line from past crash safely skipped
+                        continue
+        except Exception as e:
+            logger.warning("Error reading event archive at %s: %s", self.archive_path, e)
+
+        self._initialized = True
+
+    def archive_events(self, events: list[dict]) -> int:
+        """
+        Durably append unarchived events to the events.jsonl archive.
+        Returns the count of newly archived events.
+        Raises StateStoreError if disk write fails.
+        """
+        if not events:
+            return 0
+
+        with self._lock:
+            self._ensure_indexed()
+
+            to_write = []
+            for ev in events:
+                if not isinstance(ev, dict):
+                    continue
+                eid = ev.get("event_id")
+                ikey = ev.get("idempotency_key")
+                # Deduplication check
+                if eid and eid in self._seen_event_ids:
+                    continue
+                if ikey and ikey in self._seen_idempotency_keys:
+                    continue
+                to_write.append(ev)
+
+            if not to_write:
+                return 0
+
+            self.archive_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                # Append with write + flush + fsync
+                with open(self.archive_path, "a", encoding="utf-8") as f:
+                    for ev in to_write:
+                        line = json.dumps(ev, sort_keys=True)
+                        f.write(line + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+
+                for ev in to_write:
+                    eid = ev.get("event_id")
+                    if eid:
+                        self._seen_event_ids.add(eid)
+                    ikey = ev.get("idempotency_key")
+                    if ikey:
+                        self._seen_idempotency_keys.add(ikey)
+
+                return len(to_write)
+            except Exception as e:
+                raise StateStoreError(
+                    f"Failed to durably append events to archive at '{self.archive_path}': {e}"
+                ) from e
+
+    def read_all_events(self) -> list[dict]:
+        """Read all valid events in chronological order from the archive."""
+        if not self.archive_path.exists():
+            return []
+
+        events = []
+        with open(self.archive_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                try:
+                    ev = json.loads(line_str)
+                    if isinstance(ev, dict):
+                        events.append(ev)
+                except json.JSONDecodeError:
+                    continue
+        return events
+
+    def get_archived_count(self) -> int:
+        """Return count of uniquely archived events."""
+        with self._lock:
+            self._ensure_indexed()
+            return len(self._seen_event_ids)
+
+
+class StateStore:
+    """Manages atomic JSON file persistence, session backups, event archiving, and execution lock for TaskLedger."""
+
+    def __init__(
+        self,
+        state_path: Path | str,
+        archive_path: Path | str | None = None,
+        backups_dir: Path | str | None = None,
+    ) -> None:
         self.state_path = Path(state_path).resolve()
         self.lock_path = self.state_path.with_suffix(".lock")
         self._thread_lock = threading.RLock()
+        archive_file = Path(archive_path).resolve() if archive_path else self.state_path.with_name("events.jsonl")
+        self.archive = EventLedgerArchive(archive_file)
+        self.backups_dir = Path(backups_dir).resolve() if backups_dir else (self.state_path.parent / "backups").resolve()
 
     def exists(self) -> bool:
         """Check if state file exists."""
@@ -99,19 +238,27 @@ class StateStore:
                 f"State file at '{self.state_path}' has invalid ledger schema: {e}"
             ) from e
 
-    def save_ledger(self, ledger: TaskLedger) -> None:
+    def save_ledger(self, ledger: TaskLedger, events: list[dict] | None = None) -> None:
         """
         Atomically save ledger to disk using temporary file replacement.
-        Ensures valid graph before writing.
+        Ensures valid graph before writing and durably archives all events to events.jsonl.
         """
         # 1. Validate in-memory graph integrity before writing
         ledger.validate_graph()
+
+        # 2. Durably archive all events before writing state.json
+        # Fails closed if event archive write fails
+        all_events = list(ledger.events)
+        if events:
+            all_events.extend(events)
+        self.archive.archive_events(all_events)
+
         payload = ledger.to_dict()
 
-        # 2. Ensure parent directory exists
+        # 3. Ensure parent directory exists
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 3. Write to temporary sibling file
+        # 4. Write to temporary sibling file
         temp_id = f"{os.getpid()}_{uuid.uuid4().hex[:8]}"
         temp_file = self.state_path.with_name(f"{self.state_path.name}.tmp.{temp_id}")
 
@@ -121,7 +268,7 @@ class StateStore:
                 f.flush()
                 os.fsync(f.fileno())
 
-            # 4. Atomic file replacement with Windows transient lock backoff retry
+            # 5. Atomic file replacement with Windows transient lock backoff retry
             for attempt in range(5):
                 try:
                     os.replace(temp_file, self.state_path)
@@ -137,6 +284,113 @@ class StateStore:
                 except OSError:
                     pass
             raise StateStoreError(f"Failed to atomically persist state to '{self.state_path}': {e}") from e
+
+    def create_session_backup(self, max_backups: int = 5) -> Optional[Path]:
+        """
+        Create a rotating backup of state.json at session start.
+        - Preserves the last known valid state before session mutation.
+        - Uses atomic file write and bounded retention (keeps up to max_backups).
+        - Validates that state.json is valid and non-empty; never overwrites or creates
+          a backup from malformed/corrupted/empty state.
+        - Never automatically restores an old backup over newer state.
+        Returns the path of the created backup file, or None if no valid state exists to back up.
+        """
+        if not self.exists():
+            return None
+
+        # Check if empty (0 bytes)
+        try:
+            if self.state_path.stat().st_size == 0:
+                logger.warning("State file at '%s' is empty; skipping backup creation.", self.state_path)
+                return None
+        except OSError:
+            return None
+
+        # Validate JSON content before backing up
+        try:
+            with open(self.state_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or "tasks" not in data or "schema_version" not in data:
+                logger.warning("State file at '%s' is missing required ledger schema; skipping backup.", self.state_path)
+                return None
+        except Exception as e:
+            logger.warning(
+                "State file at '%s' is corrupt (%s); refusing to overwrite backup set with corrupt state.",
+                self.state_path,
+                e,
+            )
+            return None
+
+        # Prepare backups directory under .maya/maintenance/backups/
+        self.backups_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        backup_name = f"state_backup_{timestamp_str}.json"
+        temp_file = self.backups_dir / f"{backup_name}.tmp.{uuid.uuid4().hex[:6]}"
+        final_backup_path = self.backups_dir / backup_name
+
+        try:
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_file, final_backup_path)
+        except Exception as e:
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except OSError:
+                    pass
+            logger.error("Failed to write state backup: %s", e)
+            return None
+
+        # Bounded backup retention: prune older backups beyond max_backups
+        try:
+            existing_backups = sorted(
+                [p for p in self.backups_dir.glob("state_backup_*.json") if p.is_file()],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            for old_backup in existing_backups[max_backups:]:
+                try:
+                    old_backup.unlink()
+                except OSError:
+                    pass
+        except Exception as e:
+            logger.warning("Failed to prune old backups: %s", e)
+
+        return final_backup_path
+
+    def list_backups(self) -> list[Path]:
+        """Return existing valid backup paths sorted newest first."""
+        if not self.backups_dir.is_dir():
+            return []
+        return sorted(
+            [p for p in self.backups_dir.glob("state_backup_*.json") if p.is_file()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
+    def restore_backup(self, backup_path: Path | str, authorized: bool = False) -> TaskLedger:
+        """
+        Restore state from an explicit backup file.
+        Requires explicit operator authorization (--authorize).
+        Validates backup integrity before atomic replacement.
+        """
+        if not authorized:
+            raise PermissionError("Restoring a state backup requires explicit operator authorization (--authorize).")
+
+        b_path = Path(backup_path).resolve()
+        if not b_path.is_file():
+            raise FileNotFoundError(f"Backup file not found at: {b_path}")
+
+        with open(b_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        ledger = TaskLedger.from_dict(data)
+
+        # Atomically replace state.json
+        self.save_ledger(ledger)
+        return ledger
 
     def update_task_atomic(self, task: TaskDefinition) -> TaskLedger:
         """

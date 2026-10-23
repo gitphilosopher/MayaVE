@@ -7,11 +7,9 @@ Does not introduce a runtime autonomous planning loop.
 
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any
 
 try:
     from .models import (
@@ -234,6 +232,12 @@ class TaskContractValidator:
                     except re.error as re_err:
                         errors.append(f"pre_validation_pattern.pattern '{pat}' is invalid regex: {re_err}.")
 
+        # 12. task_type (Optional, defaults to 'defect')
+        task_type = data.get("task_type")
+        if task_type is not None:
+            if not isinstance(task_type, str) or task_type.lower() not in ("defect", "feature", "improvement", "refactor", "chore"):
+                errors.append("Field 'task_type' must be one of: 'defect', 'feature', 'improvement', 'refactor', 'chore'.")
+
         is_valid = len(errors) == 0
         return is_valid, errors
 
@@ -406,6 +410,7 @@ class TaskContractValidator:
             attempts=0,
             max_attempts=int(contract_data.get("max_attempts", 3)),
             allow_file_deletion=bool(contract_data.get("allow_file_deletion", False)),
+            task_type=contract_data.get("task_type", "defect"),
             created_at=utc_now_iso(),
             updated_at=utc_now_iso(),
         )

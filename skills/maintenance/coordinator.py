@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any, Optional
 
 # Ensure UTF-8 output on Windows consoles if available
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
@@ -48,7 +49,7 @@ try:
     from .inventory import get_default_audit_inventory
     from .hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from .ledger import LedgerValidationError, TaskLedger
-    from .models import CheckpointRecord, PlanProposal, TaskRisk, TaskStatus, utc_now_iso
+    from .models import CheckpointRecord, PlanProposal, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
     from .planner import LocalPlanner, PlannerConfig
     from .orchestrator import ExecutionSummary, SingleTaskOrchestrator
     from .quality import QualityGateEngine
@@ -95,7 +96,7 @@ except ImportError:
     from inventory import get_default_audit_inventory
     from hub import CoordinatorAPI, compute_patch_sha256, compute_verification_sha256
     from ledger import LedgerValidationError, TaskLedger
-    from models import CheckpointRecord, PlanProposal, TaskRisk, TaskStatus, utc_now_iso
+    from models import CheckpointRecord, PlanProposal, TaskDefinition, TaskRisk, TaskStatus, utc_now_iso
     from planner import LocalPlanner, PlannerConfig
     from orchestrator import ExecutionSummary, SingleTaskOrchestrator
     from quality import QualityGateEngine
@@ -467,18 +468,219 @@ def cmd_cleanup_preview(repo_root: Path, store: StateStore) -> int:
         print("No worktrees or managed workspace directories detected under .maya/worktrees/.")
         return 0
 
-    print(f"{'Task ID':<10} {'Task Status':<16} {'Dirty?':<8} {'Recommendation':<25} {'Worktree Path'}")
-    print("-" * 96)
+    print(f"{'Task ID':<10} {'Task Status':<16} {'Dirty?':<8} {'Merged?':<8} {'Eligible?':<10} {'Recommendation':<25} {'Branch'}")
+    print("-" * 105)
     for item in preview:
         t_id = item.task_id or "[ORPHAN]"
         print(
-            f"{t_id:<10} {item.task_status:<16} {str(item.is_dirty):<8} "
-            f"{item.recommendation:<25} {item.path}"
+            f"{t_id:<10} {item.task_status:<16} {str(item.is_dirty):<8} {str(item.is_merged):<8} "
+            f"{str(item.eligible):<10} {item.recommendation:<25} {item.branch_name}"
         )
-        print(f"           Reason: {item.reason}")
-    print("-" * 96)
+        print(f"           Path    : {item.path}")
+        print(f"           Reason  : {item.reason}")
+        if item.blocking_reasons:
+            print(f"           Blockers: {'; '.join(item.blocking_reasons)}")
+        if item.actions:
+            print(f"           Actions : {', '.join(item.actions)}")
+    print("-" * 105)
     print("\n[SAFETY NOTICE] Preview only. No worktrees, branches, or files were modified or deleted.")
     return 0
+
+
+def cmd_cleanup(
+    repo_root: Path,
+    store: StateStore,
+    task_id: str | None = None,
+    authorized: bool = False,
+    dry_run: bool = False,
+) -> int:
+    """Execute or preview safe cleanup of a finished task's worktree and merged branch."""
+    if dry_run or not task_id or task_id.upper() == "ALL":
+        return cmd_cleanup_preview(repo_root, store)
+
+    if not authorized:
+        print("[ERROR] Cleanup execution requires explicit operator authorization (--authorize).")
+        print("To preview cleanup without executing, run with --dry-run or --cleanup-preview.")
+        return 1
+
+    try:
+        ledger, _ = _load_or_mock_ledger(store)
+    except CorruptStateError as e:
+        print(f"[FAIL] State file is corrupt: {e}")
+        return 2
+
+    wt_manager = WorktreeManager(repo_root)
+    ok, msg = wt_manager.cleanup_workspace(task_id, ledger, authorized=authorized)
+    if not ok:
+        print(f"[FAIL] {msg}")
+        return 1
+
+    print(f"[SUCCESS] {msg}")
+    return 0
+
+
+def cmd_pending_merges(repo_root: Path, store: StateStore, target_branch: str = "main") -> int:
+    """Display visibility into pending and completed integration branches."""
+    print(f"\n=== MayaVE Integration Branches & Pending Merges (Read-Only) ===")
+    try:
+        ledger, _ = _load_or_mock_ledger(store)
+    except CorruptStateError as e:
+        print(f"[FAIL] State file is corrupt: {e}")
+        return 2
+
+    wt_manager = WorktreeManager(repo_root)
+
+    # 1. Discover all local branches in the Git repository
+    br_proc = subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    all_local_branches = set(br_proc.stdout.splitlines()) if br_proc.returncode == 0 else set()
+
+    # Find candidate autophage branches
+    int_branches = {b for b in all_local_branches if b.startswith("autophage/")}
+
+    # Map ledger tasks by their workspace branch and expected integration branch
+    ledger_tasks_by_branch: dict[str, list[TaskDefinition]] = {}
+    for task in ledger:
+        if task.workspace and task.workspace.branch_name:
+            ledger_tasks_by_branch.setdefault(task.workspace.branch_name, []).append(task)
+        int_b = f"autophage/integrate-{task.task_id}"
+        ledger_tasks_by_branch.setdefault(int_b, []).append(task)
+        int_branches.add(int_b)
+
+    rows = []
+    discrepancies = []
+
+    for branch_name in sorted(int_branches):
+        branch_exists = branch_name in all_local_branches
+        associated_tasks = ledger_tasks_by_branch.get(branch_name, [])
+
+        if not branch_exists:
+            for t in associated_tasks:
+                if t.status in (TaskStatus.READY_TO_INTEGRATE, TaskStatus.INTEGRATING, TaskStatus.VERIFIED):
+                    discrepancies.append(
+                        f"Task {t.task_id} ({t.status.value}) expects branch '{branch_name}', but branch does not exist in Git."
+                    )
+            continue
+
+        task_id_str = "-"
+        task_info = "[DISCREPANCY: No ledger task]"
+        base_commit = "-"
+        head_commit = "-"
+        commits_ahead = 0
+        wt_state = "MISSING"
+
+        if associated_tasks:
+            t = associated_tasks[0]
+            task_id_str = t.task_id
+            task_info = t.title[:35]
+            if t.workspace and t.workspace.base_commit:
+                base_commit = t.workspace.base_commit[:7]
+            ws_status = wt_manager.inspect_workspace(t.task_id)
+            if ws_status.exists_on_disk:
+                wt_state = "DIRTY" if ws_status.is_dirty else "CLEAN"
+            else:
+                wt_state = "MISSING"
+        else:
+            discrepancies.append(
+                f"Branch '{branch_name}' exists in Git but is not associated with any task in the ledger."
+            )
+
+        # Inspect Git commits
+        head_proc = subprocess.run(
+            ["git", "rev-parse", f"refs/heads/{branch_name}"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if head_proc.returncode == 0:
+            full_head = head_proc.stdout.strip()
+            head_commit = full_head[:7]
+            if base_commit != "-":
+                cnt_proc = subprocess.run(
+                    ["git", "rev-list", "--count", f"{base_commit}..{branch_name}"],
+                    cwd=str(repo_root),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if cnt_proc.returncode == 0:
+                    try:
+                        commits_ahead = int(cnt_proc.stdout.strip())
+                    except ValueError:
+                        commits_ahead = 0
+
+        # Check merge status
+        is_merged = wt_manager.is_branch_merged(branch_name, target_branch)
+        merge_status = "MERGED" if is_merged else "PENDING"
+
+        rows.append({
+            "branch": branch_name,
+            "task_id": task_id_str,
+            "title": task_info,
+            "base": base_commit,
+            "head": head_commit,
+            "ahead": commits_ahead,
+            "merge_status": merge_status,
+            "worktree": wt_state,
+        })
+
+    if not rows and not discrepancies:
+        print("No active integration or task branches detected.")
+        return 0
+
+    print(f"{'Branch Name':<32} {'Task':<8} {'Base':<8} {'Head':<8} {'Ahead':<6} {'Merge Status':<14} {'Worktree':<9} {'Description'}")
+    print("-" * 115)
+    for r in rows:
+        print(
+            f"{r['branch']:<32} {r['task_id']:<8} {r['base']:<8} {r['head']:<8} "
+            f"{r['ahead']:<6} {r['merge_status']:<14} {r['worktree']:<9} {r['title']}"
+        )
+    print("-" * 115)
+
+    if discrepancies:
+        print("\n[DISCREPANCIES DETECTED]")
+        for d in discrepancies:
+            print(f"  ! {d}")
+
+    print("\n[SAFETY NOTICE] Strictly an inspection and governance view. Zero merges performed.")
+    return 0
+
+
+def cmd_list_backups(store: StateStore) -> int:
+    """List available rotating session state backups."""
+    print(f"\n=== MayaVE Session State Backups ===")
+    backups = store.list_backups()
+    if not backups:
+        print(f"No state backups found under: {store.backups_dir}")
+        return 0
+
+    print(f"{'Backup File':<45} {'Size (bytes)':<14} {'Modified (UTC)':<24}")
+    print("-" * 85)
+    for b in backups:
+        print(f"{b['filename']:<45} {b['size_bytes']:<14} {b['modified_utc']:<24}")
+    print("-" * 85)
+    return 0
+
+
+def cmd_restore_backup(store: StateStore, backup_name_or_path: str, authorized: bool = False) -> int:
+    """Restore state.json from an earlier valid backup snapshot (requires --authorize)."""
+    if not authorized:
+        print("[ERROR] Restoring a state backup mutates active state and requires operator authorization (--authorize).")
+        return 1
+
+    try:
+        store.restore_backup(backup_name_or_path, authorized=authorized)
+        print(f"[SUCCESS] Restored state from backup '{backup_name_or_path}'.")
+        return 0
+    except Exception as e:
+        print(f"[FAIL] {e}")
+        return 1
 
 
 def cmd_validate(repo_root: Path, store: StateStore) -> int:
@@ -832,6 +1034,12 @@ def cmd_execute(
         print("Run with --init first before executing tasks.")
         return 1
 
+    if is_persisted:
+        try:
+            store.create_session_backup()
+        except Exception:
+            pass
+
     worktree_mgr = WorktreeManager(repo_root)
     quality_engine = QualityGateEngine(repo_root)
     cache = ContextCache(repo_root / ".maya" / "maintenance" / "cache.json")
@@ -987,6 +1195,7 @@ def cmd_run_adaptive(
     force_new_session: bool = False,
     resume: bool = False,
     local_model: str = "qwen2.5-coder:3b",
+    route_complexity: bool = False,
 ) -> int:
     """Execute maintenance loop using AdaptiveWorkerScheduler with pilot safety bounds."""
     try:
@@ -999,6 +1208,12 @@ def cmd_run_adaptive(
         print(f"[ERROR] State store not initialized at: {store.state_path}")
         print("Run with --init first before executing tasks.")
         return 1
+
+    if is_persisted:
+        try:
+            store.create_session_backup()
+        except Exception:
+            pass
 
     try:
         config = AdaptiveConfig(
@@ -1038,6 +1253,19 @@ def cmd_run_adaptive(
 
     review_policy = ReviewPolicy(max_reviews_per_session=max_reviews)
 
+    router = None
+    if route_complexity:
+        routing_cfg = RoutingConfig(
+            local_model=local_model,
+            max_fallback_attempts=1,
+            efficient_cloud_agent="implementer",
+            advanced_cloud_agent="architect",
+        )
+        router = ComplexityRouter(config=routing_cfg)
+
+    concurrency_guard = WorkerConcurrencyGuard(max_implementation_workers=1)
+    local_adapter_instance = LocalModelAgentAdapter(model=local_model) if route_complexity else None
+
     scheduler = AdaptiveWorkerScheduler(
         repo_root=repo_root,
         store=store,
@@ -1049,6 +1277,9 @@ def cmd_run_adaptive(
         reviewer=reviewer,
         review_policy=review_policy,
         cache=cache,
+        router=router,
+        concurrency_guard=concurrency_guard,
+        local_adapter=local_adapter_instance,
     )
 
     print("\n=== MayaVE Adaptive Worker Scheduler Starting ===")
@@ -1377,6 +1608,11 @@ def cmd_integrate(
     # Rule 2: Prefer dedicated integration branch 'autophage/integrate-<task_id>' branched from baseline_commit.
     # Rule 3: Fail closed on existing-branch collisions or dirty states without modifying the repository.
     br_proc = subprocess.run(["git", "branch", "--show-current"], cwd=str(repo_root), capture_output=True, text=True, check=False)
+    try:
+        store.create_session_backup()
+    except Exception:
+        pass
+
     initial_branch = br_proc.stdout.strip()
     target_branch = f"autophage/integrate-{task_id}"
     created_integration_branch = False
@@ -1574,7 +1810,7 @@ def cmd_integrate(
         subprocess.run(["git", "reset", "--", *files_to_add], cwd=str(repo_root), capture_output=True, check=False)
         _restore_integration_files(repo_root, backups)
         _rollback_branch_on_failure()
-        hub.transition_task(
+        result = hub.transition_task(
             ledger, task_id, TaskStatus.RECOVERY_REQUIRED, actor="integration",
             failure_reason="Integration commit failed.", checkpoint_stage="INTEGRATION_COMMIT_FAILED",
             checkpoint_details={"artifact_sha256": patch_sha256}, event_type="INTEGRATION_FAILED",
@@ -1683,6 +1919,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace-status", nargs="?", const="ALL", metavar="TASK_ID", help="Inspect workspace status for a task or ALL tasks")
     parser.add_argument("--reconcile", action="store_true", help="Reconcile task state on coordinator restart and detect interruptions")
     parser.add_argument("--cleanup-preview", action="store_true", help="Produce a non-destructive cleanup preview of all managed worktrees")
+    parser.add_argument("--cleanup", nargs="?", const="ALL", metavar="TASK_ID", help="Safely remove finished worktree and delete its merged local branch (requires --authorize; use with --dry-run for preview)")
+    parser.add_argument("--pending-merges", action="store_true", help="Display visibility into pending and completed integration branches (read-only governance view)")
+    parser.add_argument("--list-backups", action="store_true", help="List available rotating session state backups")
+    parser.add_argument("--restore-backup", type=str, metavar="BACKUP_PATH", help="Restore state.json from an earlier backup snapshot (requires --authorize)")
     parser.add_argument("--run-adaptive", action="store_true", help="Run maintenance loop with adaptive worker scaling")
     parser.add_argument("--initial-workers", type=int, default=1, help="Initial worker concurrency (default: 1)")
     parser.add_argument("--max-workers", type=int, default=1, help="Maximum concurrent implementation workers (default: 1 for pilot)")
@@ -1791,6 +2031,28 @@ def build_parser() -> argparse.ArgumentParser:
         default="Operator rejected",
         help="Reason for rejecting a plan proposal (used with --reject-plan)",
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch read-only terminal dashboard (Rich observer)",
+    )
+    parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="Display trace events in non-TTY plain-text format",
+    )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Enable append-only JSONL tracing in .maya/maintenance/trace/",
+    )
+    parser.add_argument(
+        "--replay",
+        nargs="?",
+        const="LATEST",
+        metavar="SESSION_ID",
+        help="Replay recorded trace session in terminal dashboard",
+    )
     return parser
 
 
@@ -1833,6 +2095,30 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     repo_root, state_path = _resolve_default_paths(args.state_path, args.repo_root)
+
+    if args.trace or args.tui:
+        try:
+            from .trace import enable_trace
+        except ImportError:
+            try:
+                from trace import enable_trace
+            except ImportError:
+                enable_trace = None
+        if enable_trace:
+            enable_trace(trace_dir=repo_root / ".maya" / "maintenance" / "trace")
+
+    if args.tui or args.plain or args.replay:
+        try:
+            from .tui import run_tui, run_plain
+        except ImportError:
+            from tui import run_tui, run_plain
+        session_target = None
+        if args.replay and args.replay != "LATEST":
+            session_target = args.replay
+        if args.plain:
+            return run_plain(session_id=session_target, repo_root=repo_root)
+        return run_tui(session_id=session_target, repo_root=repo_root, replay=bool(args.replay))
+
     store = StateStore(state_path)
 
     if args.terminal_approval:
@@ -1922,6 +2208,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.cleanup_preview:
         return cmd_cleanup_preview(repo_root, store)
 
+    if args.cleanup:
+        return cmd_cleanup(
+            repo_root=repo_root,
+            store=store,
+            task_id=args.cleanup,
+            authorized=args.authorize,
+            dry_run=args.dry_run,
+        )
+
+    if args.pending_merges:
+        return cmd_pending_merges(repo_root, store)
+
+    if args.list_backups:
+        return cmd_list_backups(store)
+
+    if args.restore_backup:
+        return cmd_restore_backup(store, args.restore_backup, authorized=args.authorize)
+
     if args.run_adaptive:
         return cmd_run_adaptive(
             repo_root=repo_root,
@@ -1942,6 +2246,7 @@ def main(argv: list[str] | None = None) -> int:
             force_new_session=args.new_session,
             resume=args.resume,
             local_model=args.local_model,
+            route_complexity=args.route_complexity,
         )
 
     if args.integrate_task:

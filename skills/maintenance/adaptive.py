@@ -33,6 +33,7 @@ try:
     from .store import StateStore
     from .terminal_approval import generate_session_summary, generate_task_report
     from .worktree import WorktreeManager
+    from .routing import ComplexityRouter, WorkerConcurrencyGuard
 except ImportError:
     from adapter import AgentAdapter, FakeAgentAdapter
     from cache import ContextCache
@@ -46,6 +47,7 @@ except ImportError:
     from store import StateStore
     from terminal_approval import generate_session_summary, generate_task_report
     from worktree import WorktreeManager
+    from routing import ComplexityRouter, WorkerConcurrencyGuard
 
 logger = logging.getLogger("maya.maintenance.adaptive")
 
@@ -197,6 +199,11 @@ class AdaptiveSchedulerSummary:
         }
 
 
+def is_escalation_eligible(task: TaskDefinition) -> bool:
+    """Check if task is eligible for adapter tier escalation under existing policy."""
+    return False
+
+
 class AdaptiveWorkerScheduler:
     """
     Adaptive worker scheduler managing parallel task execution across git worktrees.
@@ -216,6 +223,9 @@ class AdaptiveWorkerScheduler:
         reviewer: Optional[ReviewerAdapter] = None,
         review_policy: Optional[ReviewPolicy] = None,
         cache: Optional[ContextCache] = None,
+        router: Optional[ComplexityRouter] = None,
+        concurrency_guard: Optional[WorkerConcurrencyGuard] = None,
+        local_adapter: Optional[AgentAdapter] = None,
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.store = store
@@ -228,6 +238,9 @@ class AdaptiveWorkerScheduler:
         self.reviewer = reviewer or FakeReviewerAdapter()
         self.review_policy = review_policy or ReviewPolicy()
         self.cache = cache
+        self.router = router
+        self.concurrency_guard = concurrency_guard
+        self.local_adapter = local_adapter
 
         self._lock = threading.RLock()
         self.reviewer_lock = threading.Lock()
@@ -509,6 +522,9 @@ class AdaptiveWorkerScheduler:
             cache=self.cache,
             reviewer_lock=self.reviewer_lock,
             timeout_seconds=self.config.worker_timeout_sec,
+            router=self.router,
+            concurrency_guard=self.concurrency_guard,
+            local_adapter=self.local_adapter,
         )
 
         try:
