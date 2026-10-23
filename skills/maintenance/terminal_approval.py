@@ -12,8 +12,7 @@ import json
 import logging
 import os
 import subprocess
-import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -155,7 +154,8 @@ class TerminalApprovalManager:
             logger.warning("Task %s not found in ledger during approval sync.", req.task_id)
             return False
         task = ledger.get_task(req.task_id)
-        if task.status not in (TaskStatus.NEEDS_APPROVAL, TaskStatus.RECOVERY_REQUIRED):
+        if task.status != TaskStatus.NEEDS_APPROVAL:
+            logger.warning("Task %s has status %s; approval sync only permitted for NEEDS_APPROVAL.", req.task_id, task.status.value)
             return False
         result = CoordinatorAPI(self.store).transition_task(
             ledger, task.task_id, TaskStatus.PENDING, actor="approval",

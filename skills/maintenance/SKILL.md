@@ -40,6 +40,10 @@ Common commands:
 - Reconcile worktrees: `--reconcile`
 - Cleanup preview: `--cleanup-preview` (or `--cleanup --dry-run`)
 - Safe worktree cleanup: `--cleanup <TASK_ID> --authorize`
+- Read-only terminal dashboard: `--tui` (or `--watch`)
+- Interactive operator dashboard: `--operate` (or `--tui --operate`)
+- Plain text dashboard fallback: `--plain [--operate]`
+- Trace replay: `--replay [SESSION_ID]`
 - Integration branches & pending merges: `--pending-merges`
 - Session backups: `--list-backups`
 - Restore state backup: `--restore-backup <BACKUP_PATH> --authorize`
@@ -53,3 +57,4 @@ Common commands:
 6. **Integration Branch Governance**: Commits are never made directly to `main`. Integration automatically redirects to dedicated task branches (`autophage/integrate-<task_id>`).
 7. **Worktree Isolation & Safe Cleanup**: Work is conducted strictly inside isolated worktrees (`.maya/worktrees/<task_id>`). Cleanup requires 5 verified eligibility conditions, explicit operator authorization (`--authorize`), and non-force branch deletion (`git branch -d`).
 8. **Crash Resilience & Recovery Chaos Handling**: Interrupted in-flight tasks (`IN_PROGRESS`, `VERIFYING`, `INTEGRATING`) and unverified integration commits move safely to `RECOVERY_REQUIRED` on restart; direct transitions from `RECOVERY_REQUIRED` to `IN_PROGRESS` are strictly forbidden without operator review.
+9. **Interactive Operator Safety & Binding Revalidation**: The terminal dashboard is strictly read-only by default; consequential operations require opt-in `--operate` mode. Consequential actions require confirmation, revalidate exact bindings (`patch_sha256`, `baseline_commit`, `verification_sha256`), prevent duplicate approvals and downgrades, enforce reviewer-safeguard holds, and keep `RECOVERY_REQUIRED` tasks blocked until manual review. Merging into `main` remains human-controlled.

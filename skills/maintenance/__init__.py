@@ -67,6 +67,11 @@ from .task_contract import (
     TaskContractValidationError,
     TaskContractValidator,
 )
+from .operator_controls import (
+    ApprovalValidationResult,
+    OperatorController,
+    RecoveryDiagnostic,
+)
 from .orchestrator import ExecutionSummary, SingleTaskOrchestrator
 from .quality import QualityGateEngine, QualityGateResult, QualityReport
 from .reviewer import (
@@ -193,6 +198,9 @@ __all__ = [
     "ModelDescriptor",
     "ModelRegistry",
     "ModelStatus",
+    "OperatorController",
+    "ApprovalValidationResult",
+    "RecoveryDiagnostic",
     "parse_unified_diff",
     "ParsedDiff",
     "PlannerConfig",

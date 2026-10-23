@@ -199,7 +199,7 @@ def cmd_status(store: StateStore, repo_root: Path | None = None) -> int:
             reason = t.blocking_reason or t.failure_reason or "Interrupted execution or failed verification."
             print(f"  - [{t.task_id}] {t.title}")
             print(f"      Reason : {reason}")
-            print(f"      Action : Inspect with '--inspect-request req-{t.task_id}-recovery' and approve with '--approve-request req-{t.task_id}-recovery'")
+            print(f"      Action : Inspect worktree status and reconcile via '--reconcile'. Approvals cannot bypass RECOVERY_REQUIRED.")
 
     eligible = scheduler.get_eligible_tasks()
     if eligible:
@@ -2037,6 +2037,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Launch read-only terminal dashboard (Rich observer)",
     )
     parser.add_argument(
+        "--operate",
+        action="store_true",
+        help="Launch interactive operator dashboard (Rich TUI with approval/operator controls)",
+    )
+    parser.add_argument(
         "--plain",
         action="store_true",
         help="Display trace events in non-TTY plain-text format",
@@ -2096,7 +2101,7 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_root, state_path = _resolve_default_paths(args.state_path, args.repo_root)
 
-    if args.trace or args.tui:
+    if args.trace or args.tui or args.operate:
         try:
             from .trace import enable_trace
         except ImportError:
@@ -2107,7 +2112,7 @@ def main(argv: list[str] | None = None) -> int:
         if enable_trace:
             enable_trace(trace_dir=repo_root / ".maya" / "maintenance" / "trace")
 
-    if args.tui or args.plain or args.replay:
+    if args.tui or args.plain or args.replay or args.operate:
         try:
             from .tui import run_tui, run_plain
         except ImportError:
@@ -2116,8 +2121,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.replay and args.replay != "LATEST":
             session_target = args.replay
         if args.plain:
-            return run_plain(session_id=session_target, repo_root=repo_root)
-        return run_tui(session_id=session_target, repo_root=repo_root, replay=bool(args.replay))
+            return run_plain(session_id=session_target, repo_root=repo_root, operate=bool(args.operate))
+        return run_tui(session_id=session_target, repo_root=repo_root, replay=bool(args.replay), operate=bool(args.operate))
 
     store = StateStore(state_path)
 
