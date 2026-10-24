@@ -385,18 +385,20 @@ def render_header(state: DashboardState) -> Group:
     else:
         line1.append("  observe", style=GRAY)
 
-    # Inactive tabs light up when they hold something that needs attention.
+    # Tab indicator (Claude Code style: active indicator)
     tabs = [
-        ("1 ops", state.active_tab == "OPERATIONS", GRAY),
-        (f"2 approvals ({len(state.pending_requests)})", state.active_tab == "APPROVALS",
-         AMBER if state.pending_requests else GRAY),
-        ("3 merges", state.active_tab == "MERGES", GRAY),
-        (f"4 recovery ({len(state.cached_recovery)})", state.active_tab == "RECOVERY",
-         CORAL if state.cached_recovery else GRAY),
+        ("ops", state.active_tab == "OPERATIONS"),
+        ("approvals", state.active_tab == "APPROVALS"),
+        ("merges", state.active_tab == "MERGES"),
+        ("recovery", state.active_tab == "RECOVERY"),
     ]
     line2 = Text(no_wrap=True, overflow="ellipsis")
-    for name, is_active, idle_style in tabs:
-        line2.append(name + "   ", style=ACCENT if is_active else idle_style)
+    for name, is_active in tabs:
+        if is_active:
+            line2.append(f" {name} ", style=f"bold {WHITE} on {PURPLE}")
+        else:
+            line2.append(f" {name} ", style=GRAY)
+        line2.append("  ", style=GRAY)
 
     return Group(line1, line2, _rule())
 
@@ -760,6 +762,7 @@ def render_message_popup(state: DashboardState) -> Panel:
 def render_dashboard(state: DashboardState, console: Console) -> Layout:
     layout = Layout()
 
+    # 1. Modal / Popup Overlay
     popup: Optional[Panel] = None
     if state.modal_mode == "CONFIRM_APPROVE":
         popup = render_confirm_approve_popup(state)
@@ -778,23 +781,55 @@ def render_dashboard(state: DashboardState, console: Console) -> Layout:
         )
         return layout
 
+    # 2. Stream-centric Main Layout
+    # Header (Fixed)
+    # Activity Stream (Scrolling)
+    # Footer (Fixed)
+
+    # We preserve the current tab logic internally but render the content
+    # as a focused stream of the active tab's view.
     if state.active_tab == "APPROVALS":
-        main_panel = render_approvals(state)
+        main_content = render_approvals(state)
     elif state.active_tab == "MERGES":
-        main_panel = render_merges(state)
+        main_content = render_merges(state)
     elif state.active_tab == "RECOVERY":
-        main_panel = render_recovery(state)
+        main_content = render_recovery(state)
     else:
-        main_panel = render_operations(state)
+        # Operations view: Task Summary + Live Trace Stream
+        # We wrap the trace in a panel to create the "Stream" feel
+        stream = render_trace(state)
+
+        # Add a task summary at the top of the operations stream
+        tasks_summary = _table()
+        tasks_summary.add_column("task", style=GRAY, width=12)
+        tasks_summary.add_column("status", width=15)
+        tasks_summary.add_column("risk", width=8)
+        tasks_summary.add_column("tries", width=8)
+
+        if state.cached_tasks:
+            # Show only active/critical tasks
+            active = [t for t in state.cached_tasks.values() if t.get("status") != "VERIFIED"]
+            for t in active[:3]:
+                tasks_summary.add_row(
+                    t.get("task_id", "?"),
+                    Text(t.get("status", "PENDING"), style=WHITE),
+                    Text(t.get("risk", "LOW"), style=_risk_style(t.get("risk"))),
+                    f"{t.get('attempts', 0)}/{t.get('max_attempts', 3)}"
+                )
+
+        main_content = Group(
+            _section("active tasks", tasks_summary),
+            _rule(),
+            stream
+        )
 
     layout.split_column(
         Layout(render_header(state), size=3),
-        Layout(main_panel, size=10),
-        Layout(_rule(), size=1),
-        Layout(render_trace(state), ratio=1),
+        Layout(main_content, ratio=1),
         Layout(render_footer(state), size=2),
     )
     return layout
+
 
 
 def poll_keyboard(state: DashboardState) -> bool:

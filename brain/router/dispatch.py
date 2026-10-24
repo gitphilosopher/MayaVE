@@ -35,7 +35,7 @@ from skills.system.clipboard import execute as clipboard
 from skills.system.lock_screen import execute as lock_screen
 from skills.system.open_target import execute as open_target
 from skills.system.perform_action import execute as perform_action
-from skills.system.power import execute as power_action, resolve_pending as resolve_power_confirmation
+from skills.system.power import execute as power_action, resolve_pending as resolve_power_confirmation, cancel_shutdown as cancel_power_action
 from skills.system.system_info import execute as system_info
 from skills.utilities.datetime_skill import execute as get_datetime
 from skills.utilities.notepad import (
@@ -74,6 +74,7 @@ class Router:
             "lock_screen": lock_screen,
             "shutdown": power_action,
             "restart": power_action,
+            "cancel_shutdown": cancel_power_action,
             "search_web": google_search,
             "play_music": play_music,
             "pause_music": play_music,

@@ -611,6 +611,9 @@ class AutoPhageCLI:
         )
 
         if show_diff:
+            if not success:
+                self.tui.console.print(f"[{CORAL}][PREVIEW FAILED] {msg}[/]\n")
+                return 1
             if info:
                 self.tui.print_integration_diff(info, full_diff=True)
             tip_sha = info.get("branch_tip_sha", "")
@@ -619,6 +622,9 @@ class AutoPhageCLI:
             return 0
 
         if not authorized:
+            if not success and "requires explicit operator authorization" not in msg:
+                self.tui.console.print(f"[{CORAL}][ERROR] {msg}[/]\n")
+                return 1
             if info:
                 self.tui.print_integration_diff(info, full_diff=False)
             self.tui.console.print(f"[{AMBER}][APPROVAL REQUIRED] {msg}[/]\n")

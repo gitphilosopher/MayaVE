@@ -31,6 +31,7 @@
     "volume_up",
     "volume_down",
     "shutdown",
+    "cancel_shutdown",
     "clipboard_clear",
     "screenshot",
     "restart",
@@ -242,6 +243,20 @@
       "keywords": [
         "screenshot",
         "capture screen"
+      ],
+      "response_mode": "skill"
+    },
+    {
+      "id": "cancel_shutdown",
+      "category": "system",
+      "description": "User wants to abort a pending OS shutdown or restart countdown.",
+      "min_examples": 40,
+      "keywords": [
+        "cancel shutdown",
+        "stop the shutdown",
+        "abort the shutdown",
+        "stop the restart",
+        "cancel the restart"
       ],
       "response_mode": "skill"
     },

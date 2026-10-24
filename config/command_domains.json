@@ -679,6 +679,19 @@
             "power cycle my pc",
             "turn it off and back on again"
           ]
+        },
+        "cancel_shutdown": {
+          "legacy_intent": "cancel_shutdown",
+          "entities": {},
+          "target_mode": "raw",
+          "seeds": [
+            "cancel shutdown",
+            "stop the shutdown",
+            "abort the shutdown",
+            "stop the restart",
+            "cancel the restart",
+            "cancel the power off"
+          ]
         }
       }
     }

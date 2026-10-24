@@ -205,14 +205,25 @@ Proposed sequence:
 
 For each move/split, update imports/docs/tests/changelog in separately authorized work. Keep facades for rollback; do not bundle DB changes with organizational cleanup.
 
-## 14. Agentic coding efficiency
+## 14. AutoPhage 3.0 Worker Routing Policy
 
-Start each feature with this index and `CONTRIBUTING.md`, then follow the ownership path:
-- Voice/state/turn ordering: `core/`, `main.py`, `core/processor.py`.
-- IR/routing/confirmation: `brain/router/`, `brain/intent_engine.py`, `config/command_domains.json`, relevant skill.
-- Semantic memory: `brain/conversation.py`, `vector_store.py`, `embeddings.py`, Node producer if synced.
-- Avatar/WS: `services/ws_server.py`, `frontend/js/`; `PROTOCOL_CONTRACT.md` covers Node, not avatar WS.
-- Models/TTS/chat: `services/llm/`, `core/speaker.py`, embeddings, settings.
+The implementation routing for maintenance tasks follows a deterministic risk/complexity matrix to ensure safety and efficiency.
+
+### Routing Matrix
+| Risk | Complexity | Selected Worker | Tier |
+| :--- | :--- | :--- | :--- |
+| LOW/MEDIUM | LOW/MEDIUM | Qwen2.5-Coder:3b | TIER_1_LOCAL |
+| HIGH/VERY_HIGH | ANY | Antigravity | TIER_2_CLOUD |
+| ANY | HIGH/VERY_HIGH | Antigravity | TIER_2_CLOUD |
+| UNKNOWN | ANY | Antigravity | TIER_2_CLOUD |
+| ANY | UNKNOWN | Antigravity | TIER_2_CLOUD |
+
+### Operational Rules
+1. **Primary Selection**: If either the risk or complexity dimension is HIGH (or VERY_HIGH), the task is routed to Antigravity (Tier 2).
+2. **Safe Defaults**: Any task with missing, invalid, or unknown risk/complexity classifications is routed to Antigravity as a fail-safe.
+3. **Planning**: Qwen3.5:4b is the exclusive planning and analysis worker; it is never used for implementation.
+4. **Fallback**: After three qualifying implementation failures by a Tier 1 worker, the task is escalated to Antigravity.
+5. **Governance**: Worker routing is independent of authorization. Routing to Antigravity does not bypass human approval gates, protected-path restrictions, independent review, or the no-auto-merge rule.
 
 Potential lightweight checks: import-layer/cycle rules; raw SQLite restricted to adapters; Python/JS message contract fixture; registry-to-handler/confirmation consistency. Adopt only with explicit exceptions and a reproducible test baseline. Avoid turning this central page into duplicate subsystem manuals.
 

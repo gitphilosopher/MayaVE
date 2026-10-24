@@ -1,0 +1,100 @@
+"""
+skills/maintenance/orchestration/orchestrator.py
+Central Coordinator for AutoPhage 3.0.
+Integrates Ledger, Registry, and Worker Adapters.
+"""
+from __future__ import annotations
+import logging
+from pathlib import Path
+from typing import Any, Optional, Set
+from skills.maintenance.ledger import MaintenanceLedger, TaskEntry, TaskStatus
+from skills.maintenance.macro.tools import MacroToolRegistry, ToolExecutionContext, ToolResult
+from skills.maintenance.orchestration.approval import ApprovalManager
+from skills.maintenance.orchestration.adapters import (
+    MaintenanceWorker, PlanningWorker, ImplementationWorker,
+    AntigravityWorker, CopilotWorker, WorkerResponse
+)
+
+logger = logging.getLogger(__name__)
+
+class MaintenanceOrchestrator:
+    """
+    Coordinates the lifecycle of a maintenance task.
+    Ensures policy enforcement, secure approvals, and worker routing.
+    """
+    def __init__(
+        self,
+        repo_root: Path,
+        ledger: MaintenanceLedger,
+        registry: MacroToolRegistry,
+        approval_mgr: ApprovalManager,
+    ):
+        self.repo_root = repo_root
+        self.ledger = ledger
+        self.registry = registry
+        self.approval_mgr = approval_mgr
+
+        # Worker instantiation based on authoritative strategy
+        self.planner = PlanningWorker()
+        self.implementer = ImplementationWorker()
+        self.fallback = AntigravityWorker(executable="agy.exe")
+        self.validator = CopilotWorker()
+
+    def run_task(self, task_id: str, authorized: bool = True) -> bool:
+        """
+        Main execution loop for a single task.
+        """
+        tasks = self.ledger.load()
+        task = tasks.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found in ledger.")
+            return False
+
+        # 1. Context Setup
+        ctx = ToolExecutionContext(
+            worktree_path=Path(f".maya/worktrees/{task_id}"), # Simplified for structure
+            repo_root=self.repo_root,
+            task_id=task_id,
+            target_files=task.target_files
+        )
+
+        # 2. Planning Phase (Qwen3.5:4b)
+        logger.info(f"Starting Planning Phase for {task_id}...")
+        plan_response = self.planner.execute_turn(ctx, f"Objective: {task.task_id}")
+
+        # 3. Implementation Phase (Qwen2.5-Coder:3b)
+        current_worker = self.implementer
+        attempts = 0
+
+        while attempts < 3:
+            impl_response = current_worker.execute_turn(ctx, f"Plan: {plan_response.thought}")
+
+            if impl_response.finish_task:
+                break
+
+            # Process tool calls through policy registry
+            for call in impl_response.tool_calls:
+                tool_name = call["name"]
+                args = call["args"]
+
+                # Bound approval check
+                if self.registry.get(tool_name).approval_required:
+                    targets = {args.get("path")} if "path" in args else set()
+                    if not self.approval_mgr.verify_approval(task_id, tool_name, targets, args):
+                        logger.warning(f"Operation {tool_name} rejected: Missing bound approval.")
+                        # Transition task to NEEDS_APPROVAL in ledger
+                        self.ledger.update_task(task_id, status=TaskStatus.NEEDS_APPROVAL)
+                        return False
+
+                res = self.registry.execute(tool_name, ctx, args)
+                if not res.success:
+                    attempts += 1
+                    logger.info(f"Implementation failure {attempts}/3: {res.error}")
+
+        # 4. Fallback Phase (Antigravity)
+        if attempts >= 3:
+            logger.info("Escalating to Antigravity fallback...")
+            current_worker = self.fallback
+            # Execute fallback turn...
+
+        return True

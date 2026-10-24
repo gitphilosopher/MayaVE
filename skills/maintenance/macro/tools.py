@@ -137,6 +137,7 @@ class ToolDefinition:
     parameters: list[ToolParameter]
     execute: Callable[..., ToolResult]
     category: str = "general"
+    approval_required: bool = False  # New: High-impact operations require human sign-off
 
     def to_schema(self) -> dict[str, Any]:
         """Convert parameter specifications to standard JSON Schema."""
@@ -1221,7 +1222,8 @@ class MacroToolRegistry:
         arguments: Optional[dict[str, Any]] = None,
     ) -> ToolResult:
         """
-        Dispatch and execute a tool with input validation and exception isolation.
+        Dispatch and execute a tool with input validation, policy enforcement,
+        and exception isolation.
         """
         tool = self._tools.get(name)
         if not tool:
@@ -1233,7 +1235,18 @@ class MacroToolRegistry:
 
         args = arguments or {}
 
-        # Validate required arguments
+        # 1. Policy Enforcement: Check for approval requirement
+        if tool.approval_required:
+            # In a real agentic loop, this would check a ledger/approval store.
+            # For Phase 1, we enforce the check but provide a hook for the orchestrator.
+            if not getattr(context, "has_approval", False):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Operation '{name}' requires explicit human approval. Please grant approval via the ledger before retrying.",
+                )
+
+        # 2. Validate required arguments
         for param in tool.parameters:
             if param.required and param.name not in args:
                 return ToolResult(
@@ -1331,6 +1344,7 @@ def create_default_registry() -> MacroToolRegistry:
         name="fs_edit",
         description="Apply an exact-match replacement to a file in the worktree, rejecting ambiguous or stale edits.",
         category="filesystem",
+        approval_required=True,
         parameters=[
             ToolParameter("path", "string", "Relative path to file in worktree.", required=True),
             ToolParameter("old_text", "string", "Exact existing text to be replaced (must match uniquely).", required=True),
@@ -1344,6 +1358,7 @@ def create_default_registry() -> MacroToolRegistry:
         name="fs_write",
         description="Create or overwrite a file strictly within the worktree boundary.",
         category="filesystem",
+        approval_required=True,
         parameters=[
             ToolParameter("path", "string", "Relative path to file in worktree.", required=True),
             ToolParameter("content", "string", "Full text content to write.", required=True),

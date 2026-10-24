@@ -145,10 +145,11 @@ def validate_integration_target_branch(
 ) -> tuple[bool, str]:
     """
     Validate integration target branch name using strict allowlisting and git check-ref-format.
-    - Rejects mainline/protected branches (main, master, refs/heads/main, refs/heads/master, HEAD, etc.).
-    - Rejects arbitrary dev/feature branches (develop, dev, staging, feature/*, etc.).
+    - Rejects mainline/protected branches (main, master, refs/heads/main, refs/heads/master, HEAD, develop, etc.).
+    - Rejects alternative ref representations (refs/* prefixes).
+    - Rejects sibling task IDs (e.g., autophage/integrate-BUG-1-2 for task BUG-1).
     - Rejects other tasks' branches or task worktree branch.
-    - Requires conforming to 'autophage/integrate-{task_id}' scheme.
+    - Requires conforming exactly to 'autophage/integrate-{task_id}'.
     - Validates ref format via `git check-ref-format --branch`.
     """
     import subprocess
@@ -157,19 +158,25 @@ def validate_integration_target_branch(
         return False, "Target branch name cannot be empty."
 
     raw = target_branch.strip()
-    norm = raw
-    if norm.startswith("refs/heads/"):
-        norm = norm[len("refs/heads/"):]
+    if not raw:
+        return False, "Target branch name cannot be empty."
 
-    # 1. Mainline and protected branches
-    forbidden_mainline = {"main", "master", "head", "trunk", "default"}
-    if norm.lower() in forbidden_mainline or raw.lower() in {f"refs/heads/{b}" for b in forbidden_mainline}:
+    # 1. Alternative ref representations and prefixes
+    if raw.startswith("refs/") or raw.startswith("refs:"):
+        return False, f"Target branch '{target_branch}' must not include 'refs/' prefix. Specify the branch name directly."
+
+    if any(c.isspace() for c in raw):
+        return False, f"Target branch '{target_branch}' contains whitespace."
+
+    # 2. Mainline and protected branches
+    forbidden_mainline = {"main", "master", "head", "trunk", "default", "develop", "dev", "staging"}
+    if raw.lower() in forbidden_mainline:
         return False, f"Integration directly into protected/mainline branch '{target_branch}' is strictly forbidden by repository governance policy."
 
-    # 2. Ref format validation using git check-ref-format --branch
+    # 3. Ref format validation using git check-ref-format --branch
     try:
         proc = subprocess.run(
-            ["git", "check-ref-format", "--branch", norm],
+            ["git", "check-ref-format", "--branch", raw],
             cwd=str(repo_root) if repo_root else None,
             capture_output=True,
             text=True,
@@ -181,20 +188,23 @@ def validate_integration_target_branch(
     except Exception as exc:
         return False, f"Could not validate git ref format: {exc}"
 
-    # 3. Allowlist validation: Must match intended integration branch scheme for THIS task
-    expected_prefix = f"autophage/integrate-{task_id}"
-    if norm == expected_prefix or norm.startswith(f"{expected_prefix}-") or norm.startswith(f"{expected_prefix}/"):
+    # 4. Allowlist validation: Must match exact intended integration branch for THIS task
+    expected_branch = f"autophage/integrate-{task_id}"
+    if raw == expected_branch:
         return True, ""
 
     # Specific actionable rejections
-    if norm.startswith("autophage/integrate-"):
-        other_task = norm[len("autophage/integrate-"):].split("/")[0].split("-")[0]
-        return False, f"Target branch '{target_branch}' belongs to another task ('{other_task}'). Integration must target 'autophage/integrate-{task_id}'."
+    if raw.startswith("autophage/integrate-"):
+        other_candidate = raw[len("autophage/integrate-"):]
+        return False, (
+            f"Target branch '{target_branch}' does not match expected integration branch '{expected_branch}' "
+            f"(potential sibling task collision with '{other_candidate}')."
+        )
 
-    if norm == f"autophage/{task_id}" or norm.startswith(f"autophage/{task_id}/"):
-        return False, f"Target branch '{target_branch}' is the task worktree branch, not a dedicated integration branch."
+    if raw == f"autophage/{task_id}" or raw.startswith(f"autophage/{task_id}/") or raw.startswith("autophage/"):
+        return False, f"Target branch '{target_branch}' is not a dedicated integration branch. Integration must target '{expected_branch}'."
 
-    return False, f"Target branch '{target_branch}' is not permitted. Integration must target the dedicated integration branch scheme 'autophage/integrate-{task_id}'."
+    return False, f"Target branch '{target_branch}' is not permitted. Integration must target the dedicated integration branch '{expected_branch}'."
 
 
 @dataclass
@@ -1194,725 +1204,46 @@ class CampaignEngine:
     # --------------------------------------------------------------------------
 
     def _route_worker_tier(self, task: TaskDefinition, attempts: int = 1) -> WorkerTier:
-        """Determine appropriate worker tier based on risk, scope, and attempts."""
-        if self.config.tier1_only:
+        """
+        Determine appropriate worker tier based on risk and complexity.
+
+        Authoritative Routing Policy:
+        - Qwen2.5-Coder:3b (TIER_1_LOCAL): LOW/MEDIUM risk AND LOW/MEDIUM complexity.
+        - Antigravity (TIER_2_CLOUD): HIGH risk OR HIGH complexity.
+        - Fallback: Route to TIER_2_CLOUD after 3 qualifying TIER_1 failures.
+
+        Safe Handling:
+        - If risk or complexity is missing/invalid, the task is routed to TIER_2_CLOUD
+          as a safety precaution (fail-safe to most capable worker).
+        """
+        # 1. Extract Risk and Complexity
+        risk = getattr(task, "risk", None)
+        # Complexity is often inferred from target_files count or explicit attribute
+        complexity = getattr(task, "complexity", "LOW")
+        if not complexity:
+            complexity = "LOW"
+
+        # Normalize to uppercase for comparison
+        # Handle both Enum values and raw strings
+        risk_val = str(risk.value if hasattr(risk, "value") else risk).upper() if risk else "UNKNOWN"
+        comp_val = str(complexity.value if hasattr(complexity, "value") else complexity).upper() if complexity else "UNKNOWN"
+
+        # 2. Safe Handling for Unknowns: Fail-safe to Antigravity
+        if risk_val == "UNKNOWN" or comp_val == "UNKNOWN":
+            logger.warning(f"Task {task.task_id} has unknown risk ({risk_val}) or complexity ({comp_val}). Routing to TIER_2_CLOUD for safety.")
+            return WorkerTier.TIER_2_CLOUD
+
+        # 3. Primary Routing Matrix
+        # Antigravity if either dimension is HIGH
+        if risk_val in ("HIGH", "VERY_HIGH") or comp_val in ("HIGH", "VERY_HIGH"):
+            return WorkerTier.TIER_2_CLOUD
+
+        # Qwen2.5-Coder if both are LOW or MEDIUM
+        if risk_val in ("LOW", "MEDIUM") and comp_val in ("LOW", "MEDIUM"):
             return WorkerTier.TIER_1_LOCAL
-        if attempts > 1:
-            return WorkerTier.TIER_2_CLOUD
-        if task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH):
-            return WorkerTier.TIER_2_CLOUD
-        if len(task.target_files) >= 3:
-            return WorkerTier.TIER_2_CLOUD
-        # Architectural core
-        for f in task.target_files:
-            clean = f.replace("\\", "/")
-            if any(clean.startswith(p) for p in ("core/", "brain/router/", "services/ws_server.py")):
-                return WorkerTier.TIER_2_CLOUD
-        return WorkerTier.TIER_1_LOCAL
 
-    def _build_worker_prompt(
-        self,
-        task: TaskDefinition,
-        plan: str,
-        tier: WorkerTier,
-        feedback: Optional[str] = None,
-    ) -> str:
-        """
-        Construct a comprehensive, self-contained worker prompt incorporating
-        task specifications, acceptance criteria, prior feedback, and tier-appropriate constraints.
-        """
-        priority_val = task.priority.value if hasattr(task.priority, "value") else str(task.priority)
-        risk_val = task.risk.value if hasattr(task.risk, "value") else str(task.risk)
-        targets_str = ", ".join(task.target_files) if task.target_files else "None"
-        tests_str = ", ".join(task.test_targets) if task.test_targets else "None"
-
-        sections = [
-            f"CAMPAIGN REPAIR TASK: {task.task_id}",
-            f"Title: {task.title}",
-            f"Priority: {priority_val} | Risk: {risk_val}",
-        ]
-
-        if task.description:
-            sections.append(f"\nDescription:\n{task.description.strip()}")
-
-        exp = getattr(task, "expected_behavior", "")
-        if exp and exp not in (task.description or ""):
-            sections.append(f"\nExpected Behavior:\n{exp.strip()}")
-
-        if task.evidence:
-            sections.append(f"\nEvidence of Defect:\n{task.evidence.strip()}")
-
-        if task.acceptance_criteria:
-            criteria_str = "\n".join(f"- {c}" for c in task.acceptance_criteria)
-            sections.append(f"\nAcceptance Criteria:\n{criteria_str}")
-
-        sections.append(f"\nTarget Files: {targets_str}\nTest Targets: {tests_str}")
-
-        if plan:
-            sections.append(f"\nPlan:\n{plan.strip()}")
-
-        if feedback:
-            sections.append(f"\n=== PREVIOUS ATTEMPT / REVIEW FEEDBACK ===\n{feedback.strip()}\nPlease adjust your implementation to address this feedback.")
-
-        if tier == WorkerTier.TIER_1_LOCAL:
-            sections.append(
-                "\nInstructions:\n"
-                "1. Read the target files using 'fs_read'.\n"
-                "2. Apply exact-match edits using 'fs_edit'.\n"
-                "3. Run focused tests using 'test_runner'.\n"
-                "4. Synchronize docs/CHANGELOG.md under ### Fixes.\n"
-                "5. Conclude with <finish_task> when verified."
-            )
-        else:
-            sections.append(
-                "\n=== STRICT OPERATIONAL INVARIANTS ===\n"
-                "1. NO COMMAND OR SHELL TOOLS: Do NOT invoke run_command or shell commands. Inspect and edit files strictly using file tools.\n"
-                "2. MANDATORY TOOL-BACKED IMPLEMENTATION: Use file editing tools to modify declared target files on disk. Do not return without edits.\n"
-                "3. WORKTREE CONFINEMENT: Stay strictly within the assigned worktree. Never access .git or files outside the worktree root.\n"
-                "4. SCOPE BOUNDARY: Only modify files listed in Target Files and docs/CHANGELOG.md.\n"
-                "5. TEST POLICY: All tests must remain strictly under '.maya/tests/'. Do not weaken assertions or add skips.\n"
-                "6. CHANGELOG: Record your change in docs/CHANGELOG.md under ### Fixes in the same changeset.\n"
-                "7. GIT RESTRICTIONS: Do not run git stage, commit, push, or destructive commands."
-            )
-
-        return "\n".join(sections)
-
-    def _invoke_worker(
-        self,
-        task: TaskDefinition,
-        worktree_path: Path,
-        tier: WorkerTier,
-        plan: str,
-        feedback: Optional[str] = None,
-    ) -> tuple[bool, Optional[str]]:
-        """Dispatch repair task to Tier 1 MACRO agent or Tier 2 Antigravity adapter."""
-        prompt = self._build_worker_prompt(task, plan, tier, feedback=feedback)
-
-        if tier == WorkerTier.TIER_1_LOCAL:
-            if not self.agent:
-                return False, "Tier 1 worker (MacroAgent) is not configured or unavailable."
-            # Use MACRO agent with worktree context
-            reg = create_default_registry()
-            ctx = ToolExecutionContext(
-                worktree_path=worktree_path,
-                repo_root=self.repo_root,
-                task_id=task.task_id,
-                task_type=getattr(task, "task_type", "defect"),
-                target_files=list(task.target_files or []),
-                test_targets=list(task.test_targets or []),
-                require_repair_evidence=task.is_defect_task() if hasattr(task, "is_defect_task") else True,
-            )
-            if getattr(self, "_campaign_start_time", None) is not None:
-                ctx.campaign_deadline_monotonic = self._campaign_start_time + self.config.campaign_timeout_seconds
-            res: MacroAgentResult = self.agent.run(prompt, context=ctx, registry=reg, on_progress=self._emit_progress)
-            return res.success, res.error_message or res.summary
-
-        elif tier == WorkerTier.TIER_2_CLOUD:
-            if not self.tier2_adapter:
-                return False, "Tier 2 worker (AntigravityAgentAdapter) is not configured or unavailable."
-            res_adapter: AgentExecutionResult = self.tier2_adapter.execute(
-                task=task,
-                prompt=prompt,
-                worktree_path=worktree_path,
-                timeout_seconds=int(self.config.task_timeout_seconds),
-            )
-            return res_adapter.success, res_adapter.error_message
-
-        return False, f"Unknown worker tier '{tier}'."
-
-    def _run_review_cycle(
-        self,
-        task: TaskDefinition,
-        worktree_path: Path,
-        diff_text: str,
-        t_state: TaskCampaignState,
-        verification_summary: str = "",
-    ) -> tuple[bool, Optional[str]]:
-        """Conduct independent code review with bounded correction attempts."""
-        if not self.reviewer:
-            t_state.status = TaskStatus.NEEDS_APPROVAL
-            t_state.blocking_reason = "Reviewer is required but not configured."
-            return False, t_state.blocking_reason
-
-        if not verification_summary:
-            verification_summary = (
-                f"Quality Gates: passed={t_state.verification_passed}\n"
-                f"Target Files: {', '.join(t_state.target_files)}\n"
-                f"Test Targets: {', '.join(t_state.test_targets)}"
-            )
-
-        try:
-            review_res: ReviewResult = self.reviewer.review(
-                task=task,
-                diff=diff_text,
-                verification_summary=verification_summary,
-                worktree_path=worktree_path,
-                timeout_seconds=int(self.config.task_timeout_seconds),
-            )
-        except Exception as exc:
-            logger.error("Reviewer invocation failed for %s: %s", task.task_id, exc, exc_info=True)
-            t_state.status = TaskStatus.NEEDS_APPROVAL
-            t_state.blocking_reason = f"Reviewer invocation failed: {exc}"
-            return False, t_state.blocking_reason
-
-        rec = getattr(review_res, "recommendation", None)
-        rec_val = getattr(rec, "value", str(rec)) if rec else "UNKNOWN"
-        t_state.review_recommendation = rec_val
-
-        if rec == ReviewRecommendation.APPROVE:
-            return True, "Review approved."
-
-        elif rec == ReviewRecommendation.NEEDS_HUMAN_APPROVAL:
-            t_state.status = TaskStatus.NEEDS_APPROVAL
-            t_state.blocking_reason = f"Reviewer elevated: {review_res.summary}"
-            return False, t_state.blocking_reason
-
-        elif rec == ReviewRecommendation.REQUEST_CHANGES:
-            t_state.review_corrections += 1
-            if t_state.review_corrections <= self.config.max_review_corrections:
-                logger.info(
-                    "Reviewer requested changes for %s (correction attempt %d/%d). Retrying...",
-                    task.task_id, t_state.review_corrections, self.config.max_review_corrections
-                )
-                # Correction cycle: pass reviewer findings to worker alongside full task context
-                correction_feedback = f"Reviewer requested changes:\n{review_res.summary}"
-                success, _ = self._invoke_worker(
-                    task, worktree_path, t_state.worker_tier, t_state.plan_summary, feedback=correction_feedback
-                )
-                if success:
-                    q_post = self.quality_gates.evaluate(task, worktree_path)
-                    if not q_post.passed:
-                        t_state.status = TaskStatus.FAILED
-                        t_state.failure_reason = f"Quality gate failure after correction: {q_post.failure_reason}"
-                        return False, t_state.failure_reason
-                    new_diff = self._get_worktree_diff(worktree_path)
-                    new_verif = "\n".join(r.message for r in q_post.results) if q_post.results else "Quality gates passed."
-                    return self._run_review_cycle(task, worktree_path, new_diff, t_state, verification_summary=new_verif)
-
-            t_state.status = TaskStatus.NEEDS_APPROVAL
-            t_state.blocking_reason = "Reviewer requested changes; review correction budget exhausted."
-            return False, t_state.blocking_reason
-
-        else:
-            t_state.status = TaskStatus.NEEDS_APPROVAL
-            t_state.blocking_reason = f"Reviewer inconclusive or rejected: {getattr(review_res, 'error_message', None) or getattr(review_res, 'summary', 'Unknown review outcome')}"
-            return False, t_state.blocking_reason
-
-    def _check_dependencies(
-        self,
-        task_state: TaskCampaignState,
-        checkpoint: CampaignCheckpoint,
-    ) -> tuple[bool, Optional[str]]:
-        """Verify that all prerequisite tasks are completed/verified."""
-        for dep_id in task_state.dependencies:
-            dep_state = checkpoint.tasks.get(dep_id)
-            if not dep_state:
-                return False, f"Prerequisite task '{dep_id}' was not found in campaign."
-            if dep_state.status not in (TaskStatus.READY_TO_INTEGRATE, TaskStatus.VERIFIED):
-                return False, f"Prerequisite task '{dep_id}' is not yet verified (current: {dep_state.status.value})."
-        return True, None
-
-    def _get_worktree_diff(self, worktree_path: Path) -> str:
-        """Capture git diff within the worktree without mutating index or worktree state."""
-        import subprocess
-        proc = subprocess.run(
-            ["git", "diff", "HEAD"],
-            cwd=str(worktree_path),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return proc.stdout or ""
-
-    def _commit_worktree_changes(self, worktree_path: Path, tdef: TaskDefinition) -> CommitResult:
-        """
-        Commit declared target files and changelog in the task worktree to preserve verified changes.
-        Handles declared-path modifications, additions, deletions, and renames using `git add -A -- <targets>`.
-        Checks staging command exit code and verifies no declared changes remain unstaged.
-        Fails closed on any staging error, ignored file, or git error.
-        """
-        import subprocess
-        try:
-            declared_targets = list(dict.fromkeys(tdef.target_files or []))
-            changelog_path = "docs/CHANGELOG.md"
-            all_targets = list(declared_targets)
-            if (worktree_path / changelog_path).exists() and changelog_path not in all_targets:
-                all_targets.append(changelog_path)
-
-            if not all_targets:
-                return CommitResult((True, None))
-
-            # Stage declared targets using git add -A -- <targets>
-            stage_proc = subprocess.run(
-                ["git", "add", "-A", "--", *all_targets],
-                cwd=str(worktree_path),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if stage_proc.returncode != 0:
-                err_msg = stage_proc.stderr.strip() or stage_proc.stdout.strip() or f"git add exited with code {stage_proc.returncode}"
-                logger.error("Failed to stage declared target paths for %s: %s", tdef.task_id, err_msg)
-                return CommitResult((False, f"Failed to stage declared targets: {err_msg}"))
-
-            # Verify no declared files remain untracked (??) or unstaged (modified after staging)
-            status_proc = subprocess.run(
-                ["git", "status", "--porcelain", "--", *all_targets],
-                cwd=str(worktree_path),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if status_proc.returncode != 0:
-                err_msg = status_proc.stderr.strip() or f"git status exited with code {status_proc.returncode}"
-                return CommitResult((False, f"Failed to verify staging status: {err_msg}"))
-
-            for line in status_proc.stdout.strip().splitlines():
-                if not line:
-                    continue
-                index_status = line[0]
-                worktree_status = line[1]
-                if index_status == "?" or worktree_status != " ":
-                    return CommitResult((False, f"Declared file was not cleanly staged: '{line}'"))
-
-            st_proc = subprocess.run(
-                ["git", "diff", "--staged", "--quiet"],
-                cwd=str(worktree_path),
-                capture_output=True,
-                check=False,
-            )
-            if st_proc.returncode != 0:
-                commit_msg = f"fix({tdef.task_id.lower()}): {tdef.title}"
-                res = subprocess.run(
-                    ["git", "-c", "user.name=AutoPhage", "-c", "user.email=autophage@mayave.local", "commit", "-m", commit_msg],
-                    cwd=str(worktree_path),
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                if res.returncode != 0:
-                    err_msg = res.stderr.strip() or f"git commit exited with code {res.returncode}"
-                    return CommitResult((False, f"Git commit failed: {err_msg}"))
-            return CommitResult((True, None))
-        except Exception as exc:
-            logger.warning("Could not commit worktree changes for %s: %s", tdef.task_id, exc)
-            return CommitResult((False, str(exc)))
-
-    def _propagate_dependencies(
-        self,
-        t_state: TaskCampaignState,
-        checkpoint: CampaignCheckpoint,
-        worktree_path: Path,
-    ) -> tuple[bool, Optional[str]]:
-        """Propagate verified changes of prerequisite tasks into the current worktree."""
-        import subprocess
-        import shutil
-
-        for dep_id in t_state.dependencies:
-            dep_state = checkpoint.tasks.get(dep_id)
-            if not dep_state:
-                return False, f"Prerequisite task '{dep_id}' was not found in campaign."
-            if dep_state.status not in (TaskStatus.READY_TO_INTEGRATE, TaskStatus.VERIFIED):
-                return False, f"Prerequisite task '{dep_id}' is not yet verified (current: {dep_state.status.value})."
-
-            dep_branch = dep_state.branch_name or self.worktree_mgr.get_branch_name(dep_id)
-            dep_wt = Path(dep_state.worktree_path) if dep_state.worktree_path else self.worktree_mgr.get_workspace_path(dep_id)
-
-            if dep_wt.exists():
-                # Commit any verified target files if not yet committed using robust staging
-                dep_tdef = TaskDefinition(
-                    task_id=dep_id,
-                    title=dep_state.title,
-                    audit_source="dependency",
-                    priority=dep_state.priority,
-                    risk=dep_state.risk,
-                    description=dep_state.description,
-                    evidence=dep_state.evidence,
-                    target_files=list(dep_state.target_files),
-                    test_targets=list(dep_state.test_targets),
-                )
-                commit_res = self._commit_worktree_changes(dep_wt, dep_tdef)
-                if not commit_res:
-                    _, stage_err = commit_res
-                    return False, f"Failed to stage/commit prerequisite '{dep_id}' changes: {stage_err}"
-
-                # Mirror untracked .maya/tests/ files from prerequisite worktree
-                dep_tests = dep_wt / ".maya" / "tests"
-                dst_tests = worktree_path / ".maya" / "tests"
-                if dep_tests.is_dir():
-                    dst_tests.mkdir(parents=True, exist_ok=True)
-                    for item in dep_tests.rglob("*.py"):
-                        if "__pycache__" in item.parts or ".pytest_cache" in item.parts:
-                            continue
-                        rel = item.relative_to(dep_tests)
-                        target_file = dst_tests / rel
-                        target_file.parent.mkdir(parents=True, exist_ok=True)
-                        if not target_file.exists() or target_file.stat().st_mtime < item.stat().st_mtime:
-                            try:
-                                shutil.copy2(item, target_file)
-                            except Exception:
-                                pass
-
-            # Resolve git reference for dep_branch
-            ref_proc = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{dep_branch}"],
-                cwd=str(self.repo_root),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if ref_proc.returncode != 0:
-                # Try fallback to integration branch if already integrated
-                int_b = f"autophage/integrate-{dep_id}"
-                ref_proc2 = subprocess.run(
-                    ["git", "rev-parse", "--verify", f"refs/heads/{int_b}"],
-                    cwd=str(self.repo_root),
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                if ref_proc2.returncode == 0:
-                    dep_branch = int_b
-
-            # Query commits on prerequisite branch not yet in current worktree HEAD
-            rev_proc = subprocess.run(
-                ["git", "rev-list", "--reverse", "^HEAD", dep_branch],
-                cwd=str(worktree_path),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if rev_proc.returncode == 0 and rev_proc.stdout.strip():
-                commits = rev_proc.stdout.strip().splitlines()
-                for c in commits:
-                    cp_proc = subprocess.run(
-                        ["git", "-c", "user.name=AutoPhage", "-c", "user.email=autophage@mayave.local", "cherry-pick", c],
-                        cwd=str(worktree_path),
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    if cp_proc.returncode != 0:
-                        subprocess.run(["git", "cherry-pick", "--abort"], cwd=str(worktree_path), capture_output=True, check=False)
-                        return False, f"Dependency patch conflict with prerequisite '{dep_id}': failed to cleanly apply commit {c[:7]}."
-
-            self._emit_progress(f"[{t_state.task_id}] Successfully chained prerequisite changes from '{dep_id}'.")
-
-        return True, None
-
-    def list_eligible_integration_tasks(self) -> list[dict]:
-        """Find all tasks across campaign_state.json and legacy state.json eligible for integration."""
-        candidates = []
-        seen_ids = set()
-
-        # 1. Campaign state tasks
-        cp = self.state_mgr.load()
-        if cp:
-            for task_id in cp.task_order:
-                t = cp.tasks.get(task_id)
-                if t and t.status == TaskStatus.READY_TO_INTEGRATE:
-                    candidates.append({
-                        "task_id": t.task_id,
-                        "title": t.title,
-                        "priority": t.priority.value,
-                        "risk": t.risk.value,
-                        "status": t.status.value,
-                        "branch_name": t.branch_name or self.worktree_mgr.get_branch_name(t.task_id),
-                        "worktree_path": t.worktree_path or str(self.worktree_mgr.get_workspace_path(t.task_id)),
-                        "target_files": list(t.target_files),
-                        "dependencies": list(t.dependencies),
-                        "verification_passed": t.verification_passed,
-                        "source": "campaign",
-                    })
-                    seen_ids.add(t.task_id)
-
-        # 2. Legacy state.json tasks
-        if StateStore:
-            legacy_store = StateStore(self.repo_root / ".maya" / "maintenance" / "state.json")
-            if legacy_store.exists():
-                try:
-                    ledger = legacy_store.load_ledger()
-                    for t in ledger:
-                        if t.task_id not in seen_ids and t.status == TaskStatus.READY_TO_INTEGRATE:
-                            wt_p = t.workspace.worktree_path if t.workspace else str(self.worktree_mgr.get_workspace_path(t.task_id))
-                            br = t.workspace.branch_name if t.workspace else self.worktree_mgr.get_branch_name(t.task_id)
-                            candidates.append({
-                                "task_id": t.task_id,
-                                "title": t.title,
-                                "priority": t.priority.value,
-                                "risk": t.risk.value,
-                                "status": t.status.value,
-                                "branch_name": br,
-                                "worktree_path": wt_p,
-                                "target_files": list(t.target_files),
-                                "dependencies": list(t.dependencies),
-                                "verification_passed": True,
-                                "source": "legacy",
-                            })
-                            seen_ids.add(t.task_id)
-                except Exception as exc:
-                    logger.warning("Could not read legacy state.json: %s", exc)
-
-        return candidates
-
-    def integrate_task(
-        self,
-        task_id: str,
-        authorized: bool = False,
-        target_branch: Optional[str] = None,
-        dry_run: bool = False,
-        expected_sha: Optional[str] = None,
-        require_expected_sha: bool = False,
-    ) -> tuple[bool, str, dict]:
-        """
-        Safely integrate a verified task into a dedicated integration branch.
-        - Validates task state is READY_TO_INTEGRATE.
-        - Strictly validates target branch against governance allowlist before any mutation (S3-04).
-        - Provides read-only diff preview without touching index, branch, or creating worktrees (S3-05).
-        - Validates reviewed branch tip SHA against expected_sha before authorized mutation (S3-05).
-        - Never merges into main.
-        - Preserves unrelated working tree files by using an isolated integration worktree.
-        - Synchronizes status to VERIFIED across campaign_state.json and legacy state.json.
-        """
-        import subprocess
-        import shutil
-
-        cp = self.state_mgr.load()
-        t_state = cp.tasks.get(task_id) if cp else None
-
-        legacy_task = None
-        legacy_store = None
-        if StateStore:
-            legacy_store = StateStore(self.repo_root / ".maya" / "maintenance" / "state.json")
-            if legacy_store.exists():
-                try:
-                    ledger = legacy_store.load_ledger()
-                    legacy_task = ledger.get(task_id)
-                except Exception:
-                    pass
-
-        if not t_state and not legacy_task:
-            return False, f"Task '{task_id}' not found in active campaign or legacy ledger.", {}
-
-        # Resolve task metadata
-        title = t_state.title if t_state else legacy_task.title
-        status = t_state.status if t_state else legacy_task.status
-        branch_name = (
-            (t_state.branch_name if t_state else (legacy_task.workspace.branch_name if legacy_task and legacy_task.workspace else None))
-            or self.worktree_mgr.get_branch_name(task_id)
-        )
-        ws_path_str = (
-            (t_state.worktree_path if t_state else (legacy_task.workspace.worktree_path if legacy_task and legacy_task.workspace else None))
-            or str(self.worktree_mgr.get_workspace_path(task_id))
-        )
-        ws_path = Path(ws_path_str).resolve()
-        target_files = list(t_state.target_files if t_state else legacy_task.target_files)
-
-        if status == TaskStatus.VERIFIED:
-            return True, f"Task '{task_id}' is already VERIFIED and integrated.", {"status": "ALREADY_VERIFIED"}
-
-        if status != TaskStatus.READY_TO_INTEGRATE:
-            return False, f"Task '{task_id}' is not in READY_TO_INTEGRATE state (current status: {status.value}). Integration rejected.", {"status": status.value}
-
-        if not ws_path.is_dir():
-            return False, f"Worktree directory for task '{task_id}' does not exist at {ws_path}.", {}
-
-        # Target branch validation (P3 / S3-04): Must occur before any mutation or worktree creation
-        target_branch = target_branch or f"autophage/integrate-{task_id}"
-        is_valid_branch, branch_err = validate_integration_target_branch(target_branch, task_id, self.repo_root)
-        if not is_valid_branch:
-            return False, f"Integration target branch rejected: {branch_err}", {}
-
-        # Resolve candidate branch tip SHA from git (read-only)
-        ref_proc = subprocess.run(
-            ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
-            cwd=str(self.repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        branch_sha = ref_proc.stdout.strip() if ref_proc.returncode == 0 else ""
-
-        # Candidate diff check (P2 / S3-05: READ-ONLY, no git add -N, no premature commits)
-        diff_text = self._get_worktree_diff(ws_path)
-        rev_ahead = subprocess.run(
-            ["git", "rev-list", "^HEAD", branch_name],
-            cwd=str(self.repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        has_commits = rev_ahead.returncode == 0 and bool(rev_ahead.stdout.strip())
-        if not diff_text and not has_commits:
-            return False, f"Candidate patch for task '{task_id}' is empty; no diff or commits found.", {}
-
-        # If diff_text was empty but commits exist, get diff from git diff
-        if not diff_text and has_commits:
-            commit_diff_proc = subprocess.run(
-                ["git", "diff", f"HEAD..{branch_name}"],
-                cwd=str(self.repo_root),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            diff_text = commit_diff_proc.stdout or ""
-
-        # Identify changed files
-        changed_proc = subprocess.run(
-            ["git", "diff", "--name-only", f"HEAD..{branch_name}"],
-            cwd=str(self.repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        changed_files = changed_proc.stdout.strip().splitlines() if (changed_proc.returncode == 0 and changed_proc.stdout.strip()) else target_files
-
-        info = {
-            "task_id": task_id,
-            "title": title,
-            "branch": branch_name,
-            "branch_tip_sha": branch_sha,
-            "target_branch": target_branch,
-            "worktree_path": str(ws_path),
-            "changed_files": changed_files,
-            "diff_preview": diff_text[:1200],
-            "full_diff": diff_text,
-            "verification_passed": t_state.verification_passed if t_state else True,
-        }
-
-        # Check authorization / dry run (P2 / S3-05: preview is strictly read-only)
-        if dry_run or not authorized:
-            return False, "Integration requires explicit operator authorization (--authorize).", info
-
-        # Validate expected-SHA match before performing any mutation (P2 / S3-05)
-        if expected_sha is not None:
-            clean_expected = expected_sha.strip().lower()
-            if not clean_expected or clean_expected != branch_sha.lower():
-                return False, f"Expected SHA mismatch: candidate branch tip is '{branch_sha}', but received '{expected_sha}'. Integration rejected without mutation.", info
-        elif require_expected_sha:
-            return False, f"Integration requires explicit expected SHA matching reviewed branch tip '{branch_sha}'.", info
-
-        # Authorized mutation phase begins here
-        # Commit any verified uncommitted target files in the task worktree
-        tdef_for_commit = TaskDefinition(
-            task_id=task_id,
-            title=title,
-            audit_source="integration",
-            priority=TaskPriority.P2,
-            risk=TaskRisk.LOW,
-            description=t_state.description if t_state else "",
-            evidence=t_state.evidence if t_state else "",
-            target_files=target_files,
-            test_targets=list(t_state.test_targets if t_state else []),
-        )
-        commit_res = self._commit_worktree_changes(ws_path, tdef_for_commit)
-        if not commit_res:
-            _, commit_err = commit_res
-            return False, f"Failed to commit worktree changes for task '{task_id}': {commit_err}", info
-
-        # Create isolated integration worktree
-        int_wt_path = self.worktree_mgr.worktrees_dir / f"integrate-{task_id}"
-        if int_wt_path.exists():
-            shutil.rmtree(int_wt_path, ignore_errors=True)
-            subprocess.run(["git", "worktree", "prune"], cwd=str(self.repo_root), capture_output=True, check=False)
-
-        # Baseline commit from repo_root HEAD
-        head_proc = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(self.repo_root), capture_output=True, text=True, check=False)
-        base_commit = head_proc.stdout.strip() if head_proc.returncode == 0 else "HEAD"
-
-        ref_check = subprocess.run(
-            ["git", "rev-parse", "--verify", f"refs/heads/{target_branch}"],
-            cwd=str(self.repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if ref_check.returncode == 0:
-            add_cmd = ["git", "worktree", "add", str(int_wt_path), target_branch]
-        else:
-            add_cmd = ["git", "worktree", "add", "-b", target_branch, str(int_wt_path), base_commit]
-
-        wt_proc = subprocess.run(add_cmd, cwd=str(self.repo_root), capture_output=True, text=True, check=False)
-        if wt_proc.returncode != 0:
-            return False, f"Failed to create integration worktree: {wt_proc.stderr.strip()}", info
-
-        try:
-            # Apply commits from task branch into integration worktree
-            commits_proc = subprocess.run(
-                ["git", "rev-list", "--reverse", "^HEAD", branch_name],
-                cwd=str(int_wt_path),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            commits = commits_proc.stdout.strip().splitlines() if (commits_proc.returncode == 0 and commits_proc.stdout.strip()) else []
-
-            if commits:
-                for c in commits:
-                    cp_res = subprocess.run(
-                        ["git", "-c", "user.name=AutoPhage", "-c", "user.email=autophage@mayave.local", "cherry-pick", c],
-                        cwd=str(int_wt_path),
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    if cp_res.returncode != 0:
-                        subprocess.run(["git", "cherry-pick", "--abort"], cwd=str(int_wt_path), capture_output=True, check=False)
-                        return False, f"Integration conflict applying commit {c[:7]} from {branch_name} into {target_branch}: {cp_res.stderr.strip()}", info
-            else:
-                # Apply diff if no distinct commits
-                apply_res = subprocess.run(
-                    ["git", "apply", "--ignore-whitespace"],
-                    input=diff_text,
-                    text=True,
-                    cwd=str(int_wt_path),
-                    capture_output=True,
-                    check=False,
-                )
-                if apply_res.returncode != 0:
-                    return False, f"Integration conflict applying candidate diff into {target_branch}: {apply_res.stderr.strip()}", info
-                subprocess.run(["git", "add", "-A"], cwd=str(int_wt_path), check=True)
-                subprocess.run(
-                    ["git", "-c", "user.name=AutoPhage", "-c", "user.email=autophage@mayave.local", "commit", "-m", f"fix({task_id.lower()}): {title}"],
-                    cwd=str(int_wt_path),
-                    capture_output=True,
-                    check=False,
-                )
-        finally:
-            # Clean up temporary integration worktree
-            subprocess.run(["git", "worktree", "remove", "--force", str(int_wt_path)], cwd=str(self.repo_root), capture_output=True, check=False)
-            if int_wt_path.exists():
-                shutil.rmtree(int_wt_path, ignore_errors=True)
-            subprocess.run(["git", "worktree", "prune"], cwd=str(self.repo_root), capture_output=True, check=False)
-
-        # Update task state to VERIFIED in campaign checkpoint
-        if t_state and cp:
-            t_state.status = TaskStatus.VERIFIED
-            t_state.blocking_reason = None
-            t_state.failure_reason = None
-            self._record_attempt(t_state)
-            self.state_mgr.save(cp)
-
-        # Update legacy ledger if present
-        if legacy_store and legacy_store.exists():
-            try:
-                ledger = legacy_store.load_ledger()
-                leg_t = ledger.get(task_id)
-                if leg_t:
-                    leg_t.status = TaskStatus.VERIFIED
-                    leg_t.checkpoint = CheckpointRecord(
-                        stage="INTEGRATED",
-                        details={"target_branch": target_branch},
-                        timestamp=utc_now_iso(),
-                    )
-                    if hasattr(ledger, "_commit_status"):
-                        ledger._commit_status(task_id, TaskStatus.VERIFIED)
-                    legacy_store.save_ledger(ledger)
-            except Exception as exc:
-                logger.warning("Could not sync legacy ledger for %s: %s", task_id, exc)
-
-        return True, f"Successfully integrated task '{task_id}' into branch '{target_branch}'.", info
-
+        # Default fallback for any other combination (fail-safe)
+        return WorkerTier.TIER_2_CLOUD
 
 # ==============================================================================
 # Helper / Entry Point Functions

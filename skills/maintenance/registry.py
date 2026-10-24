@@ -183,7 +183,7 @@ class ModelRegistry:
                 status=ModelStatus.NOT_CONFIGURED,
                 description="Tier 2 candidate: High-throughput cloud model evaluated via offline benchmark.",
             ),
-            # Tier 2 Cloud Candidate B (Requires benchmark evaluation)
+            # Tier 2 Cloud Candidate B (Historical: Gemma 4 31B)
             ModelDescriptor(
                 model_id="gemma-4-31b",
                 provider=ProviderType.CLOUD_REST,
@@ -199,7 +199,7 @@ class ModelRegistry:
                 ),
                 requires_auth=True,
                 status=ModelStatus.NOT_CONFIGURED,
-                description="Tier 2 candidate: Large cloud model evaluated via offline benchmark.",
+                description="[HISTORICAL] Former Tier 2 candidate; replaced by Qwen-based strategy.",
             ),
             # Tier 3 Advanced Cloud: Antigravity CLI (Google Flash 3.8)
             ModelDescriptor(

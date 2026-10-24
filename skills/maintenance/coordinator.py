@@ -880,7 +880,7 @@ def cmd_run_benchmark(repo_root: Path, output_file: str | None = None) -> int:
         task_replays=None,
     )
 
-    # Evaluate Candidate B (Gemma 4 31B Cloud) - Offline Unconfigured by default
+    # Evaluate Candidate B (Historical: Gemma 4 31B Cloud) - Offline Unconfigured by default
     res_gemma = harness.evaluate_candidate(
         candidate_id="gemma-4-31b",
         cost_per_1k_input=0.0002,

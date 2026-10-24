@@ -329,6 +329,9 @@ class CoordinatorAPI:
         try:
             ledger.validate_status_integrity()
             task = ledger.get_task(task_id)
+            if task is None:
+                return self._reject(ledger, task_id, actor, TaskStatus.PENDING, "TASK_NOT_FOUND", "Task not found in ledger.", idempotency_key, lock_held)
+
             original_state = self.store.load_ledger()
             persisted_task = original_state.get(task_id)
             if persisted_task is not None and persisted_task.status != task.status:

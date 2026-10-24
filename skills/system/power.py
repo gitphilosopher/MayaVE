@@ -35,6 +35,19 @@ _ACTIONS = {
 _pending: tuple[str, float] | None = None
 
 
+async def cancel_shutdown(intent: dict | None = None, text: str | None = None) -> str:
+    """Attempt to abort any pending OS-level shutdown or restart."""
+    try:
+        subprocess.run(["shutdown", "/a"], check=True, capture_output=True)
+        logger.info("Pending power action aborted successfully.")
+        return f"[relaxed] Okay {_U}, I've cancelled the shutdown."
+    except subprocess.CalledProcessError:
+        logger.warning("Failed to abort shutdown — likely none pending.")
+        return f"[sad] I couldn't cancel the shutdown, {_U}. It might already be too late, or none was scheduled."
+    except Exception as e:
+        logger.error(f"Unexpected error during shutdown cancellation: {e}")
+        return f"[sad] I ran into a problem trying to cancel the shutdown, {_U}."
+
 async def execute(intent: dict, text: str) -> str:
     """Ask for confirmation before scheduling a Windows shutdown or restart."""
     global _pending
