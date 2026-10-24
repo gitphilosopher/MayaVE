@@ -2329,6 +2329,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_args = sys.argv[1:] if argv is None else argv
+    # Forward AutoPhage 2.0 subcommands to MACRO CLI
+    if raw_args and raw_args[0] in ("scan", "fix", "improve", "review", "resume", "status"):
+        try:
+            from .macro.cli import main as macro_main
+        except ImportError:
+            from macro.cli import main as macro_main
+        return macro_main(raw_args)
+
     args = parse_args(argv)
 
     repo_root, state_path = _resolve_default_paths(args.state_path, args.repo_root)

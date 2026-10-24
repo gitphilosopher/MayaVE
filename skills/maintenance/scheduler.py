@@ -128,9 +128,8 @@ class DependencyScheduler:
             return False, f"Task is pending human authorization (NEEDS_APPROVAL): {task.blocking_reason or 'Pending review'}"
         if task.status == TaskStatus.RECOVERY_REQUIRED:
             return False, f"Task requires recovery reconciliation (RECOVERY_REQUIRED): {task.blocking_reason or 'Interrupted'}"
-        if task.status == TaskStatus.FAILED:
-            if task.attempts >= task.max_attempts:
-                return False, f"Task has reached maximum attempts ({task.attempts}/{task.max_attempts})."
+        if task.attempts >= task.max_attempts:
+            return False, f"Task has reached maximum attempts ({task.attempts}/{task.max_attempts})."
 
         # 2. Risk check
         if task.risk in (TaskRisk.HIGH, TaskRisk.VERY_HIGH):

@@ -465,6 +465,25 @@ class SingleTaskOrchestrator:
                     task.failure_reason = reason
                     if task.workspace:
                         task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+
+                    # Register a durable PermissionRequest in approvals.json so hold can be audited/approved
+                    if self.approval_manager:
+                        try:
+                            req_id = f"req-{task.task_id}-policy-hold"
+                            if req_id not in self.approval_manager._requests:
+                                self.approval_manager.create_request(
+                                    task_id=task.task_id,
+                                    risk=task.risk.value if hasattr(task.risk, "value") else str(task.risk),
+                                    operation="risk_approval_policy",
+                                    target=", ".join(task.target_files or []),
+                                    scope=f"risk policy execution review for {task.task_id}: {policy_msg}",
+                                    reason=reason,
+                                    request_id=req_id,
+                                    lock_held=acquire_coarse_lock,
+                                )
+                        except Exception as req_err:
+                            logger.warning("Failed to record policy approval request for %s: %s", task.task_id, req_err)
+
                     _transition(
                         TaskStatus.NEEDS_APPROVAL,
                         stage="RISK_APPROVAL_POLICY",
@@ -627,6 +646,25 @@ class SingleTaskOrchestrator:
                     task.failure_reason = reason
                     if task.workspace:
                         task.workspace.lifecycle_state = "NEEDS_APPROVAL"
+
+                    # Register a durable PermissionRequest in approvals.json so hold can be audited/approved
+                    if self.approval_manager:
+                        try:
+                            req_id = f"req-{task.task_id}-baseline-review"
+                            if req_id not in self.approval_manager._requests:
+                                self.approval_manager.create_request(
+                                    task_id=task.task_id,
+                                    risk=task.risk.value if hasattr(task.risk, "value") else str(task.risk),
+                                    operation="baseline_verification",
+                                    target=", ".join(task.test_targets or task.target_files or []),
+                                    scope=f"baseline defect reproduction review for {task.task_id}: {'; '.join(freeze_errs) if freeze_errs else 'missing test target'}",
+                                    reason=reason,
+                                    request_id=req_id,
+                                    lock_held=acquire_coarse_lock,
+                                )
+                        except Exception as req_err:
+                            logger.warning("Failed to record baseline approval request for %s: %s", task.task_id, req_err)
+
                     _transition(
                         TaskStatus.NEEDS_APPROVAL,
                         stage="BASELINE_VERIFICATION",
