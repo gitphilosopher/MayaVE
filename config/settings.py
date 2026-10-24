@@ -23,6 +23,7 @@ This file is the source of truth for runtime defaults. Most modules consume the
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -64,6 +65,7 @@ class LLMConfig:
     temperature: float = 0.7
     num_gpu: int | None = None
     num_ctx: int = 2048
+    keep_alive: str = "60m"
 
 
 @dataclass
@@ -76,6 +78,8 @@ class ContextConfig:
     dedup_threshold: float = 0.92
     semantic_recency_guard_seconds: float = 120.0
     embedding_provider: str = "local"
+    embedding_device: str = "cpu"
+    ollama_embedding_model: str = "nomic-embed-text"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     memory_dir: str = None
 
@@ -141,6 +145,7 @@ class MayaConfig:
         "http://127.0.0.1:5173",
         None,
     ])
+    notes_dir: str = field(default_factory=lambda: str(Path.home() / "Maya" / "Notes"))
 
 
 config = MayaConfig()

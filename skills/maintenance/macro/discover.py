@@ -41,6 +41,21 @@ from .agent import (
     MacroAgentResult,
 )
 
+try:
+    from skills.maintenance.task_contract import FORBIDDEN_TARGET_PREFIXES
+except ImportError:
+    try:
+        from task_contract import FORBIDDEN_TARGET_PREFIXES
+    except ImportError:
+        FORBIDDEN_TARGET_PREFIXES = (
+            ".git/",
+            ".maya/maintenance/",
+            "skills/maintenance/",
+            ".maya/tmp/",
+            ".maya/reports/",
+            ".maya/worktrees/",
+        )
+
 logger = logging.getLogger("maya.maintenance.macro.discover")
 
 # ==============================================================================
@@ -68,6 +83,9 @@ DEFAULT_EXCLUSIONS: tuple[str, ...] = (
     "node_modules",
     ".maya/worktrees",
     ".maya/reports",
+    ".maya/tmp",
+    ".maya/maintenance",
+    "skills/maintenance",
     "build",
     "dist",
     ".egg-info",
@@ -170,7 +188,7 @@ class DiscoveryFinding:
         skills.maintenance.manifest.parse_markdown_backlog.
         """
         targets_str = ", ".join(self.target_files) if self.target_files else "None"
-        tests_line = f"- **Test Targets:** {', '.join(self.test_targets)}\n" if self.test_targets else ""
+        tests_line = f"- **Test Targets:** {', '.join(self.test_targets)}\n" if self.test_targets else "- **Test Targets:** None\n"
         criteria_lines = "\n".join(f"- {c}" for c in self.acceptance_criteria) if self.acceptance_criteria else "- Fix verified and regression test added."
 
         evidence_block = self.evidence.strip()
@@ -310,7 +328,7 @@ class RepoMapper:
                 return True
         return False
 
-    def build_inventory(self, max_files: int = 1000, max_symbols: int = 500) -> RepoInventory:
+    def build_inventory(self, max_files: int = 5000, max_symbols: int = 500) -> RepoInventory:
         """Scan repository and construct the bounded inventory."""
         inv = RepoInventory(repo_root=self.repo_root)
 
@@ -337,24 +355,32 @@ class RepoMapper:
                 inv.file_type_counts[ext] = inv.file_type_counts.get(ext, 0) + 1
                 inv.total_files += 1
 
-                # Classify subsystem
-                subsystem_name = "other"
-                first_part = rel_str.split("/")[0]
-                if first_part in inv.subsystems:
-                    subsystem_name = first_part
-                inv.subsystems[subsystem_name].files.append(rel_str)
-
-                # Check entry points
-                if rel_str in KNOWN_ENTRY_POINTS:
-                    inv.entry_points.append(rel_str)
-                    inv.subsystems[subsystem_name].entry_points.append(rel_str)
+                is_test_file = rel_str.startswith(".maya/tests/") and ext == ".py"
+                is_internal_maintenance = (
+                    rel_str.startswith("skills/maintenance/")
+                    or rel_str.startswith(".maya/")
+                )
 
                 # Check tests
-                if rel_str.startswith(".maya/tests/") and ext == ".py":
+                if is_test_file:
                     all_test_files.append(file_path)
 
-                if ext == ".py":
-                    all_python_files.append(file_path)
+                # Internal maintenance and test files are not ordinary product targets
+                if not is_internal_maintenance and not is_test_file:
+                    # Classify subsystem
+                    subsystem_name = "other"
+                    first_part = rel_str.split("/")[0]
+                    if first_part in inv.subsystems:
+                        subsystem_name = first_part
+                    inv.subsystems[subsystem_name].files.append(rel_str)
+
+                    # Check entry points
+                    if rel_str in KNOWN_ENTRY_POINTS:
+                        inv.entry_points.append(rel_str)
+                        inv.subsystems[subsystem_name].entry_points.append(rel_str)
+
+                    if ext == ".py":
+                        all_python_files.append(file_path)
 
                 scanned += 1
                 if scanned >= max_files:
@@ -494,11 +520,14 @@ class MechanicalScanner:
         # 1. Syntax Errors in malformed files
         for item in inventory.malformed_files:
             file_rel = item["file"]
+            if any(file_rel.startswith(pfx) for pfx in FORBIDDEN_TARGET_PREFIXES) or file_rel.startswith(".maya/"):
+                continue
             if target_subsystem != "all" and not file_rel.startswith(f"{target_subsystem}/"):
                 continue
 
+            h = hashlib.sha256(f"syntax:{file_rel}".encode("utf-8")).hexdigest()[:6].upper()
             findings.append(DiscoveryFinding(
-                issue_id=f"MECH-SYNTAX-{counter:03d}",
+                issue_id=f"MECH-SYNTAX-{h}",
                 title=f"Syntax error in {file_rel}",
                 category=FindingCategory.CONFIRMED_DEFECT,
                 severity=FindingSeverity.P1,
@@ -551,6 +580,9 @@ class MechanicalScanner:
         mapped_tests: Optional[list[str]] = None,
     ) -> list[DiscoveryFinding]:
         """Inspect a single AST for anti-patterns."""
+        if any(file_rel.startswith(pfx) for pfx in FORBIDDEN_TARGET_PREFIXES) or file_rel.startswith(".maya/"):
+            return []
+
         results: list[DiscoveryFinding] = []
         counter = start_counter
         lines = code.splitlines()
@@ -569,8 +601,9 @@ class MechanicalScanner:
                 if is_swallowed:
                     line_no = node.lineno
                     line_snip = lines[line_no - 1] if 0 < line_no <= len(lines) else "except ...: pass"
+                    h = hashlib.sha256(f"exc:{file_rel}:{line_no}".encode("utf-8")).hexdigest()[:6].upper()
                     results.append(DiscoveryFinding(
-                        issue_id=f"MECH-EXC-{counter:03d}",
+                        issue_id=f"MECH-EXC-{h}",
                         title=f"Swallowed exception in {file_rel}:{line_no}",
                         category=FindingCategory.PROBABLE_DEFECT,
                         severity=FindingSeverity.P2,
@@ -607,8 +640,9 @@ class MechanicalScanner:
 
                 if is_unsafe_shell:
                     line_no = node.lineno
+                    h = hashlib.sha256(f"sec:{file_rel}:{line_no}".encode("utf-8")).hexdigest()[:6].upper()
                     results.append(DiscoveryFinding(
-                        issue_id=f"MECH-SEC-{counter:03d}",
+                        issue_id=f"MECH-SEC-{h}",
                         title=f"Unsafe shell execution in {file_rel}:{line_no}",
                         category=FindingCategory.ARCHITECTURAL_CONCERN,
                         severity=FindingSeverity.P1,
@@ -648,11 +682,26 @@ class EvidenceVerifier:
 
         for f in findings:
             # Check 1: Do target files actually exist on disk?
+            # Also handle if target file has ":line_no" appended (e.g., "skills/system/open_target.py:175")
             existing_targets = []
             for t in f.target_files:
-                p = self.repo_root / t
-                if p.exists():
-                    existing_targets.append(t)
+                clean_path = t
+                line_no_str = None
+                if ":" in t:
+                    parts = t.rsplit(":", 1)
+                    if parts[1].isdigit():
+                        clean_path = parts[0]
+                        line_no_str = parts[1]
+
+                p = self.repo_root / clean_path
+                if p.is_file():
+                    existing_targets.append(clean_path)
+                    if line_no_str:
+                        ref_str = f"{clean_path}:{line_no_str}"
+                        if ref_str not in f.line_references:
+                            f.line_references.append(ref_str)
+                elif p.exists():
+                    existing_targets.append(clean_path)
 
             if f.target_files and not existing_targets:
                 # All claimed targets are non-existent -> Mark UNVERIFIED / SPECULATIVE
@@ -664,6 +713,40 @@ class EvidenceVerifier:
 
             # Update with verified target files
             f.target_files = existing_targets or f.target_files
+
+            # Check 1b: Verify line references if present
+            valid_line_refs = []
+            for ref in f.line_references:
+                ref_path_str = ref
+                line_num = None
+                if ":" in ref:
+                    p_str, l_str = ref.rsplit(":", 1)
+                    if l_str.isdigit():
+                        ref_path_str = p_str
+                        line_num = int(l_str)
+                abs_f = self.repo_root / ref_path_str
+                if abs_f.is_file():
+                    if line_num is not None:
+                        try:
+                            line_count = sum(1 for _ in abs_f.open(encoding="utf-8", errors="replace"))
+                            if 0 < line_num <= line_count:
+                                valid_line_refs.append(ref)
+                            else:
+                                logger.debug("Line reference %s exceeds file line count %d", ref, line_count)
+                        except Exception:
+                            valid_line_refs.append(ref)
+                    else:
+                        valid_line_refs.append(ref)
+            f.line_references = valid_line_refs or f.line_references
+
+            # Check 1c: Check for forbidden maintenance or coordinator paths
+            has_forbidden = any(
+                any(t.startswith(pfx) for pfx in FORBIDDEN_TARGET_PREFIXES) or t.startswith(".maya/")
+                for t in f.target_files
+            )
+            if has_forbidden:
+                f.category = FindingCategory.ARCHITECTURAL_CONCERN
+                f.actual_behavior += "\n[VERIFIER NOTE: Finding targets internal maintenance or coordinator path; excluded from automated repair campaign.]"
 
             # Check 2: If test target is specified and verified, check confirmation
             if f.test_targets:
@@ -795,9 +878,15 @@ class DiscoveryEngine:
 
         # Assemble compact, budget-conscious prompt
         sub = self.config.subsystem
-        sub_info = inventory.subsystems.get(sub)
-        file_summary = ", ".join(sub_info.files[:10]) if sub_info else "none"
-        entry_summary = ", ".join(sub_info.entry_points) if sub_info and sub_info.entry_points else "none"
+        if sub == "all":
+            all_files = [f for s in inventory.subsystems.values() for f in s.files]
+            all_entries = inventory.entry_points
+            file_summary = ", ".join(all_files[:15]) if all_files else "none"
+            entry_summary = ", ".join(all_entries[:10]) if all_entries else "none"
+        else:
+            sub_info = inventory.subsystems.get(sub)
+            file_summary = ", ".join(sub_info.files[:10]) if sub_info else "none"
+            entry_summary = ", ".join(sub_info.entry_points) if sub_info and sub_info.entry_points else "none"
         prior_summary = ", ".join(f.issue_id for f in prior_findings[:5]) if prior_findings else "none"
 
         objective = (

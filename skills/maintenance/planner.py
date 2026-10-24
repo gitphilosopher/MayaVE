@@ -20,14 +20,16 @@ from typing import Any, Callable, Optional
 try:
     from .models import PlanProposal, utc_now_iso
     from .task_contract import (
-        TaskContractValidator,
+        ALLOWED_ROOT_FILES,
         ALLOWED_SUBSYSTEM_ROOTS,
+        TaskContractValidator,
     )
 except ImportError:
     from models import PlanProposal, utc_now_iso
     from task_contract import (
-        TaskContractValidator,
+        ALLOWED_ROOT_FILES,
         ALLOWED_SUBSYSTEM_ROOTS,
+        TaskContractValidator,
     )
 
 try:
@@ -138,7 +140,7 @@ Your objective is to decompose an explicit maintenance objective into a structur
 3. Task count limit: Output at most {task_cap} tasks (minimum 1, hard max 8).
 4. Priorities: "P0", "P1", "P2", "P3".
 5. Risk: Must be "LOW" or "MEDIUM" only. "HIGH" and "VERY_HIGH" are strictly forbidden.
-6. Target Files: Must reside in allowed subsystems: {sorted(ALLOWED_SUBSYSTEM_ROOTS)}.
+6. Target Files: Must reside in allowed subsystems: {sorted(ALLOWED_SUBSYSTEM_ROOTS)} or allowed root files: {sorted(ALLOWED_ROOT_FILES)}.
    NEVER target skills/maintenance/, .maya/maintenance/, state.json, cache.json, .env, or credentials.
 7. Test Targets: All test files MUST strictly reside under '.maya/tests/'.
 8. Dependencies: Must form an acyclic directed graph (no circular dependencies).

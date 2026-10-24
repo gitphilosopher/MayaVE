@@ -59,6 +59,9 @@ ALLOWED_SUBSYSTEM_ROOTS = {
     "scripts/",
     "skills/",
 }
+ALLOWED_ROOT_FILES = {
+    "main.py",
+}
 
 
 
@@ -149,8 +152,8 @@ class TaskContractValidator:
                         errors.append(f"Target file '{tf}' targets security-sensitive or coordinator state file.")
                     elif norm.startswith(".maya/tests/"):
                         errors.append(f"Target file '{tf}' cannot target test directory; tests belong in 'test_targets'.")
-                    elif not any(norm.startswith(sub) for sub in ALLOWED_SUBSYSTEM_ROOTS):
-                        errors.append(f"Target file '{tf}' is outside allowed subsystems ({sorted(ALLOWED_SUBSYSTEM_ROOTS)}).")
+                    elif norm not in ALLOWED_ROOT_FILES and not any(norm.startswith(sub) for sub in ALLOWED_SUBSYSTEM_ROOTS):
+                        errors.append(f"Target file '{tf}' is outside allowed subsystems ({sorted(ALLOWED_SUBSYSTEM_ROOTS)}) and allowed root files ({sorted(ALLOWED_ROOT_FILES)}).")
 
         # 8. test_targets (Mandatory Local Test Policy)
         test_targets = data.get("test_targets", [])

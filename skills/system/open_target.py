@@ -175,11 +175,6 @@ async def execute(intent: dict, text: str) -> str:
             webbrowser.open(url)
             return f"[happy] Opening {url} senpai!"
 
-    if cleaned:
-        reply = await _launch_app(cleaned, (cleaned,))
-        if reply:
-            return reply
-
     if raw_target:
         url = _resolve_url_label_guess(raw_target)
         if url:

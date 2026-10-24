@@ -194,6 +194,7 @@ class ToolExecutionContext:
     test_timeout_sec: float = 180.0
     findings: list[dict[str, Any]] = field(default_factory=list)
     is_cancelled: bool = False
+    campaign_deadline_monotonic: Optional[float] = None
     tools_executed: list[dict[str, Any]] = field(default_factory=list)
     files_modified: set[str] = field(default_factory=set)
     tests_passed: list[str] = field(default_factory=list)
@@ -227,7 +228,10 @@ class PathGuard:
         """Standardize relative path string without leading slashes or dots."""
         p = str(path_str).strip().replace("\\", "/")
         while p.startswith("./") or p.startswith("/"):
-            p = p.lstrip("./")
+            if p.startswith("./"):
+                p = p[2:]
+            elif p.startswith("/"):
+                p = p[1:]
         return p
 
     @classmethod
@@ -240,6 +244,9 @@ class PathGuard:
         Validate path for reading. Allows reading from worktree_path or repo_root,
         strictly prohibiting .git internals and external filesystem escapes.
         """
+        if isinstance(path_str, (list, tuple)):
+            raise ForbiddenPathError(f"Path parameter must be a string relative path, not a list: {path_str}")
+
         if cls.is_git_path(path_str):
             raise ForbiddenPathError(f"Access to Git internal path '{path_str}' is strictly forbidden.")
 
@@ -282,6 +289,9 @@ class PathGuard:
         Validate path for writing or editing. Must be strictly confined to worktree_path,
         with the sole approved exception of docs/CHANGELOG.md.
         """
+        if isinstance(path_str, (list, tuple)):
+            raise ForbiddenPathError(f"Path parameter must be a string relative path, not a list: {path_str}")
+
         if cls.is_git_path(path_str):
             raise ForbiddenPathError(f"Modifying Git internal path '{path_str}' is strictly forbidden.")
 
@@ -815,12 +825,14 @@ def _fs_edit_impl(
     # Single unambiguous match! Perform replacement
     new_content = content.replace(old_text, new_text, 1)
 
-    # Re-apply CRLF if the original file was CRLF
-    if is_crlf and "\r\n" not in new_content:
-        new_content = new_content.replace("\n", "\r\n")
+    # Preserve exact line-ending convention without Windows text-mode corruption
+    if is_crlf:
+        final_content = new_content.replace("\r\n", "\n").replace("\n", "\r\n")
+    else:
+        final_content = new_content.replace("\r\n", "\n")
 
     try:
-        resolved_path.write_text(new_content, encoding="utf-8")
+        resolved_path.write_bytes(final_content.encode("utf-8"))
     except Exception as e:
         return ToolResult(success=False, output="", error=f"Failed to write changes to '{path}': {e}")
 
@@ -831,7 +843,7 @@ def _fs_edit_impl(
         data={
             "path": norm_rel,
             "occurrences": 1,
-            "bytes_written": len(new_content.encode("utf-8")),
+            "bytes_written": len(final_content.encode("utf-8")),
             "newline": "CRLF" if is_crlf else "LF",
         },
     )
@@ -858,10 +870,25 @@ def _fs_write_impl(
             data={"path": str(resolved_path), "existed": True},
         )
 
+    # Determine newline convention: preserve existing if overwriting, else maintain content
+    if existed:
+        try:
+            raw_orig = resolved_path.read_bytes()
+            if b"\r\n" in raw_orig:
+                final_content = content.replace("\r\n", "\n").replace("\n", "\r\n")
+            elif b"\n" in raw_orig:
+                final_content = content.replace("\r\n", "\n")
+            else:
+                final_content = content
+        except Exception:
+            final_content = content
+    else:
+        final_content = content
+
     try:
         # Create parent directories safely
         resolved_path.parent.mkdir(parents=True, exist_ok=True)
-        resolved_path.write_text(content, encoding="utf-8")
+        resolved_path.write_bytes(final_content.encode("utf-8"))
     except Exception as e:
         return ToolResult(success=False, output="", error=f"Failed to write file '{path}': {e}")
 
@@ -869,11 +896,11 @@ def _fs_write_impl(
     norm_rel = PathGuard.normalize_relpath(resolved_path)
     return ToolResult(
         success=True,
-        output=f"File '{norm_rel}' {operation} successfully ({len(content.encode('utf-8'))} bytes).",
+        output=f"File '{norm_rel}' {operation} successfully ({len(final_content.encode('utf-8'))} bytes).",
         data={
             "path": norm_rel,
             "operation": operation,
-            "bytes": len(content.encode("utf-8")),
+            "bytes": len(final_content.encode("utf-8")),
         },
     )
 

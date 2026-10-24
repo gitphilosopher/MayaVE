@@ -49,13 +49,17 @@ class MacroAgentConfig:
     base_url: str = "http://127.0.0.1:11434"
     temperature: float = 0.2
     num_ctx: int = 4096
-    max_turns: int = 15
+    num_predict: int = 512
+    max_turn_timeout_seconds: float = 60.0
     timeout_seconds: float = 300.0
+    max_turns: int = 15
+    keep_alive: str = "5m"
+    unload_on_exit: bool = True
+    stop_sequences: list[str] = field(default_factory=lambda: ["</tool_call>", "</finish_task>"])
     max_consecutive_malformed: int = 3
     max_identical_failed_calls: int = 3
     max_consecutive_premature_finishes: int = 3
     max_context_chars: int = 24_000
-    keep_alive: str = "0"  # Unload weights immediately after run to preserve RTX 3050 VRAM
 
 
 @dataclass
@@ -141,6 +145,20 @@ class ToolCallParser:
                 return thought, None, {}, False, None, f"Malformed JSON in <tool_call>: {err}"
             return thought, tool_name, tool_args, False, None, None
 
+        # 1a-stop. Stop-sequence-truncated <tool_call> tags without closing tag
+        tc_unclosed = re.search(r"<tool_call>(.*)$", raw, re.DOTALL | re.IGNORECASE)
+        if tc_unclosed:
+            body = tc_unclosed.group(1).strip()
+            tool_name, tool_args, err = cls._extract_json_call(body)
+            if not err and tool_name:
+                thought = raw[:tc_unclosed.start()].strip()
+                thought = cls._clean_thought(thought)
+                return thought, tool_name, tool_args, False, None, None
+            elif err and ("name" in body or "tool" in body or "action" in body):
+                thought = raw[:tc_unclosed.start()].strip()
+                thought = cls._clean_thought(thought)
+                return thought, None, {}, False, None, f"Malformed JSON in unclosed <tool_call>: {err}"
+
         # 1b. Markdown json / tool_call fences: ```json ... ```
         fence_match = re.search(r"```(?:json|tool_call)?\s*(\{.*?\})\s*```", raw, re.DOTALL | re.IGNORECASE)
         if fence_match:
@@ -163,11 +181,23 @@ class ToolCallParser:
 
         # 2. If NO tool call was found, check for completion signals
 
-        # 2a. <finish_task>summary</finish_task>
+        # 2a. Explicit <finish_task>summary</finish_task>
         finish_match = re.search(r"<finish_task>(.*?)</finish_task>", raw, re.DOTALL | re.IGNORECASE)
         if finish_match:
             finish_summary = finish_match.group(1).strip()
+            if not finish_summary or len(finish_summary) < 3:
+                return cls._clean_thought(raw[:finish_match.start()].strip()), None, {}, False, None, "Empty or truncated completion summary in <finish_task>."
             thought = raw[:finish_match.start()].strip()
+            thought = cls._clean_thought(thought)
+            return thought, None, {}, True, finish_summary, None
+
+        # 2a-stop. Stop-sequence-truncated <finish_task> without closing tag
+        finish_unclosed = re.search(r"<finish_task>(.*)$", raw, re.DOTALL | re.IGNORECASE)
+        if finish_unclosed:
+            finish_summary = finish_unclosed.group(1).strip()
+            if not finish_summary or len(finish_summary) < 3:
+                return cls._clean_thought(raw[:finish_unclosed.start()].strip()), None, {}, False, None, "Empty or truncated completion summary in <finish_task>."
+            thought = raw[:finish_unclosed.start()].strip()
             thought = cls._clean_thought(thought)
             return thought, None, {}, True, finish_summary, None
 
@@ -175,6 +205,8 @@ class ToolCallParser:
         alt_finish = re.search(r"^(?:TASK_COMPLETED|FINAL_ANSWER|COMPLETED)\s*:\s*(.*)$", raw, re.MULTILINE | re.IGNORECASE)
         if alt_finish:
             finish_summary = alt_finish.group(1).strip()
+            if not finish_summary or len(finish_summary) < 3:
+                return cls._clean_thought(raw[:alt_finish.start()].strip()), None, {}, False, None, "Empty or truncated completion summary in alternative completion marker."
             thought = raw[:alt_finish.start()].strip()
             return cls._clean_thought(thought), None, {}, True, finish_summary, None
 
@@ -226,10 +258,12 @@ class ToolCallParser:
 
     @classmethod
     def _clean_thought(cls, text: str) -> str:
-        """Strip <thought> and <finish_task> XML tags if explicitly emitted by model."""
+        """Strip <thought>, <tool_call>, and <finish_task> XML tags if explicitly emitted by model."""
         cleaned = re.sub(r"</?thought>", "", text, flags=re.IGNORECASE)
-        cleaned = re.sub(r"<finish_task>.*?</finish_task>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
-        return cleaned
+        cleaned = re.sub(r"<finish_task>.*?</finish_task>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r"</?finish_task>", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"</?tool_call>", "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip()
 
     @classmethod
     def _extract_json_call(cls, json_str: str) -> Tuple[Optional[str], dict[str, Any], Optional[str]]:
@@ -249,8 +283,8 @@ class ToolCallParser:
 
         # Extract tool name
         tool_name = data.get("name") or data.get("tool") or data.get("action")
-        if not tool_name or not isinstance(tool_name, str):
-            return None, {}, "Missing 'name' or 'tool' string in tool call payload."
+        if not tool_name or not isinstance(tool_name, str) or not tool_name.strip():
+            return None, {}, "Missing or empty 'name' or 'tool' string in tool call payload."
 
         # Extract arguments
         args = data.get("arguments") or data.get("args") or data.get("action_input") or {}
@@ -281,21 +315,27 @@ class OllamaTransport:
         prompt: str,
         config: MacroAgentConfig,
         timeout: Optional[float] = None,
-    ) -> Tuple[str, Optional[int], Optional[int]]:
+    ) -> Tuple[str, Optional[int], Optional[int], Optional[str]]:
         """
         Call Ollama generate endpoint.
-        Returns (response_text, input_tokens, output_tokens).
+        Returns (response_text, input_tokens, output_tokens, done_reason).
         """
         url = f"{config.base_url.rstrip('/')}/api/generate"
+        options: dict[str, Any] = {
+            "temperature": config.temperature,
+            "num_ctx": config.num_ctx,
+            "num_predict": getattr(config, "num_predict", 512),
+        }
+        stop_seqs = getattr(config, "stop_sequences", None)
+        if stop_seqs:
+            options["stop"] = list(stop_seqs)
+
         payload = json.dumps({
             "model": config.model,
             "prompt": prompt,
             "stream": False,
             "keep_alive": config.keep_alive,
-            "options": {
-                "temperature": config.temperature,
-                "num_ctx": config.num_ctx,
-            },
+            "options": options,
         }).encode("utf-8")
 
         req = urllib.request.Request(
@@ -305,7 +345,7 @@ class OllamaTransport:
             method="POST",
         )
 
-        timeout_sec = timeout or config.timeout_seconds
+        timeout_sec = timeout if timeout is not None else getattr(config, "max_turn_timeout_seconds", 60.0)
         try:
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -313,11 +353,39 @@ class OllamaTransport:
                     data.get("response", ""),
                     data.get("prompt_eval_count"),
                     data.get("eval_count"),
+                    data.get("done_reason"),
                 )
         except urllib.error.URLError as e:
             raise ConnectionError(f"Ollama connection error at {url}: {e}") from e
         except TimeoutError as e:
             raise TimeoutError(f"Ollama request timed out after {timeout_sec:.1f}s") from e
+
+    @classmethod
+    def unload(cls, config: MacroAgentConfig, timeout: float = 5.0) -> bool:
+        """
+        Request Ollama to evict model from memory by setting keep_alive to 0.
+        Returns True if successfully acknowledged, False otherwise.
+        Never raises an exception; failures are logged and do not mask primary outcomes.
+        """
+        url = f"{config.base_url.rstrip('/')}/api/generate"
+        payload = json.dumps({
+            "model": config.model,
+            "keep_alive": 0,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                resp.read()
+            logger.info("Evicted model '%s' from memory (keep_alive: 0).", config.model)
+            return True
+        except Exception as exc:
+            logger.debug("Ollama unload request for '%s' non-critical failure: %s", config.model, exc)
+            return False
 
 
 # ==============================================================================
@@ -541,12 +609,42 @@ class MacroAgent:
                     on_progress(f"  [Turn {current_turn}/{self.config.max_turns}] Generating reasoning step with {self.config.model}...")
 
                 # 4. Invoke local model via transport
+                # Multi-constraint timeout: bounded by per-turn cap, remaining task budget, and optional campaign deadline
+                remaining_task_budget = self.config.timeout_seconds - elapsed
+                if remaining_task_budget <= 0:
+                    final_status = "TIMEOUT"
+                    final_summary = f"Execution exceeded task wall-clock budget of {self.config.timeout_seconds:.1f}s."
+                    break
+
+                campaign_deadline = getattr(context, "campaign_deadline_monotonic", None)
+                if campaign_deadline is not None:
+                    remaining_campaign_budget = campaign_deadline - time.monotonic()
+                    if remaining_campaign_budget <= 0:
+                        final_status = "TIMEOUT"
+                        final_summary = "Execution halted: campaign deadline expired."
+                        break
+                    remaining_budget = min(remaining_task_budget, remaining_campaign_budget)
+                else:
+                    remaining_budget = remaining_task_budget
+
+                if remaining_budget <= 0:
+                    final_status = "TIMEOUT"
+                    final_summary = "Execution halted: deadline expired."
+                    break
+
+                call_timeout = min(self.config.max_turn_timeout_seconds, remaining_budget)
+
+                done_reason = None
                 try:
-                    call_timeout = max(5.0, self.config.timeout_seconds - elapsed)
                     if self._transport is not None:
-                        response_text, in_tok, out_tok = self._transport(prompt_text, self.config)
+                        t_res = self._transport(prompt_text, self.config)
+                        if isinstance(t_res, tuple) and len(t_res) == 4:
+                            response_text, in_tok, out_tok, done_reason = t_res
+                        else:
+                            response_text, in_tok, out_tok = t_res[:3]
+                            done_reason = None
                     else:
-                        response_text, in_tok, out_tok = OllamaTransport.generate(
+                        response_text, in_tok, out_tok, done_reason = OllamaTransport.generate(
                             prompt=prompt_text,
                             config=self.config,
                             timeout=call_timeout,
@@ -557,14 +655,62 @@ class MacroAgent:
                     if out_tok:
                         total_out_tokens += out_tok
 
+                except TimeoutError as e:
+                    elapsed_now = time.monotonic() - start_time
+                    if elapsed_now >= self.config.timeout_seconds or (campaign_deadline and time.monotonic() >= campaign_deadline):
+                        final_status = "TIMEOUT"
+                        error_msg = f"Execution exceeded timeout ceiling: {e}"
+                        final_summary = error_msg
+                        break
+                    if on_progress:
+                        on_progress(f"  [Turn {current_turn}] Inference timed out: {e}")
+                    consecutive_malformed += 1
+                    step = AgentStep(
+                        turn=current_turn,
+                        thought="[Inference Timed Out]",
+                        duration_sec=time.monotonic() - turn_start,
+                    )
+                    steps.append(step)
+                    if consecutive_malformed >= self.config.max_consecutive_malformed:
+                        final_status = "TIMEOUT"
+                        error_msg = f"Inference timed out repeatedly ({consecutive_malformed} consecutive turns): {e}"
+                        final_summary = error_msg
+                        break
+                    context_mgr.add_system_note(
+                        f"Turn {current_turn} inference timed out ({e}). "
+                        "Your previous response took too long. Emit concise, single tool calls without large text blocks."
+                    )
+                    continue
+
                 except Exception as e:
                     final_status = "OLLAMA_ERROR"
                     error_msg = f"Local model invocation failed: {e}"
                     final_summary = f"Halted on Ollama error: {e}"
                     break
 
+                # Post-inference cancellation check
+                if self._is_cancelled or getattr(context, "is_cancelled", False):
+                    final_status = "CANCELLED"
+                    final_summary = f"Execution cancelled by operator during turn {current_turn}."
+                    break
+
                 # 5. Parse model response
                 thought, tool_name, tool_args, is_finished, finish_summary, parse_err = ToolCallParser.parse(response_text)
+
+                # If output was truncated by token limit, handle incomplete completions and payloads fail-closed
+                if done_reason == "length":
+                    if is_finished and "</finish_task>" not in response_text.lower():
+                        is_finished = False
+                        finish_summary = None
+                        parse_err = (
+                            f"Output truncated: token limit ({self.config.num_predict} tokens) "
+                            "reached before <finish_task> completion."
+                        )
+                    elif parse_err:
+                        parse_err = (
+                            f"Output truncated: token limit ({self.config.num_predict} tokens) "
+                            "reached before payload completion."
+                        )
 
                 # 6. Check for completion signal
                 if is_finished:
@@ -737,3 +883,8 @@ class MacroAgent:
 
         finally:
             self._execution_lock.release()
+            if getattr(self.config, "unload_on_exit", True) and self._transport is None:
+                try:
+                    OllamaTransport.unload(self.config, timeout=5.0)
+                except Exception as exc:
+                    logger.debug("Cleanup exception caught: %s", exc)

@@ -21,6 +21,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+from rich.panel import Panel
 
 # Mandatory color palette
 PURPLE = "rgb(180,156,255)"
@@ -69,12 +70,12 @@ def to_ascii_safe(text: Any, target_encoding: str = "cp1252") -> str:
 def get_status_style(status_value: str) -> str:
     """Return matching palette color style for a status string."""
     val = str(status_value).upper()
-    if any(k in val for k in ("READY_TO_INTEGRATE", "VERIFIED", "COMPLETED", "APPROVE", "PASS", "CLEAN", "AVAILABLE")):
-        return MINT
-    if any(k in val for k in ("IN_PROGRESS", "PLANNING", "VERIFYING", "NEEDS_APPROVAL", "REVIEW_PENDING", "PAUSED", "WARNING", "REQUEST_CHANGES")):
-        return AMBER
     if any(k in val for k in ("FAILED", "BLOCKED", "ERROR", "CORRUPT", "CRITICAL", "UNAVAILABLE")):
         return CORAL
+    if any(k in val for k in ("IN_PROGRESS", "PLANNING", "VERIFYING", "NEEDS_APPROVAL", "REVIEW_PENDING", "PAUSED", "WARNING", "REQUEST_CHANGES")):
+        return AMBER
+    if any(k in val for k in ("READY_TO_INTEGRATE", "VERIFIED", "COMPLETED", "APPROVE", "PASS", "CLEAN", "AVAILABLE")):
+        return MINT
     return GRAY
 
 
@@ -151,6 +152,11 @@ class MacroTUI:
             "resume",
             "Safely resume interrupted campaign skipping verified tasks",
             "autophage resume",
+        )
+        table.add_row(
+            "integrate [task_id]",
+            "Integrate verified tasks into dedicated integration branch",
+            "autophage integrate [BUG-001] [--authorize]",
         )
         table.add_row(
             "help",
@@ -342,9 +348,14 @@ class MacroTUI:
         for f in findings:
             sev_val = getattr(getattr(f, "severity", ""), "value", str(getattr(f, "severity", "")))
             conf_val = getattr(getattr(f, "confidence", ""), "value", str(getattr(f, "confidence", "")))
-            locs = getattr(f, "affected_locations", [])
-            loc_str = locs[0] if locs else ""
-            desc = getattr(f, "description", "") or getattr(f, "title", "")
+            locs = (
+                getattr(f, "line_references", None)
+                or getattr(f, "target_files", None)
+                or getattr(f, "affected_locations", None)
+                or []
+            )
+            loc_str = str(locs[0]) if locs else ""
+            desc = getattr(f, "title", "") or getattr(f, "description", "") or getattr(f, "actual_behavior", "")
 
             table.add_row(
                 to_ascii_safe(getattr(f, "issue_id", "N/A")),
@@ -406,6 +417,64 @@ class MacroTUI:
 
             self.console.print(table)
             self.console.print()
+
+    def print_integration_candidates(self, candidates: Sequence[dict]) -> None:
+        """Render table of tasks eligible for integration (READY_TO_INTEGRATE)."""
+        table = Table(
+            box=box.SIMPLE_HEAD,
+            header_style=f"bold {PURPLE}",
+            show_edge=False,
+            padding=(0, 2),
+        )
+        table.add_column("Task ID", style=f"bold {WHITE}")
+        table.add_column("Pri", style=GRAY)
+        table.add_column("Risk", style=GRAY)
+        table.add_column("Status", style=MINT)
+        table.add_column("Branch", style=PURPLE)
+        table.add_column("Target Files", style=GRAY)
+        table.add_column("Title", style=WHITE)
+
+        for c in candidates:
+            targets_str = ", ".join(c.get("target_files", []))[:30]
+            table.add_row(
+                to_ascii_safe(c.get("task_id", "")),
+                to_ascii_safe(c.get("priority", "")),
+                to_ascii_safe(c.get("risk", "")),
+                to_ascii_safe(c.get("status", "")),
+                to_ascii_safe(c.get("branch_name", "")),
+                to_ascii_safe(targets_str),
+                to_ascii_safe(c.get("title", "")[:40]),
+            )
+
+        self.console.print(table)
+        self.console.print()
+
+    def print_integration_diff(self, info: dict, full_diff: bool = False) -> None:
+        """Display proposed patch diff and task verification details for human review."""
+        task_id = info.get("task_id", "")
+        title = info.get("title", "")
+        branch = info.get("branch", "")
+        changed = ", ".join(info.get("changed_files", []))
+        diff_text = info.get("full_diff" if full_diff else "diff_preview", "")
+
+        header = f"[bold {PURPLE}]Candidate Integration:[/] [bold {WHITE}]{task_id}[/] - {title}\n"
+        meta = (
+            f"[{GRAY}]Source Branch:[/] [{WHITE}]{branch}[/]  |  "
+            f"[{GRAY}]Changed Files:[/] [{WHITE}]{changed}[/]\n"
+        )
+        self.console.print(header + meta)
+
+        if diff_text:
+            diff_panel = Panel(
+                Text(to_ascii_safe(diff_text), style=GRAY),
+                title=f"Proposed Diff ({task_id})",
+                border_style=PURPLE,
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+            self.console.print(diff_panel)
+        else:
+            self.console.print(f"[{GRAY}]No diff content available.[/]\n")
 
     def interactive_repl(self, dispatcher: Callable[[list[str]], int]) -> int:
         """

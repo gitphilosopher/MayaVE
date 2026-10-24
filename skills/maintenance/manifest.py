@@ -24,6 +24,7 @@ try:
     from .planner import compute_proposal_hash
     from .store import StateStore
     from .task_contract import (
+        ALLOWED_ROOT_FILES,
         ALLOWED_SUBSYSTEM_ROOTS,
         FORBIDDEN_TARGET_EXACT,
         FORBIDDEN_TARGET_PREFIXES,
@@ -41,6 +42,7 @@ except ImportError:
     from planner import compute_proposal_hash
     from store import StateStore
     from task_contract import (
+        ALLOWED_ROOT_FILES,
         ALLOWED_SUBSYSTEM_ROOTS,
         FORBIDDEN_TARGET_EXACT,
         FORBIDDEN_TARGET_PREFIXES,
@@ -69,6 +71,7 @@ class BacklogParseError(Exception):
 def parse_markdown_backlog(
     content: str,
     source_path: str = "",
+    require_test_targets: bool = True,
 ) -> tuple[dict[str, Any], list[str]]:
     """
     Parse a Markdown bug backlog into the canonical JSON manifest dictionary.
@@ -145,6 +148,7 @@ def parse_markdown_backlog(
     _flush_section()
 
     parsed_bugs: list[dict[str, Any]] = []
+    skipped_bugs: list[dict[str, Any]] = []
     seen_bug_ids: set[str] = set()
 
     for sec_idx, (sec_id, sec_title, sec_body) in enumerate(defect_sections, start=1):
@@ -157,6 +161,8 @@ def parse_markdown_backlog(
             "title": sec_title,
             "priority": "P2",
             "risk": "LOW",
+            "category": None,
+            "task_type": "defect",
             "target_files": [],
             "test_targets": [],
             "dependencies": [],
@@ -236,28 +242,46 @@ def parse_markdown_backlog(
                             errors.append(f"Section #{sec_idx} ({sec_id or 'unknown'}): Invalid risk '{v}'. Must be LOW, MEDIUM, HIGH, or VERY_HIGH.")
                         active_list_attr = None
                         continue
+                    elif k in ("category", "finding category"):
+                        cat_clean = v.strip("`'\"").upper()
+                        bug_data["category"] = cat_clean
+                        if cat_clean in ("IMPROVEMENT", "ARCHITECTURAL_CONCERN"):
+                            bug_data["task_type"] = "improvement"
+                        active_list_attr = None
+                        continue
+                    elif k in ("task type", "task_type", "type"):
+                        type_clean = v.strip("`'\"").lower()
+                        bug_data["task_type"] = type_clean
+                        active_list_attr = None
+                        continue
                     elif k in ("target files", "target_files", "targets"):
                         active_list_attr = "target_files"
-                        if v:
+                        if v and v.strip().lower() not in ("none", "none.", "-", "n/a"):
                             for item in re.split(r"[,;]", v):
-                                norm = normalize_relpath(item)
-                                if norm and norm not in bug_data["target_files"]:
+                                clean_item = item.strip("`'\" ")
+                                if clean_item.lower() in ("none", "none.", "-", "n/a"):
+                                    continue
+                                norm = normalize_relpath(clean_item)
+                                if norm and norm.lower() not in ("none", "none.", "-", "n/a") and norm not in bug_data["target_files"]:
                                     bug_data["target_files"].append(norm)
                         continue
                     elif k in ("test targets", "test_targets", "tests"):
                         active_list_attr = "test_targets"
-                        if v:
+                        if v and v.strip().lower() not in ("none", "none.", "-", "n/a"):
                             for item in re.split(r"[,;]", v):
-                                norm = normalize_relpath(item)
-                                if norm and norm not in bug_data["test_targets"]:
+                                clean_item = item.strip("`'\" ")
+                                if clean_item.lower() in ("none", "none.", "-", "n/a"):
+                                    continue
+                                norm = normalize_relpath(clean_item)
+                                if norm and norm.lower() not in ("none", "none.", "-", "n/a") and norm not in bug_data["test_targets"]:
                                     bug_data["test_targets"].append(norm)
                         continue
                     elif k in ("dependencies", "deps"):
                         active_list_attr = "dependencies"
-                        if v and v.lower() != "none":
+                        if v and v.lower() not in ("none", "none.", "-", "n/a"):
                             for item in re.split(r"[,;]", v):
                                 dep_id = item.strip("`'\" ")
-                                if dep_id and dep_id not in bug_data["dependencies"]:
+                                if dep_id and dep_id.lower() not in ("none", "none.", "-", "n/a") and dep_id not in bug_data["dependencies"]:
                                     bug_data["dependencies"].append(dep_id)
                         continue
                     elif k in ("actual behavior", "actual", "observed"):
@@ -287,14 +311,15 @@ def parse_markdown_backlog(
 
             # List item parsing for active list attribute
             if active_list_attr and (s_line.startswith("- ") or s_line.startswith("* ")):
-                item_val = s_line[2:].strip()
+                item_val = s_line[2:].strip().strip("`'\" ")
                 if active_list_attr in ("target_files", "test_targets"):
-                    norm = normalize_relpath(item_val)
-                    if norm and norm not in bug_data[active_list_attr]:
-                        bug_data[active_list_attr].append(norm)
+                    if item_val.lower() not in ("none", "none.", "-", "n/a"):
+                        norm = normalize_relpath(item_val)
+                        if norm and norm.lower() not in ("none", "none.", "-", "n/a") and norm not in bug_data[active_list_attr]:
+                            bug_data[active_list_attr].append(norm)
                 elif active_list_attr == "dependencies":
                     dep_val = item_val.strip("`'\" ")
-                    if dep_val and dep_val.lower() != "none" and dep_val not in bug_data["dependencies"]:
+                    if dep_val and dep_val.lower() not in ("none", "none.", "-", "n/a") and dep_val not in bug_data["dependencies"]:
                         bug_data["dependencies"].append(dep_val)
                 elif active_list_attr == "acceptance_criteria":
                     if item_val and item_val not in bug_data["acceptance_criteria"]:
@@ -332,44 +357,47 @@ def parse_markdown_backlog(
             continue
         seen_bug_ids.add(b_id)
 
+        bug_errors: list[str] = []
         title = bug_data["title"]
         if not title or len(title.strip()) < 5:
-            errors.append(f"Bug '{b_id}': Missing or too short title (must be at least 5 chars).")
+            bug_errors.append(f"Bug '{b_id}': Missing or too short title (must be at least 5 chars).")
 
         if not bug_data["actual_behavior"]:
-            errors.append(
+            bug_errors.append(
                 f"Bug '{b_id}': Missing 'Actual Behavior'. Backlog entries must describe the observed defect without fabrication."
             )
 
         if not bug_data["expected_behavior"]:
-            errors.append(
+            bug_errors.append(
                 f"Bug '{b_id}': Missing 'Expected Behavior'. Backlog entries must describe the intended correct behavior."
             )
 
         if not bug_data["target_files"]:
-            errors.append(
+            bug_errors.append(
                 f"Bug '{b_id}': Missing 'target_files'. At least one target file must be explicitly declared."
             )
         else:
             for tf in bug_data["target_files"]:
                 if any(tf.startswith(p) for p in FORBIDDEN_TARGET_PREFIXES) or tf.lower() in FORBIDDEN_TARGET_EXACT:
-                    errors.append(f"Bug '{b_id}': Target file '{tf}' modifies forbidden maintenance/system path.")
-                elif not any(tf.startswith(sub) for sub in ALLOWED_SUBSYSTEM_ROOTS):
-                    errors.append(f"Bug '{b_id}': Target file '{tf}' is outside allowed subsystems ({sorted(ALLOWED_SUBSYSTEM_ROOTS)}).")
+                    bug_errors.append(f"Bug '{b_id}': Target file '{tf}' modifies forbidden maintenance/system path.")
+                elif tf not in ALLOWED_ROOT_FILES and not any(tf.startswith(sub) for sub in ALLOWED_SUBSYSTEM_ROOTS):
+                    bug_errors.append(f"Bug '{b_id}': Target file '{tf}' is outside allowed subsystems ({sorted(ALLOWED_SUBSYSTEM_ROOTS)}) and allowed root files ({sorted(ALLOWED_ROOT_FILES)}).")
 
         # Mandatory Local Test Policy validation
         if not bug_data["test_targets"]:
-            errors.append(
-                f"Bug '{b_id}': Missing 'test_targets'. Defect tasks require reproducible test evidence strictly under '.maya/tests/'."
-            )
+            is_defect = bug_data.get("task_type") in ("defect", "repair", "bug") and bug_data.get("category") not in ("IMPROVEMENT", "ARCHITECTURAL_CONCERN")
+            if require_test_targets and is_defect:
+                bug_errors.append(
+                    f"Bug '{b_id}': Missing 'test_targets'. Defect tasks require reproducible test evidence strictly under '.maya/tests/'."
+                )
         else:
             for tt in bug_data["test_targets"]:
                 if not tt.startswith(".maya/tests/"):
-                    errors.append(
+                    bug_errors.append(
                         f"Bug '{b_id}': Test target '{tt}' violates local-only test policy. All tests must reside strictly under '.maya/tests/'."
                     )
                 if ".." in tt:
-                    errors.append(f"Bug '{b_id}': Test target '{tt}' contains forbidden path traversal.")
+                    bug_errors.append(f"Bug '{b_id}': Test target '{tt}' contains forbidden path traversal.")
 
         # Default acceptance criteria if omitted
         if not bug_data["acceptance_criteria"]:
@@ -378,7 +406,11 @@ def parse_markdown_backlog(
                 "Target tests pass and maintain frozen test integrity",
             ]
 
-        parsed_bugs.append(bug_data)
+        if bug_errors:
+            errors.extend(bug_errors)
+            skipped_bugs.append({"bug_id": b_id, "errors": bug_errors})
+        else:
+            parsed_bugs.append(bug_data)
 
     if not parsed_bugs and not errors:
         errors.append("Markdown backlog contains zero defect entries.")
@@ -388,6 +420,7 @@ def parse_markdown_backlog(
         "source_file": source_path,
         "description": manifest_desc,
         "bugs": parsed_bugs,
+        "skipped_bugs": skipped_bugs,
     }
 
     return manifest, errors
@@ -430,7 +463,7 @@ def manifest_to_contracts(
             "dependencies": list(b.get("dependencies", [])),
             "acceptance_criteria": list(b.get("acceptance_criteria", [])),
             "verification_instructions": "Run pytest on test_targets; verify failing baseline then passing patch.",
-            "task_type": "defect",
+            "task_type": b.get("task_type", "defect"),
             "allow_file_deletion": False,
         }
         contracts.append(contract)

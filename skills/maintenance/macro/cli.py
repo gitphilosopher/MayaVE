@@ -206,25 +206,30 @@ class AutoPhageCLI:
 
         return 0
 
-    def cmd_fix(self, args: argparse.Namespace) -> int:
-        """Execute multi-issue campaign (Mode B) or single issue (Mode A)."""
-        issue_id = getattr(args, "issue", None)
-        backlog_path = getattr(args, "findings_file", None) or getattr(args, "backlog", None)
-        authorized = bool(getattr(args, "authorize", False))
-        tier1_only = bool(getattr(args, "tier1_only", False))
-        max_attempts = int(getattr(args, "max_attempts", 3))
-
-        config = CampaignConfig(
-            max_attempts_per_task=max_attempts,
-            is_tier2_authorized=authorized,
-            require_authorization_for_tier2=True,
-            tier1_only=tier1_only,
-        )
+    def _create_campaign_engine(
+        self,
+        config: Optional[CampaignConfig] = None,
+        authorized: bool = False,
+        tier1_only: bool = False,
+        max_attempts: int = 3,
+    ) -> tuple[CampaignEngine, dict[str, str]]:
+        """
+        Construct a fully wired CampaignEngine with probed workers (Tier 1 MacroAgent
+        and Tier 2 AntigravityAgentAdapter), TUI callbacks, and safety boundaries.
+        Returns (engine, availability_dict).
+        """
+        if config is None:
+            config = CampaignConfig(
+                max_attempts_per_task=max_attempts,
+                is_tier2_authorized=authorized,
+                require_authorization_for_tier2=True,
+                tier1_only=tier1_only,
+            )
 
         # Probe model availability and initialize workers
         avail = check_model_availability(self.repo_root)
-        tier1_avail = "AVAILABLE" in avail.get("Tier 1 Implementation", "")
-        tier2_avail = "AVAILABLE" in avail.get("Tier 2 Escalation", "")
+        tier1_avail = "[AVAILABLE]" in avail.get("Tier 1 Implementation", "")
+        tier2_avail = "[AVAILABLE]" in avail.get("Tier 2 Escalation", "")
 
         tier1_agent = None
         if tier1_avail:
@@ -232,6 +237,9 @@ class AutoPhageCLI:
                 config=MacroAgentConfig(
                     model=config.tier1_model,
                     base_url=config.ollama_base_url,
+                    max_turn_timeout_seconds=getattr(config, "turn_timeout_seconds", 60.0),
+                    num_predict=getattr(config, "num_predict", 512),
+                    keep_alive=getattr(config, "keep_alive", "5m"),
                 )
             )
 
@@ -252,6 +260,21 @@ class AutoPhageCLI:
             agent=tier1_agent,
             tier2_adapter=tier2_adapter,
             on_progress=progress_cb,
+        )
+        return engine, avail
+
+    def cmd_fix(self, args: argparse.Namespace) -> int:
+        """Execute multi-issue campaign (Mode B) or single issue (Mode A)."""
+        issue_id = getattr(args, "issue", None)
+        backlog_path = getattr(args, "findings_file", None) or getattr(args, "backlog", None)
+        authorized = bool(getattr(args, "authorize", False))
+        tier1_only = bool(getattr(args, "tier1_only", False))
+        max_attempts = int(getattr(args, "max_attempts", 3))
+
+        engine, _ = self._create_campaign_engine(
+            authorized=authorized,
+            tier1_only=tier1_only,
+            max_attempts=max_attempts,
         )
 
         # Mode A: Single-issue execution
@@ -325,7 +348,7 @@ class AutoPhageCLI:
 
         self.tui.console.print(f"[{PURPLE}]AutoPhage Mode B: Initializing campaign from '{resolved_file.name}'...[/]")
         try:
-            checkpoint = engine.ingest_markdown(resolved_file)
+            checkpoint = engine.ingest_markdown(resolved_file, merge_existing=True)
         except Exception as exc:
             self.tui.console.print(f"[{CORAL}]Failed to ingest backlog: {exc}[/]\n")
             return 1
@@ -492,15 +515,77 @@ class AutoPhageCLI:
             self.tui.console.print(f"[{CORAL}]Error: No campaign state found to resume.[/]\n")
             return 1
 
-        self.tui.console.print(f"[{PURPLE}]Resuming campaign '{cp.campaign_id}'...[/]\n")
+        authorized = bool(getattr(args, "authorize", False))
+        tier1_only = bool(getattr(args, "tier1_only", False))
+        max_attempts = getattr(args, "max_attempts", None)
+        max_att_val = int(max_attempts) if max_attempts is not None else 3
 
-        engine = CampaignEngine(repo_root=self.repo_root, state_mgr=self.state_mgr)
+        engine, avail = self._create_campaign_engine(
+            authorized=authorized,
+            tier1_only=tier1_only,
+            max_attempts=max_att_val,
+        )
+
+        # Fail-closed check: Ensure at least one worker is available
+        tier1_avail = "[AVAILABLE]" in avail.get("Tier 1 Implementation", "")
+        tier2_avail = "[AVAILABLE]" in avail.get("Tier 2 Escalation", "") and authorized
+        if not tier1_avail and not tier2_avail:
+            self.tui.console.print(
+                f"[{CORAL}]Cannot resume campaign: No repair worker (Tier 1 MacroAgent or authorized Tier 2) is available.[/]\n"
+                f"[{GRAY}]Ensure Ollama is running with qwen3.5:4b or pass --authorize for Tier 2 escalation.[/]\n"
+            )
+            return 1
+
+        self.tui.console.print(f"[{PURPLE}]Resuming campaign '{cp.campaign_id}' ({len(cp.task_order)} tasks)...[/]\n")
+
         try:
             resumed_cp = engine.resume_campaign()
             self.tui.print_status(resumed_cp)
             return 0 if resumed_cp.status == CampaignStatus.COMPLETED else 1
         except Exception as exc:
             self.tui.console.print(f"[{CORAL}]Failed to resume campaign: {exc}[/]\n")
+            return 1
+
+    def cmd_integrate(self, args: argparse.Namespace) -> int:
+        """Safely integrate verified tasks into dedicated integration branch."""
+        task_id = getattr(args, "task_id", None)
+        list_only = bool(getattr(args, "list", False))
+        authorized = bool(getattr(args, "authorize", False))
+        show_diff = bool(getattr(args, "diff", False))
+        target_branch = getattr(args, "branch", None)
+
+        engine, _ = self._create_campaign_engine(authorized=authorized)
+
+        if list_only or not task_id:
+            candidates = engine.list_eligible_integration_tasks()
+            if not candidates:
+                self.tui.console.print(f"[{GRAY}]No tasks currently eligible for integration (READY_TO_INTEGRATE).[/]\n")
+                return 0
+            self.tui.print_integration_candidates(candidates)
+            return 0
+
+        # Specific task requested
+        success, msg, info = engine.integrate_task(
+            task_id=task_id,
+            authorized=authorized,
+            target_branch=target_branch,
+            dry_run=show_diff,
+        )
+
+        if show_diff or not authorized:
+            if info:
+                self.tui.print_integration_diff(info, full_diff=show_diff)
+            if not authorized:
+                self.tui.console.print(f"[{AMBER}][APPROVAL REQUIRED] {msg}[/]\n")
+                self.tui.console.print(f"[{GRAY}]Re-run with: autophage integrate {task_id} --authorize[/]\n")
+                return 1
+            return 0
+
+        if success:
+            self.tui.console.print(f"[{MINT}][SUCCESS] {msg}[/]\n")
+            return 0
+        else:
+            self.tui.console.print(f"[{CORAL}][ERROR] {msg}[/]\n")
             return 1
 
 
@@ -525,6 +610,9 @@ Examples:
   autophage review candidate.diff            # Read-only review of a diff
   autophage status                           # View active campaign & models
   autophage resume                           # Resume interrupted campaign
+  autophage integrate                        # List tasks eligible for integration
+  autophage integrate BUG-001                # Inspect proposed integration patch
+  autophage integrate BUG-001 --authorize    # Safely integrate into integration branch
         """,
     )
 
@@ -558,7 +646,18 @@ Examples:
     subparsers.add_parser("status", help="Show campaign/task state, active work, and pending approvals")
 
     # resume
-    subparsers.add_parser("resume", help="Safely resume an interrupted campaign")
+    p_resume = subparsers.add_parser("resume", help="Safely resume an interrupted campaign")
+    p_resume.add_argument("--authorize", action="store_true", help="Authorize Tier 2 escalation on resumed tasks")
+    p_resume.add_argument("--tier1-only", action="store_true", help="Constrain resumed repair attempts to Tier 1 local model only")
+    p_resume.add_argument("--max-attempts", type=int, default=None, help="Override maximum attempts per task")
+
+    # integrate
+    p_integrate = subparsers.add_parser("integrate", help="Safely integrate verified tasks into dedicated integration branch")
+    p_integrate.add_argument("task_id", nargs="?", default=None, help="Specific task ID to integrate (or omit to list eligible tasks)")
+    p_integrate.add_argument("--list", action="store_true", help="List tasks eligible for integration")
+    p_integrate.add_argument("--authorize", action="store_true", help="Explicit operator authorization required to perform integration")
+    p_integrate.add_argument("--diff", action="store_true", help="Preview proposed patch diff without integrating")
+    p_integrate.add_argument("--branch", default=None, help="Target integration branch name (default: autophage/integrate-<task_id>)")
 
     return parser
 
@@ -599,6 +698,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli.cmd_status(args)
     elif args.command == "resume":
         return cli.cmd_resume(args)
+    elif args.command == "integrate":
+        return cli.cmd_integrate(args)
     else:
         parser.print_help()
         return 0
