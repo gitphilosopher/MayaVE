@@ -56,6 +56,8 @@ from .campaign import (
     CampaignStatus,
     TaskCampaignState,
     WorkerTier,
+    CommitResult,
+    validate_integration_target_branch,
     run_campaign_from_markdown,
     topological_sort_tasks,
 )
@@ -72,6 +74,8 @@ from .cli import (
     AutoPhageCLI,
     build_cli_parser,
     check_model_availability,
+    parse_worker_availability,
+    is_worker_available,
     main as cli_main,
 )
 
@@ -117,6 +121,8 @@ __all__ = [
     "CampaignStatus",
     "TaskCampaignState",
     "WorkerTier",
+    "CommitResult",
+    "validate_integration_target_branch",
     "run_campaign_from_markdown",
     "topological_sort_tasks",
     "MacroTUI",
@@ -129,5 +135,7 @@ __all__ = [
     "AutoPhageCLI",
     "build_cli_parser",
     "check_model_availability",
+    "parse_worker_availability",
+    "is_worker_available",
     "cli_main",
 ]

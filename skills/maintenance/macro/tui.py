@@ -457,11 +457,18 @@ class MacroTUI:
         changed = ", ".join(info.get("changed_files", []))
         diff_text = info.get("full_diff" if full_diff else "diff_preview", "")
 
+        tip_sha = info.get("branch_tip_sha", "")
+        target_b = info.get("target_branch", "")
         header = f"[bold {PURPLE}]Candidate Integration:[/] [bold {WHITE}]{task_id}[/] - {title}\n"
-        meta = (
-            f"[{GRAY}]Source Branch:[/] [{WHITE}]{branch}[/]  |  "
-            f"[{GRAY}]Changed Files:[/] [{WHITE}]{changed}[/]\n"
-        )
+        meta_parts = [
+            f"[{GRAY}]Source Branch:[/] [{WHITE}]{branch}[/]",
+        ]
+        if tip_sha:
+            meta_parts.append(f"[{GRAY}]Tip SHA:[/] [{WHITE}]{tip_sha}[/]")
+        if target_b:
+            meta_parts.append(f"[{GRAY}]Target Branch:[/] [{WHITE}]{target_b}[/]")
+        meta_parts.append(f"[{GRAY}]Changed Files:[/] [{WHITE}]{changed}[/]")
+        meta = "  |  ".join(meta_parts) + "\n"
         self.console.print(header + meta)
 
         if diff_text:

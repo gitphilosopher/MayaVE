@@ -132,6 +132,71 @@ class WorkerTier(str, Enum):
     TIER_4_HUMAN = "tier_4_human"        # Held for human decision
 
 
+class CommitResult(tuple):
+    """Result tuple (success: bool, error_message: Optional[str]) with truthiness tied to success."""
+    def __bool__(self) -> bool:
+        return bool(self[0])
+
+
+def validate_integration_target_branch(
+    target_branch: str,
+    task_id: str,
+    repo_root: Optional[Path] = None,
+) -> tuple[bool, str]:
+    """
+    Validate integration target branch name using strict allowlisting and git check-ref-format.
+    - Rejects mainline/protected branches (main, master, refs/heads/main, refs/heads/master, HEAD, etc.).
+    - Rejects arbitrary dev/feature branches (develop, dev, staging, feature/*, etc.).
+    - Rejects other tasks' branches or task worktree branch.
+    - Requires conforming to 'autophage/integrate-{task_id}' scheme.
+    - Validates ref format via `git check-ref-format --branch`.
+    """
+    import subprocess
+
+    if not target_branch or not isinstance(target_branch, str):
+        return False, "Target branch name cannot be empty."
+
+    raw = target_branch.strip()
+    norm = raw
+    if norm.startswith("refs/heads/"):
+        norm = norm[len("refs/heads/"):]
+
+    # 1. Mainline and protected branches
+    forbidden_mainline = {"main", "master", "head", "trunk", "default"}
+    if norm.lower() in forbidden_mainline or raw.lower() in {f"refs/heads/{b}" for b in forbidden_mainline}:
+        return False, f"Integration directly into protected/mainline branch '{target_branch}' is strictly forbidden by repository governance policy."
+
+    # 2. Ref format validation using git check-ref-format --branch
+    try:
+        proc = subprocess.run(
+            ["git", "check-ref-format", "--branch", norm],
+            cwd=str(repo_root) if repo_root else None,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.strip() or f"'{target_branch}' is not a valid git branch name format."
+            return False, f"Invalid git ref format: {err}"
+    except Exception as exc:
+        return False, f"Could not validate git ref format: {exc}"
+
+    # 3. Allowlist validation: Must match intended integration branch scheme for THIS task
+    expected_prefix = f"autophage/integrate-{task_id}"
+    if norm == expected_prefix or norm.startswith(f"{expected_prefix}-") or norm.startswith(f"{expected_prefix}/"):
+        return True, ""
+
+    # Specific actionable rejections
+    if norm.startswith("autophage/integrate-"):
+        other_task = norm[len("autophage/integrate-"):].split("/")[0].split("-")[0]
+        return False, f"Target branch '{target_branch}' belongs to another task ('{other_task}'). Integration must target 'autophage/integrate-{task_id}'."
+
+    if norm == f"autophage/{task_id}" or norm.startswith(f"autophage/{task_id}/"):
+        return False, f"Target branch '{target_branch}' is the task worktree branch, not a dedicated integration branch."
+
+    return False, f"Target branch '{target_branch}' is not permitted. Integration must target the dedicated integration branch scheme 'autophage/integrate-{task_id}'."
+
+
 @dataclass
 class CampaignConfig:
     """Operational parameters and resource bounds for an AutoPhage campaign."""
@@ -1088,8 +1153,17 @@ class CampaignEngine:
                 return
             self._emit_progress(f"[{t_state.task_id}] Independent review APPROVED")
 
-        # Commit verified changes to worktree branch
-        self._commit_worktree_changes(worktree_path, tdef)
+        # Commit verified changes to worktree branch (P4 / S3-09: Fail closed on staging/commit error)
+        commit_res = self._commit_worktree_changes(worktree_path, tdef)
+        if not commit_res:
+            _, stage_err = commit_res
+            t_state.status = TaskStatus.FAILED
+            t_state.failure_reason = f"Staging or commit failed: {stage_err}"
+            self._record_attempt(t_state)
+            checkpoint.failed_count += 1
+            self._emit_progress(f"[{t_state.task_id}] Staging/commit failed: {stage_err}")
+            self.state_mgr.save(checkpoint)
+            return
 
         # Finalize Task Success (READY_TO_INTEGRATE)
         t_state.status = TaskStatus.READY_TO_INTEGRATE
@@ -1339,17 +1413,8 @@ class CampaignEngine:
         return True, None
 
     def _get_worktree_diff(self, worktree_path: Path) -> str:
-        """Capture git diff within the worktree."""
+        """Capture git diff within the worktree without mutating index or worktree state."""
         import subprocess
-        try:
-            subprocess.run(
-                ["git", "add", "-N", "."],
-                cwd=str(worktree_path),
-                capture_output=True,
-                check=False,
-            )
-        except Exception:
-            pass
         proc = subprocess.run(
             ["git", "diff", "HEAD"],
             cwd=str(worktree_path),
@@ -1359,19 +1424,57 @@ class CampaignEngine:
         )
         return proc.stdout or ""
 
-    def _commit_worktree_changes(self, worktree_path: Path, tdef: TaskDefinition) -> bool:
-        """Commit declared target files and changelog in the task worktree to preserve verified changes."""
+    def _commit_worktree_changes(self, worktree_path: Path, tdef: TaskDefinition) -> CommitResult:
+        """
+        Commit declared target files and changelog in the task worktree to preserve verified changes.
+        Handles declared-path modifications, additions, deletions, and renames using `git add -A -- <targets>`.
+        Checks staging command exit code and verifies no declared changes remain unstaged.
+        Fails closed on any staging error, ignored file, or git error.
+        """
         import subprocess
         try:
-            target_files = set(tdef.target_files or []) | {"docs/CHANGELOG.md"}
-            files_to_stage = [f for f in target_files if (worktree_path / f).exists()]
-            if files_to_stage:
-                subprocess.run(
-                    ["git", "add", "--", *files_to_stage],
-                    cwd=str(worktree_path),
-                    capture_output=True,
-                    check=False,
-                )
+            declared_targets = list(dict.fromkeys(tdef.target_files or []))
+            changelog_path = "docs/CHANGELOG.md"
+            all_targets = list(declared_targets)
+            if (worktree_path / changelog_path).exists() and changelog_path not in all_targets:
+                all_targets.append(changelog_path)
+
+            if not all_targets:
+                return CommitResult((True, None))
+
+            # Stage declared targets using git add -A -- <targets>
+            stage_proc = subprocess.run(
+                ["git", "add", "-A", "--", *all_targets],
+                cwd=str(worktree_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if stage_proc.returncode != 0:
+                err_msg = stage_proc.stderr.strip() or stage_proc.stdout.strip() or f"git add exited with code {stage_proc.returncode}"
+                logger.error("Failed to stage declared target paths for %s: %s", tdef.task_id, err_msg)
+                return CommitResult((False, f"Failed to stage declared targets: {err_msg}"))
+
+            # Verify no declared files remain untracked (??) or unstaged (modified after staging)
+            status_proc = subprocess.run(
+                ["git", "status", "--porcelain", "--", *all_targets],
+                cwd=str(worktree_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if status_proc.returncode != 0:
+                err_msg = status_proc.stderr.strip() or f"git status exited with code {status_proc.returncode}"
+                return CommitResult((False, f"Failed to verify staging status: {err_msg}"))
+
+            for line in status_proc.stdout.strip().splitlines():
+                if not line:
+                    continue
+                index_status = line[0]
+                worktree_status = line[1]
+                if index_status == "?" or worktree_status != " ":
+                    return CommitResult((False, f"Declared file was not cleanly staged: '{line}'"))
+
             st_proc = subprocess.run(
                 ["git", "diff", "--staged", "--quiet"],
                 cwd=str(worktree_path),
@@ -1387,11 +1490,13 @@ class CampaignEngine:
                     text=True,
                     check=False,
                 )
-                return res.returncode == 0
-            return True
+                if res.returncode != 0:
+                    err_msg = res.stderr.strip() or f"git commit exited with code {res.returncode}"
+                    return CommitResult((False, f"Git commit failed: {err_msg}"))
+            return CommitResult((True, None))
         except Exception as exc:
             logger.warning("Could not commit worktree changes for %s: %s", tdef.task_id, exc)
-            return False
+            return CommitResult((False, str(exc)))
 
     def _propagate_dependencies(
         self,
@@ -1414,19 +1519,22 @@ class CampaignEngine:
             dep_wt = Path(dep_state.worktree_path) if dep_state.worktree_path else self.worktree_mgr.get_workspace_path(dep_id)
 
             if dep_wt.exists():
-                # Commit any verified target files if not yet committed
-                dep_targets = set(dep_state.target_files or []) | {"docs/CHANGELOG.md"}
-                dep_stage = [f for f in dep_targets if (dep_wt / f).exists()]
-                if dep_stage:
-                    subprocess.run(["git", "add", "--", *dep_stage], cwd=str(dep_wt), capture_output=True, check=False)
-                    st_proc = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=str(dep_wt), capture_output=True, check=False)
-                    if st_proc.returncode != 0:
-                        subprocess.run(
-                            ["git", "-c", "user.name=AutoPhage", "-c", "user.email=autophage@mayave.local", "commit", "-m", f"fix({dep_id.lower()}): {dep_state.title}"],
-                            cwd=str(dep_wt),
-                            capture_output=True,
-                            check=False,
-                        )
+                # Commit any verified target files if not yet committed using robust staging
+                dep_tdef = TaskDefinition(
+                    task_id=dep_id,
+                    title=dep_state.title,
+                    audit_source="dependency",
+                    priority=dep_state.priority,
+                    risk=dep_state.risk,
+                    description=dep_state.description,
+                    evidence=dep_state.evidence,
+                    target_files=list(dep_state.target_files),
+                    test_targets=list(dep_state.test_targets),
+                )
+                commit_res = self._commit_worktree_changes(dep_wt, dep_tdef)
+                if not commit_res:
+                    _, stage_err = commit_res
+                    return False, f"Failed to stage/commit prerequisite '{dep_id}' changes: {stage_err}"
 
                 # Mirror untracked .maya/tests/ files from prerequisite worktree
                 dep_tests = dep_wt / ".maya" / "tests"
@@ -1553,11 +1661,15 @@ class CampaignEngine:
         authorized: bool = False,
         target_branch: Optional[str] = None,
         dry_run: bool = False,
+        expected_sha: Optional[str] = None,
+        require_expected_sha: bool = False,
     ) -> tuple[bool, str, dict]:
         """
         Safely integrate a verified task into a dedicated integration branch.
         - Validates task state is READY_TO_INTEGRATE.
-        - Verifies quality gates passed and candidate diff is non-empty.
+        - Strictly validates target branch against governance allowlist before any mutation (S3-04).
+        - Provides read-only diff preview without touching index, branch, or creating worktrees (S3-05).
+        - Validates reviewed branch tip SHA against expected_sha before authorized mutation (S3-05).
         - Never merges into main.
         - Preserves unrelated working tree files by using an isolated integration worktree.
         - Synchronizes status to VERIFIED across campaign_state.json and legacy state.json.
@@ -1605,25 +1717,26 @@ class CampaignEngine:
         if not ws_path.is_dir():
             return False, f"Worktree directory for task '{task_id}' does not exist at {ws_path}.", {}
 
-        # Ensure verified target files are committed in worktree
-        tdef_for_commit = TaskDefinition(
-            task_id=task_id,
-            title=title,
-            audit_source="integration",
-            priority=TaskPriority.P2,
-            risk=TaskRisk.LOW,
-            description=t_state.description if t_state else "",
-            evidence=t_state.evidence if t_state else "",
-            target_files=target_files,
-            test_targets=list(t_state.test_targets if t_state else []),
-        )
-        self._commit_worktree_changes(ws_path, tdef_for_commit)
+        # Target branch validation (P3 / S3-04): Must occur before any mutation or worktree creation
+        target_branch = target_branch or f"autophage/integrate-{task_id}"
+        is_valid_branch, branch_err = validate_integration_target_branch(target_branch, task_id, self.repo_root)
+        if not is_valid_branch:
+            return False, f"Integration target branch rejected: {branch_err}", {}
 
-        # Candidate diff check
+        # Resolve candidate branch tip SHA from git (read-only)
+        ref_proc = subprocess.run(
+            ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
+            cwd=str(self.repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        branch_sha = ref_proc.stdout.strip() if ref_proc.returncode == 0 else ""
+
+        # Candidate diff check (P2 / S3-05: READ-ONLY, no git add -N, no premature commits)
         diff_text = self._get_worktree_diff(ws_path)
-        # Also check commits ahead on branch
         rev_ahead = subprocess.run(
-            ["git", "rev-list", f"^HEAD", branch_name],
+            ["git", "rev-list", "^HEAD", branch_name],
             cwd=str(self.repo_root),
             capture_output=True,
             text=True,
@@ -1658,6 +1771,8 @@ class CampaignEngine:
             "task_id": task_id,
             "title": title,
             "branch": branch_name,
+            "branch_tip_sha": branch_sha,
+            "target_branch": target_branch,
             "worktree_path": str(ws_path),
             "changed_files": changed_files,
             "diff_preview": diff_text[:1200],
@@ -1665,14 +1780,35 @@ class CampaignEngine:
             "verification_passed": t_state.verification_passed if t_state else True,
         }
 
-        # Check authorization / dry run
+        # Check authorization / dry run (P2 / S3-05: preview is strictly read-only)
         if dry_run or not authorized:
             return False, "Integration requires explicit operator authorization (--authorize).", info
 
-        # Governance policy: Never integrate directly into main
-        target_branch = target_branch or f"autophage/integrate-{task_id}"
-        if target_branch == "main":
-            return False, "Integration directly into branch 'main' is strictly forbidden by repository governance policy.", info
+        # Validate expected-SHA match before performing any mutation (P2 / S3-05)
+        if expected_sha is not None:
+            clean_expected = expected_sha.strip().lower()
+            if not clean_expected or clean_expected != branch_sha.lower():
+                return False, f"Expected SHA mismatch: candidate branch tip is '{branch_sha}', but received '{expected_sha}'. Integration rejected without mutation.", info
+        elif require_expected_sha:
+            return False, f"Integration requires explicit expected SHA matching reviewed branch tip '{branch_sha}'.", info
+
+        # Authorized mutation phase begins here
+        # Commit any verified uncommitted target files in the task worktree
+        tdef_for_commit = TaskDefinition(
+            task_id=task_id,
+            title=title,
+            audit_source="integration",
+            priority=TaskPriority.P2,
+            risk=TaskRisk.LOW,
+            description=t_state.description if t_state else "",
+            evidence=t_state.evidence if t_state else "",
+            target_files=target_files,
+            test_targets=list(t_state.test_targets if t_state else []),
+        )
+        commit_res = self._commit_worktree_changes(ws_path, tdef_for_commit)
+        if not commit_res:
+            _, commit_err = commit_res
+            return False, f"Failed to commit worktree changes for task '{task_id}': {commit_err}", info
 
         # Create isolated integration worktree
         int_wt_path = self.worktree_mgr.worktrees_dir / f"integrate-{task_id}"

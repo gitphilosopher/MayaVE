@@ -113,9 +113,20 @@ class SQLiteVectorStore(VectorStore):
                     importance REAL,
                     source TEXT,
                     timestamp REAL,
-                    metadata TEXT
+                    metadata TEXT,
+                    embedding_model TEXT,
+                    dimensions INTEGER
                 )
             """)
+            # Add identity columns for legacy databases
+            try:
+                conn.execute("ALTER TABLE memories ADD COLUMN embedding_model TEXT")
+            except sqlite3.OperationalError:
+                pass # Column already exists
+            try:
+                conn.execute("ALTER TABLE memories ADD COLUMN dimensions INTEGER")
+            except sqlite3.OperationalError:
+                pass # Column already exists
             conn.commit()
         logger.info(f"Semantic memory store ready — {self._db_path}")
 
@@ -131,13 +142,16 @@ class SQLiteVectorStore(VectorStore):
         if record.embedding is None:
             return None
         try:
+            # Ensure identity is persisted based on the actual embedding vector
+            model_id = getattr(config.context, "embedding_model", "unknown")
+            dims = len(record.embedding)
             with self._connect() as conn:
                 cur = conn.execute(
                     "INSERT INTO memories (content, embedding, mem_type, topic, importance, "
-                    "source, timestamp, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "source, timestamp, metadata, embedding_model, dimensions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (record.content, self._to_blob(record.embedding), record.mem_type,
                      record.topic, record.importance, record.source, record.timestamp,
-                     json.dumps(record.metadata)),
+                     json.dumps(record.metadata), model_id, dims),
                 )
                 conn.commit()
                 return cur.lastrowid
@@ -147,16 +161,18 @@ class SQLiteVectorStore(VectorStore):
 
     def update(self, record_id: int, content: str, embedding: list[float], timestamp: float, topic: str | None = None) -> None:
         try:
+            model_id = getattr(config.context, "embedding_model", "unknown")
+            dims = len(embedding)
             with self._connect() as conn:
                 if topic is not None:
                     conn.execute(
-                        "UPDATE memories SET content=?, embedding=?, timestamp=?, topic=? WHERE id=?",
-                        (content, self._to_blob(embedding), timestamp, topic, record_id),
+                        "UPDATE memories SET content=?, embedding=?, timestamp=?, topic=?, embedding_model=?, dimensions=? WHERE id=?",
+                        (content, self._to_blob(embedding), timestamp, topic, model_id, dims, record_id),
                     )
                 else:
                     conn.execute(
-                        "UPDATE memories SET content=?, embedding=?, timestamp=? WHERE id=?",
-                        (content, self._to_blob(embedding), timestamp, record_id),
+                        "UPDATE memories SET content=?, embedding=?, timestamp=?, embedding_model=?, dimensions=? WHERE id=?",
+                        (content, self._to_blob(embedding), timestamp, model_id, dims, record_id),
                     )
                 conn.commit()
         except Exception as e:
@@ -183,7 +199,7 @@ class SQLiteVectorStore(VectorStore):
 
     def _all_rows(self, mem_type: str | None = None):
         query = ("SELECT id, content, embedding, mem_type, topic, importance, "
-                  "source, timestamp, metadata FROM memories")
+                  "source, timestamp, metadata, embedding_model, dimensions FROM memories")
         params: tuple = ()
         if mem_type:
             query += " WHERE mem_type=?"
@@ -201,14 +217,35 @@ class SQLiteVectorStore(VectorStore):
             q_norm = np.linalg.norm(q)
             if q_norm == 0:
                 return []
+
+            # Determine current model identity for compatibility check
+            current_model = getattr(config.context, "embedding_model", "unknown")
+            q_dims = q.shape[0]
+
             scored = []
             for row in rows:
+                # row indices: 0:id, 1:content, 2:embedding, 3:mem_type, 4:topic, 5:importance,
+                # 6:source, 7:timestamp, 8:metadata, 9:embedding_model, 10:dimensions
+                stored_model = row[9]
+                stored_dims = row[10]
+
+                # 1. Dimensional mismatch: always skip
                 vec = self._from_blob(row[2])
                 if vec.shape != q.shape:
                     logger.warning(
                         f"Skipping vector id={row[0]} with mismatched dimension {vec.shape} (query expects {q.shape})"
                     )
                     continue
+
+                # 2. Identity mismatch: skip only if both are known and differ
+                if stored_model is not None and stored_model != current_model:
+                    logger.warning(
+                        f"Skipping vector id={row[0]} with incompatible model identity {stored_model} (query uses {current_model})"
+                    )
+                    continue
+
+                # Legacy row (stored_model is None) is treated as compatible if dimensions match.
+
                 denom = np.linalg.norm(vec) * q_norm
                 sim = float(np.dot(q, vec) / denom) if denom else 0.0
                 if sim >= min_similarity:
